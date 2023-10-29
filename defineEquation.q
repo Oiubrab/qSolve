@@ -3,14 +3,19 @@
 / sigmoid definition
 sigmoid:{1%1+exp[-1.0*x]}
 
+/ sigmoid gradient factor
+mSig:{exp[x]%1+xexp[x;2]}
+
 / takes a set of weights and biases and feeds through input
 equate:{[weightsBiases;inputs;direction]
     linearly:{sigmoid z + y mmu x};
     $[direction=`forward;
         linearly/[inputs;weightsBiases`weight;weightsBiases`bias];
         direction=`backward;
-        linearly\[inputs;weightsBiases`weight;weightsBiases`bias];
-        "Direction must be either\`forward or \`backward"
+        [
+            results:linearly\[inputs;weightsBiases`weight;weightsBiases`bias]
+        ];
+        "Direction must be either `forward or `backward"
     ]
  }
 
