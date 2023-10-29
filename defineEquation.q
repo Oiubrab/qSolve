@@ -1,19 +1,27 @@
  / building the solver
 
 / sigmoid definition
-sigmoid:{1%1+exp[-1.0*x]}
+sigmoid:{reciprocal[1+exp[-1.0*x]]}
 
 / sigmoid gradient factor
 mSig:{exp[x]%1+xexp[x;2]}
 
 / build a linear function
-linearly:{sigmoid z + y mmu x};
+linear:{z + y mmu x};
+
+/ common pythagorean gradient factor
+mGoras:{reciprocal[sqrt sum xexp[;2] x]}
 
 / takes a set of weights and biases and feeds through input
-useModel:{[weightsBiases;inputs] linearly/[inputs;weightsBiases`weight;weightsBiases`bias]}
+useModel:{[weightsBiases;inputs] {sigmoid linear[x;y;z]}/[inputs;weightsBiases`weight;weightsBiases`bias]}
 
 backPropogation:{[weightsBiases;inputs;expected]
-    results:linearly\[inputs;weightsBiases`weight;weightsBiases`bias];
+    results:{sigmoid linear[x;y;z]}\[inputs;weightsBiases`weight;weightsBiases`bias];
+    common:mGoras[results[-1 + count results] - expected];
+
+    pythagoreanFactors:common * results[-1 + count results] - expected;
+    sigmoidFactors:mSig linear[(enlist inputs) , results[til -1 + count results];weightsBiases`weight;weightsBiases`bias];
+
  }
 
 / generates a set of random weights and biases
