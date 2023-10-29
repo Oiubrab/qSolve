@@ -1,9 +1,18 @@
  / building the solver
 
-\l sigmoid.q
+/ sigmoid definition
+sigmoid:{1%1+exp[-1.0*x]}
 
 / takes a set of weights and biases and feeds through input
-forwardEquate:{[weightsBiases;inputs] {sigmoid z + y mmu x}/[inputs;weightsBiases`weight;weightsBiases`bias]}
+equate:{[weightsBiases;inputs;direction]
+    linearly:{sigmoid z + y mmu x};
+    $[direction=`forward;
+        linearly/[inputs;weightsBiases`weight;weightsBiases`bias];
+        direction=`backward;
+        linearly\[inputs;weightsBiases`weight;weightsBiases`bias];
+        "Direction must be either\`forward or \`backward"
+    ]
+ }
 
 / generates a set of random weights and biases
 weightBiasGen:{
