@@ -3,7 +3,7 @@
 \l sigmoid.q
 
 / takes a set of weights and biases and feeds through input
-forwardEquate:{[weights;biases;inputs] {sigmoid z + y mmu x}/[inputs;weights;biases]}
+forwardEquate:{[weightsBiases;inputs] {sigmoid z + y mmu x}/[inputs;weightsBiases`weight;weightsBiases`bias]}
 
 / generates a set of random weights and biases
 weightBiasGen:{
