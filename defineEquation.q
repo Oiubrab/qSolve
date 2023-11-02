@@ -4,7 +4,7 @@
 sigmoid:{reciprocal[1+exp[-1.0*x]]}
 
 / sigmoid gradient factor
-mSig:{exp[x]%1+xexp[x;2]}
+mSig:{exp[x]%xexp[1+exp[x];2]}
 
 / build a linear function
 linear:{z + y mmu x};
@@ -20,7 +20,10 @@ backPropogation:{[weightsBiases;inputs;expected]
     common:mGoras[results[-1 + count results] - expected];
 
     pythagoreanFactors:common * results[-1 + count results] - expected;
-    sigmoidFactors:mSig linear[(enlist inputs) , results[til -1 + count results];weightsBiases`weight;weightsBiases`bias];
+    resultInput:(enlist inputs) , results[til -1 + count results];
+    sigmoidFactors:mSig linear[resultInput;weightsBiases`weight;weightsBiases`bias];
+
+    / for the result nodes, the weight and bias derivatives are just the straight result direction
 
  }
 
