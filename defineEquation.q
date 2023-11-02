@@ -33,7 +33,7 @@ backPropogation:{[weightsBiases;inputs;expected]
 
 / generates a set of random weights and biases
 weightBiasGen:{
-    gen:{0.1*x?10};
+    gen:{0.1 + 0.1*x?10};
     / start with first layer
     weight:enlist gen each x[0]#x[0];
     weight,:{y each x[z]#x[z-1]}[x;gen;] each 1 + til -1 + count x;
