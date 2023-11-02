@@ -17,14 +17,18 @@ useModel:{[weightsBiases;inputs] {sigmoid linear[x;y;z]}/[inputs;weightsBiases`w
 
 backPropogation:{[weightsBiases;inputs;expected]
     results:{sigmoid linear[x;y;z]}\[inputs;weightsBiases`weight;weightsBiases`bias];
-    common:mGoras[results[-1 + count results] - expected];
+    common:mGoras[(last results) - expected];
 
-    pythagoreanFactors:common * results[-1 + count results] - expected;
-    resultInput:(enlist inputs) , results[til -1 + count results];
+    pythagoreanFactors:common * (last results) - expected;
+    resultInput:(enlist inputs) , -1_results;
     sigmoidFactors:mSig linear[resultInput;weightsBiases`weight;weightsBiases`bias];
 
     / for the result nodes, the weight and bias derivatives are just the straight result direction
-
+    gradOutputWeight:((count last sigmoidFactors)#enlist last resultInput)*(last sigmoidFactors)*pythagoreanFactors;
+    gradOutputBias:(last sigmoidFactors)*pythagoreanFactors;
+    gradLayersWeight:{[weights;sigFactors;pyFactors;coordinates]
+        /will need to build all the weight grad scalars
+    }[weightsBiases`weight;sigmoidFactors;pythagoreanFactors;]
  }
 
 / generates a set of random weights and biases
@@ -35,4 +39,13 @@ weightBiasGen:{
     weight,:{y each x[z]#x[z-1]}[x;gen;] each 1 + til -1 + count x;
     bias:gen each x;
     `weight`bias!(weight;bias)
+ }
+
+/ generate combinations of all indexes for the 3D weight list
+indexGen:{
+    structure:count each x;
+    builder:{,[x;] each raze({,[x;] each til y}[;z] each til y)};
+    combination:builder[0;first structure;first structure];
+    combination,:raze{builder[x;y[x];y[x-1]]}[;structure] each 1 + til -1 + count structure;
+    combination
  }
