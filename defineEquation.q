@@ -26,9 +26,11 @@ backPropogation:{[weightsBiases;inputs;expected]
     / for the result nodes, the weight and bias derivatives are just the straight result direction
     gradOutputWeight:((count last sigmoidFactors)#enlist last resultInput)*(last sigmoidFactors)*pythagoreanFactors;
     gradOutputBias:(last sigmoidFactors)*pythagoreanFactors;
-    gradLayersWeight:{[weights;sigFactors;pyFactors;coordinates]
+    gradLayersWeight:{[weights;sigFactors;pyFactors]
         /will need to build all the weight grad scalars
-    }[weightsBiases`weight;sigmoidFactors;pythagoreanFactors;]
+        indexWeightGen[weights]
+
+    }[weightsBiases`weight;sigmoidFactors;pythagoreanFactors]
  }
 
 / generates a set of random weights and biases
@@ -42,7 +44,7 @@ weightBiasGen:{
  }
 
 / generate combinations of all indexes for the 3D weight list
-indexGen:{
+indexWeightGen:{
     structure:count each x;
     builder:{,[x;] each raze({,[x;] each til y}[;z] each til y)};
     combination:builder[0;first structure;first structure];
