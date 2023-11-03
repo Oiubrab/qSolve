@@ -26,11 +26,27 @@ backPropogation:{[weightsBiases;inputs;expected]
     / for the result nodes, the weight and bias derivatives are just the straight result direction
     gradOutputWeight:((count last sigmoidFactors)#enlist last resultInput)*(last sigmoidFactors)*pythagoreanFactors;
     gradOutputBias:(last sigmoidFactors)*pythagoreanFactors;
-    gradLayersWeight:{[weights;sigFactors;pyFactors]
+    grad:{[weights;sigFactors;pyFactors;rezza]
         /will need to build all the weight grad scalars
-        indexWeightGen[weights]
-
-    }[weightsBiases`weight;sigmoidFactors;pythagoreanFactors]
+        index:indexWeightGen[weights];
+        weightGradList:{[weights;sigFactors;pyFactors;rezza;index]
+            $[index[0]=-1 + count weights;
+                (last rezza)[index[2]]*(last sigFactors)[index[1]]*pyFactors[index[1]];
+              index[0]=-2 + count weights;
+                [
+                    bottomGrad:rezza[index[0];index[2]]*sigFactors[index[0];index[1]];
+                    sum[bottomGrad*weights[index[0]+1;til count weights[index[0]+1];index[1]]*sigFactors[index[0]+1]*pyFactors]
+                ];
+                [
+                    bottomGrad:rezza[index[0];index[2]]*sigFactors[index[0];index[1]];
+                    secondBottomGrad:bottomGrad*weights[index[0]+1;til count weights[index[0]+1];index[1]]*sigFactors[index[0]+1];
+                    finalSigGrad:{z*sum each y*(count y)#enlist x}/[secondBottomGrad;weights[(index[0] + 2) + til (count weights) - 2 + index[0]];sigFactors[(index[0] + 2) + til (count weights) - 2 + index[0]]];
+                    sum[finalSigGrad*pyFactors]
+                ]
+            ]
+        }[weights;sigFactors;pyFactors;rezza;] each index;
+        weightGrad:{x[y[0];y[1];y[2]]:y[3];x}/[weights;index,'weightGradList];
+    }[weightsBiases`weight;sigmoidFactors;pythagoreanFactors;resultInput]
  }
 
 / generates a set of random weights and biases
@@ -46,8 +62,7 @@ weightBiasGen:{
 / generate combinations of all indexes for the 3D weight list
 indexWeightGen:{
     structure:count each x;
-    builder:{,[x;] each raze({,[x;] each til y}[;z] each til y)};
-    combination:builder[0;first structure;first structure];
-    combination,:raze{builder[x;y[x];y[x-1]]}[;structure] each 1 + til -1 + count structure;
+    combination:{,[x;] each raze({,[x;] each til y}[;z] each til y)}[0;first structure;first structure];
+    combination,:raze{{,[x;] each raze({,[x;] each til y}[;z] each til y)}[x;y[x];y[x-1]]}[;structure] each 1 + til -1 + count structure;
     combination
  }
