@@ -15,7 +15,7 @@ mGoras:{reciprocal[sqrt sum xexp[;2] x]}
 / takes a set of weights and biases and feeds through input
 useModel:{[weightsBiases;inputs] {sigmoid linear[x;y;z]}/[inputs;weightsBiases`weight;weightsBiases`bias]}
 
-backPropogation:{[weightsBiases;inputs;expected]
+backPropogation:{[weightsBiases;inputs;expected;scaling]
     /calculate preliminary factors
     results:{sigmoid linear[x;y;z]}\[inputs;weightsBiases`weight;weightsBiases`bias];
     common:mGoras[(last results) - expected];
@@ -45,9 +45,9 @@ backPropogation:{[weightsBiases;inputs;expected]
                 ]
             ]
         }[weightsBiases`weight;sigFactors;pyFactors;rezza;] each index`weight;
-        weightGrad:{x[y[0];y[1];y[2]]:y[3];x}/[weightsBiases`weight;index`weight,'weightGradList];
+        weightGrad:{x[y[0];y[1];y[2]]:y[3];x}/[weightsBiases`weight;(index`weight),'weightGradList];
         /calculate the grad for the biases
-        biasgradList:{[weights;sigFactors;pyFactors;rezza;index]
+        biasGradList:{[weights;sigFactors;pyFactors;index]
             $[index[0]=-1 + count weights;
                 (last sigFactors)[index[1]]*pyFactors[index[1]]
             index[0]=-2 + count weights;
@@ -63,10 +63,13 @@ backPropogation:{[weightsBiases;inputs;expected]
                 ]
             ]
         }[weightsBiases`weight;sigFactors;pyFactors;] each index`bias;
-        biasGrad:{x[y[0];y[1]]:y[3];x}/[weightsBiases`bias;index`bias,'biasGradList];
+        biasGrad:{x[y[0];y[1]]:y[2];x}/[weightsBiases`bias;(index`bias),'biasGradList];
         /build the grad dic
         `weight`bias!(weightGrad;biasGrad)
-    }[weightsBiases;sigmoidFactors;pythagoreanFactors;resultInput]
+    }[weightsBiases;sigmoidFactors;pythagoreanFactors;resultInput];
+
+    /use the grad to produce a new set of weights and biases that should, theoretically, be closer to the global minimum
+    weightsBiases - scaling*grad
  }
 
 / generates a set of random weights and biases
