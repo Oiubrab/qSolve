@@ -16,19 +16,19 @@ mGoras:{reciprocal[sqrt sum xexp[;2] x]}
 useModel:{[weightsBiases;inputs] {sigmoid linear[x;y;z]}/[inputs;weightsBiases`weight;weightsBiases`bias]}
 
 backPropogation:{[weightsBiases;inputs;expected]
+    /calculate preliminary factors
     results:{sigmoid linear[x;y;z]}\[inputs;weightsBiases`weight;weightsBiases`bias];
     common:mGoras[(last results) - expected];
-
+    /calculate common factors
     pythagoreanFactors:common * (last results) - expected;
     resultInput:(enlist inputs) , -1_results;
     sigmoidFactors:mSig linear[resultInput;weightsBiases`weight;weightsBiases`bias];
 
-    / for the result nodes, the weight and bias derivatives are just the straight result direction
-    gradOutputWeight:((count last sigmoidFactors)#enlist last resultInput)*(last sigmoidFactors)*pythagoreanFactors;
-    gradOutputBias:(last sigmoidFactors)*pythagoreanFactors;
-    grad:{[weights;sigFactors;pyFactors;rezza]
+    /calculate the grad
+    grad:{[weightsBiases;sigFactors;pyFactors;rezza]
         /will need to build all the weight grad scalars
-        index:indexWeightGen[weights];
+        index:indexGen[weightsBiases];
+        /calculate the grad for the weights
         weightGradList:{[weights;sigFactors;pyFactors;rezza;index]
             $[index[0]=-1 + count weights;
                 (last rezza)[index[2]]*(last sigFactors)[index[1]]*pyFactors[index[1]];
@@ -44,9 +44,29 @@ backPropogation:{[weightsBiases;inputs;expected]
                     sum[finalSigGrad*pyFactors]
                 ]
             ]
-        }[weights;sigFactors;pyFactors;rezza;] each index;
-        weightGrad:{x[y[0];y[1];y[2]]:y[3];x}/[weights;index,'weightGradList];
-    }[weightsBiases`weight;sigmoidFactors;pythagoreanFactors;resultInput]
+        }[weightsBiases`weight;sigFactors;pyFactors;rezza;] each index`weight;
+        weightGrad:{x[y[0];y[1];y[2]]:y[3];x}/[weightsBiases`weight;index`weight,'weightGradList];
+        /calculate the grad for the biases
+        biasgradList:{[weights;sigFactors;pyFactors;rezza;index]
+            $[index[0]=-1 + count weights;
+                (last sigFactors)[index[1]]*pyFactors[index[1]]
+            index[0]=-2 + count weights;
+                [
+                    bottomGrad:sigFactors[index[0];index[1]];
+                    sum[bottomGrad*weights[index[0]+1;til count weights[index[0]+1];index[1]]*sigFactors[index[0]+1]*pyFactors]
+                ];
+                [
+                    bottomGrad:sigFactors[index[0];index[1]];
+                    secondBottomGrad:bottomGrad*weights[index[0]+1;til count weights[index[0]+1];index[1]]*sigFactors[index[0]+1];
+                    finalSigGrad:{z*sum each y*(count y)#enlist x}/[secondBottomGrad;weights[(index[0] + 2) + til (count weights) - 2 + index[0]];sigFactors[(index[0] + 2) + til (count weights) - 2 + index[0]]];
+                    sum[finalSigGrad*pyFactors]
+                ]
+            ]
+        }[weightsBiases`weight;sigFactors;pyFactors;] each index`bias;
+        biasGrad:{x[y[0];y[1]]:y[3];x}/[weightsBiases`bias;index`bias,'biasGradList];
+        /build the grad dic
+        `weight`bias!(weightGrad;biasGrad)
+    }[weightsBiases;sigmoidFactors;pythagoreanFactors;resultInput]
  }
 
 / generates a set of random weights and biases
@@ -60,9 +80,10 @@ weightBiasGen:{
  }
 
 / generate combinations of all indexes for the 3D weight list
-indexWeightGen:{
-    structure:count each x;
-    combination:{,[x;] each raze({,[x;] each til y}[;z] each til y)}[0;first structure;first structure];
-    combination,:raze{{,[x;] each raze({,[x;] each til y}[;z] each til y)}[x;y[x];y[x-1]]}[;structure] each 1 + til -1 + count structure;
-    combination
+indexGen:{
+    structure:count each x`weight;
+    weightCombination:{,[x;] each raze({,[x;] each til y}[;z] each til y)}[0;first structure;first structure];
+    weightCombination,:raze{{,[x;] each raze({,[x;] each til y}[;z] each til y)}[x;y[x];y[x-1]]}[;structure] each 1 + til -1 + count structure;
+    biasCombination:raze {{(x;y)}[x[0];] each 1_x} each (til count structure),'til each structure;
+    `weight`bias!(weightCombination;biasCombination)
  }
