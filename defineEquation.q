@@ -46,6 +46,7 @@ backPropogation:{[weightsBiases;inputs;expected;scaling]
             ]
         }[weightsBiases`weight;sigFactors;pyFactors;rezza;] each index`weight;
         weightGrad:{x[y[0];y[1];y[2]]:y[3];x}/[weightsBiases`weight;(index`weight),'weightGradList];
+
         /calculate the grad for the biases
         biasGradList:{[weights;sigFactors;pyFactors;index]
             $[index[0]=-1 + count weights;
