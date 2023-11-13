@@ -49,7 +49,7 @@ backPropogation:{[weightsBiases;inputs;expected;scaling]
         /calculate the grad for the biases
         biasGradList:{[weights;sigFactors;pyFactors;index]
             $[index[0]=-1 + count weights;
-                (last sigFactors)[index[1]]*pyFactors[index[1]]
+                (last sigFactors)[index[1]]*pyFactors[index[1]];
             index[0]=-2 + count weights;
                 [
                     bottomGrad:sigFactors[index[0];index[1]];
