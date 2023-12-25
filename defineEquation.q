@@ -24,10 +24,11 @@ backPropogation:{[weightsBiases;inputs;expected;scaling]
     resultInput:(enlist inputs) , -1_results;
     sigmoidFactors:mSig linear[resultInput;weightsBiases`weight;weightsBiases`bias];
 
+    /will need to build all the weight grad scalars
+    indexing:indexGen[count inputs;weightsBiases];
+
     /calculate the grad
-    grad:{[weightsBiases;sigFactors;pyFactors;rezza]
-        /will need to build all the weight grad scalars
-        index:indexGen[weightsBiases];
+    grad:{[weightsBiases;sigFactors;pyFactors;rezza;index]
         /calculate the grad for the weights
         weightGradList:{[weights;sigFactors;pyFactors;rezza;index]
             $[index[0]=-1 + count weights;
@@ -67,26 +68,26 @@ backPropogation:{[weightsBiases;inputs;expected;scaling]
         biasGrad:{x[y[0];y[1]]:y[2];x}/[weightsBiases`bias;(index`bias),'biasGradList];
         /build the grad dic
         `weight`bias!(weightGrad;biasGrad)
-    }[weightsBiases;sigmoidFactors;pythagoreanFactors;resultInput];
+    }[weightsBiases;sigmoidFactors;pythagoreanFactors;resultInput;indexing];
 
     /use the grad to produce a new set of weights and biases that should, theoretically, be closer to the global minimum
     weightsBiases - scaling*grad
  }
 
 / generates a set of random weights and biases
-weightBiasGen:{
+weightBiasGen:{[noOfInputs;nodes]
     gen:{0.1 + 0.1*x?10};
     / start with first layer
-    weight:enlist gen each x[0]#x[0];
-    weight,:{y each x[z]#x[z-1]}[x;gen;] each 1 + til -1 + count x;
-    bias:gen each x;
+    weight:enlist gen each nodes[0]#noOfInputs;
+    weight,:{y each x[z]#x[z-1]}[nodes;gen;] each 1 + til -1 + count nodes;
+    bias:gen each nodes;
     `weight`bias!(weight;bias)
  }
 
 / generate combinations of all indexes for the 3D weight list
-indexGen:{
-    structure:count each x`weight;
-    weightCombination:{,[x;] each raze({,[x;] each til y}[;z] each til y)}[0;first structure;first structure];
+indexGen:{[noOfInputs;weightBias]
+    structure:count each weightBias`weight;
+    weightCombination:{,[x;] each raze({,[x;] each til y}[;z] each til y)}[0;first structure;noOfInputs];
     weightCombination,:raze{{,[x;] each raze({,[x;] each til y}[;z] each til y)}[x;y[x];y[x-1]]}[;structure] each 1 + til -1 + count structure;
     biasCombination:raze {{(x;y)}[x[0];] each 1_x} each (til count structure),'til each structure;
     `weight`bias!(weightCombination;biasCombination)
