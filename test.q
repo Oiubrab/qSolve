@@ -1,6 +1,6 @@
 \l defineEquation.q
 
-weightsBiases:weightBiasGen[2;2 2];
+weightsBiases:weightBiasGen[2;5 2];
 
 numOfEx:100000;
 testInput:{(0.1*x?10),'(0.1*x?10)}[numOfEx];
