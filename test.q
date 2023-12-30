@@ -1,6 +1,6 @@
 \l defineEquation.q
 
-weightsBiases: weightBiasGen[2;5 3 2];
+weightsBiases: weightBiasGen[2;2 2];
 
 backPropogation:{[wb]
     numOfEx:100;
@@ -17,11 +17,11 @@ backPropogation:{[wb]
     diff:{
         res:useModel[y[0] - x*y[1];] each z[0];
         avg (sum each abs res - z[1])
-    }[;(wb;gradient);(testInput;testExpected)]
+    }[;(wb;gradient);(testInput;testExpected)];
 
     diffs:diff each scales;
-    wb - scales[first where (min diffs)=diffs] * gradient
-}
+    (min diffs;wb - scales[first where (min diffs)=diffs] * gradient)
+ }
 
 / normalised:{[model;input]
 /     points:0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9;
