@@ -58,7 +58,7 @@ grad:{[weightsBiases;sigFactors;pyFactors;rezza;index]
     `weight`bias!(weightGrad;biasGrad)
  }
 
-backPropogation:{[weightsBiases;inputs;expected;scaling]
+gradBuild:{[weightsBiases;inputs;expected]
     /calculate preliminary factors
     results:{sigmoid linear[x;y;z]}\[;weightsBiases`weight;weightsBiases`bias] each inputs;
     common:mGoras[raze (last each results) - expected];
@@ -70,8 +70,8 @@ backPropogation:{[weightsBiases;inputs;expected;scaling]
     /will need to build all the weight grad scalars
     indexing:indexGen[count first inputs;weightsBiases];
 
-    /use the grad to produce a new set of weights and biases that should, theoretically, be closer to the global minimum
-    weightsBiases - scaling*grad[weightsBiases;sigmoidFactors;pythagoreanFactors;resultInput;indexing]
+    /produce the grad
+    grad[weightsBiases;sigmoidFactors;pythagoreanFactors;resultInput;indexing]
  }
 
 / generates a set of random weights and biases
