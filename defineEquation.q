@@ -20,17 +20,17 @@ grad:{[weightsBiases;sigFactors;pyFactors;rezza;index]
     /calculate the grad for the weights
     weightGradList:{[weights;sigFactors;pyFactors;rezza;index]
         $[index[0]=-1 + count weights;
-            (last rezza)[index[2]]*(last sigFactors)[index[1]]*pyFactors[index[1]];
+            sum (last each rezza)[;index[2]]*(last each sigFactors)[;index[1]]*pyFactors[;index[1]];
             index[0]=-2 + count weights;
             [
-                bottomGrad:rezza[index[0];index[2]]*sigFactors[index[0];index[1]];
-                sum[bottomGrad*weights[index[0]+1;til count weights[index[0]+1];index[1]]*sigFactors[index[0]+1]*pyFactors]
+                bottomGrad:rezza[;index[0];index[2]]*sigFactors[;index[0];index[1]];
+                sum[raze bottomGrad*(*[weights[index[0]+1;;index[1]];] each sigFactors[;index[0]+1]*pyFactors)]
             ];
             [
-                bottomGrad:rezza[index[0];index[2]]*sigFactors[index[0];index[1]];
-                secondBottomGrad:bottomGrad*weights[index[0]+1;til count weights[index[0]+1];index[1]]*sigFactors[index[0]+1];
-                finalSigGrad:{z*sum each y*(count y)#enlist x}/[secondBottomGrad;weights[(index[0] + 2) + til (count weights) - 2 + index[0]];sigFactors[(index[0] + 2) + til (count weights) - 2 + index[0]]];
-                sum[finalSigGrad*pyFactors]
+                bottomGrad:rezza[;index[0];index[2]]*sigFactors[;index[0];index[1]];
+                secondBottomGrad:bottomGrad*(*[weights[index[0]+1;;index[1]];] each sigFactors[;index[0]+1]);
+                finalSigGrad:{{z*sum each y*(count y)#enlist x}/[x[0];y;x[1]]}[;weights[(index[0] + 2) + til (count weights) - 2 + index[0]]] each secondBottomGrad ,' enlist each sigFactors[;(index[0] + 2) + til (count weights) - 2 + index[0]];
+                sum[raze finalSigGrad*pyFactors]
             ]
         ]
     }[weightsBiases`weight;sigFactors;pyFactors;rezza;] each index`weight;
@@ -39,17 +39,17 @@ grad:{[weightsBiases;sigFactors;pyFactors;rezza;index]
     /calculate the grad for the biases
     biasGradList:{[weights;sigFactors;pyFactors;index]
         $[index[0]=-1 + count weights;
-            (last sigFactors)[index[1]]*pyFactors[index[1]];
+            sum (last each sigFactors)[;index[1]]*pyFactors[;index[1]];
         index[0]=-2 + count weights;
             [
-                bottomGrad:sigFactors[index[0];index[1]];
-                sum[bottomGrad*weights[index[0]+1;til count weights[index[0]+1];index[1]]*sigFactors[index[0]+1]*pyFactors]
+                bottomGrad:sigFactors[;index[0];index[1]];
+                sum[raze bottomGrad*(*[weights[index[0]+1;;index[1]];] each sigFactors[;index[0]+1]*pyFactors)]
             ];
             [
-                bottomGrad:sigFactors[index[0];index[1]];
-                secondBottomGrad:bottomGrad*weights[index[0]+1;til count weights[index[0]+1];index[1]]*sigFactors[index[0]+1];
-                finalSigGrad:{z*sum each y*(count y)#enlist x}/[secondBottomGrad;weights[(index[0] + 2) + til (count weights) - 2 + index[0]];sigFactors[(index[0] + 2) + til (count weights) - 2 + index[0]]];
-                sum[finalSigGrad*pyFactors]
+                bottomGrad:sigFactors[;index[0];index[1]];
+                secondBottomGrad:bottomGrad*(*[weights[index[0]+1;;index[1]];] each sigFactors[;index[0]+1]);
+                finalSigGrad:{{z*sum each y*(count y)#enlist x}/[x[0];y;x[1]]}[;weights[(index[0] + 2) + til (count weights) - 2 + index[0]]] each secondBottomGrad ,' enlist each sigFactors[;(index[0] + 2) + til (count weights) - 2 + index[0]];
+                sum[raze finalSigGrad*pyFactors]
             ]
         ]
     }[weightsBiases`weight;sigFactors;pyFactors;] each index`bias;
@@ -60,15 +60,15 @@ grad:{[weightsBiases;sigFactors;pyFactors;rezza;index]
 
 backPropogation:{[weightsBiases;inputs;expected;scaling]
     /calculate preliminary factors
-    results:{sigmoid linear[x;y;z]}\[inputs;weightsBiases`weight;weightsBiases`bias];
-    common:mGoras[(last results) - expected];
+    results:{sigmoid linear[x;y;z]}\[;weightsBiases`weight;weightsBiases`bias] each inputs;
+    common:mGoras[raze (last each results) - expected];
     /calculate common factors
-    pythagoreanFactors:common * (last results) - expected;
-    resultInput:(enlist inputs) , -1_results;
-    sigmoidFactors:mSig linear[resultInput;weightsBiases`weight;weightsBiases`bias];
+    pythagoreanFactors:common * (last each results) - expected;
+    resultInput:(enlist each inputs) ,' _[-1;] each results;
+    sigmoidFactors:mSig linear[;weightsBiases`weight;weightsBiases`bias] each resultInput;
 
     /will need to build all the weight grad scalars
-    indexing:indexGen[count inputs;weightsBiases];
+    indexing:indexGen[count first inputs;weightsBiases];
 
     /use the grad to produce a new set of weights and biases that should, theoretically, be closer to the global minimum
     weightsBiases - scaling*grad[weightsBiases;sigmoidFactors;pythagoreanFactors;resultInput;indexing]

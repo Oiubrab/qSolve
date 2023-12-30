@@ -1,12 +1,12 @@
 \l defineEquation.q
 
-weightsBiases:weightBiasGen[2;5 2];
+weightsBiases:weightBiasGen[2;5 3 2];
 
-numOfEx:100000;
+numOfEx:100;
 testInput:{(0.1*x?10),'(0.1*x?10)}[numOfEx];
 testExpected:?[testInput[til count testInput - 1;0]>testInput[til count testInput - 1;1];numOfEx#enlist(1.0 0.0);numOfEx#enlist(0.0 1.0)];
 
-newWeightsBiases:backPropogation/[weightsBiases;testInput;testExpected;0.0001]
+newWeightsBiases:backPropogation[weightsBiases;testInput;testExpected;0.0001]
 
 
 normalised:{[model;input]
