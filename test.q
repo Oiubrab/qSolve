@@ -1,9 +1,9 @@
 \l defineEquation.q
 
-weightsBiases: weightBiasGen[2;2 2];
+weightsBiases: weightBiasGen[2;100 1000 2];
 
 backPropogation:{[wb]
-    numOfEx:100;
+    numOfEx:1000;
     trainingInput:{(0.1*x?10),'(0.1*x?10)}[numOfEx];
     trainingExpected:?[trainingInput[til count trainingInput - 1;0]>trainingInput[til count trainingInput - 1;1];numOfEx#enlist(1.0 0.0);numOfEx#enlist(0.0 1.0)];
 
