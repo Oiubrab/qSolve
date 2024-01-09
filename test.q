@@ -1,6 +1,6 @@
 \l defineEquation.q
 
-/system"python mnist_data_pull.py3 noshow";
+system"python mnist_data_pull.py3 noshow";
 
 weightsBiases:weightBiasGen[784;30 20 10];
 
@@ -42,7 +42,7 @@ backPropogation:{[weightsBiases;trainingInput;trainingExpected;testInput;testExp
             (modelAndMeta[0] - scales[first where (min diffs)=diffs] * gradient;min diffs);
             modelAndMeta
         ]
-    }/[(weightsBiases;1f);grouper[trainingInput;trainGrouping];grouper[trainingExpected;trainGrouping];grouper[testInput;testGrouping];grouper[testExpected;testGrouping]]
+    }/[(weightsBiases;1f);grouper[trainingInput;trainGrouping];grouper[trainingExpected;trainGrouping];grouper[testInput;testGrouping];grouper[testExpected;testGrouping]];
     (hsym modelFileName) set newWeightsBiasesWithMinDiff[0];
     newWeightsBiasesWithMinDiff
  }
