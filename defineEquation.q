@@ -38,7 +38,7 @@ grad:{[weightsBiases;sigFactors;pyFactors;rezza;index]
                 ]
             ]
         }[weights;index;] each ((enlist each sigFactors) ,' (enlist each pyFactors) ,' (enlist each rezza))
-    }[weightsBiases`weight;sigFactors;pyFactors;rezza;] each index`weight;
+    }[weightsBiases`weight;sigFactors;pyFactors;rezza;] peach index`weight;
     weightGrad:{x[y[0];y[1];y[2]]:y[3];x}/[weightsBiases`weight;(index`weight),'weightGradList];
 
     /calculate the grad for the biases
@@ -62,7 +62,7 @@ grad:{[weightsBiases;sigFactors;pyFactors;rezza;index]
                 ]
             ]
         }[weights;index;] each ((enlist each sigFactors) ,' (enlist each pyFactors))
-    }[weightsBiases`weight;sigFactors;pyFactors;] each index`bias;
+    }[weightsBiases`weight;sigFactors;pyFactors;] peach index`bias;
     biasGrad:{x[y[0];y[1]]:y[2];x}/[weightsBiases`bias;(index`bias),'biasGradList];
     /build the grad dic
     `weight`bias!(weightGrad;biasGrad)
