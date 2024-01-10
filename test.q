@@ -1,19 +1,18 @@
 \l defineEquation.q
 
-weightsBiases:weightBiasGen[2;2 2];
+weightsBiases:weightBiasGen[784;10 10];
 
-numOfEx:100000;
-testInput:{(0.1*x?10),'(0.1*x?10)}[numOfEx];
-testExpected:?[testInput[til count testInput - 1;0]>testInput[til count testInput - 1;1];numOfEx#enlist(1.0 0.0);numOfEx#enlist(0.0 1.0)];
+useNo:60;
 
-newWeightsBiases:backPropogation/[weightsBiases;testInput;testExpected;0.0001]
+train_total:-1 + count system"ls eternalnightmare";
+test_total:-1 + count system"ls byinheritance";
 
+x_train:({(raze flip ("JJJJJJJJJJJJJJJJJJJJJJJJJJJJ";4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 3) 0: `$":eternalnightmare/eternalnightmare",(string x),".txt")%255} each til -1 + count system"ls eternalnightmare")[til useNo];
+y_train:({this:10#0f;this[x]:1f;this} each ((enlist "J";enlist 1) 0: `$":eternalnightmare/eternalnightmareY.txt")[0])[til useNo];
 
-normalised:{[model;input]
-    points:0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9;
-    top:max useModel[model;] each points cross points;
-    bottom:min useModel[model;] each points cross points;
-    range:top - bottom;
-    above:useModel[model;input] - bottom;
-    above*(1%range)
- }
+x_test:({(raze flip ("JJJJJJJJJJJJJJJJJJJJJJJJJJJJ";4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 3) 0: `$":byinheritance/byinheritance",(string x),".txt")%255} each til -1 + count system"ls byinheritance")[til "j"$(train_total*useNo)%test_total];
+y_test:({this:10#0f;this[x]:1f;this} each ((enlist "J";enlist 1) 0: `$":byinheritance/byinheritanceY.txt")[0])[til "j"$(train_total*useNo)%test_total];
+
+newWeightsBiases:backPropogation[weightsBiases;x_train[0];y_train[0];10000.0];
+useModel[newWeightsBiases;x_train[0]]
+
