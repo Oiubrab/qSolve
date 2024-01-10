@@ -13,7 +13,7 @@ if not len(sys.argv)==2 or not sys.argv[1]=="show" and not sys.argv[1]=="noshow"
 # load (downloaded if needed) the MNIST dataset
 (X_train, y_train), (X_test, y_test) = mnist.load_data()
 
-if sys.argv=="show":
+if sys.argv[1]=="show":
    # plot 4 images as gray scale
    plt.subplot(221)
    plt.imshow(X_train[0], cmap=plt.get_cmap('gray'))

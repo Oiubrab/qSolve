@@ -88,6 +88,9 @@ gradBuild:{[weightsBiases;inputs;expected]
 /runs the backpropogation on a model and saves it to disk/outputs a new model
 backPropogation:{[weightsBiases;trainingInput;trainingExpected;testInput;testExpected;trainGrouping;modelFileName]
 
+    / get the timer going
+    `oldTimer set .z.Z;
+
     / base the number of groups used on the number of training examples
     noOfGroups:floor (count trainingExpected)%trainGrouping;
 
@@ -104,22 +107,33 @@ backPropogation:{[weightsBiases;trainingInput;trainingExpected;testInput;testExp
     grouper:{[twoDim;grp] {x[z+til y]}[twoDim;grp;] each grp*til "j"$(count twoDim)%grp};
 
     newWeightsBiasesWithMinDiff:{[modelAndMeta;trainingInput;trainingExpected;testInput;testExpected]
-        scales: 0.1 * til 1000;
+        scales: 0.1 + 0.1 * til 100;
 
-        gradient:gradBuild[modelAndMeta[0];trainingInput;trainingExpected];
+        gradient:gradBuild[modelAndMeta;trainingInput;trainingExpected];
 
         diff:{
             res:useModel[y[0] - x*y[1];] each z[0];
             avg (sum each abs res - z[1])
-        }[;(modelAndMeta[0];gradient);(testInput;testExpected)];
+        }[;(modelAndMeta;gradient);(testInput;testExpected)];
 
         diffs:diff each scales;
-        $[modelAndMeta[1] > min diffs;
-            (modelAndMeta[0] - scales[first where (min diffs)=diffs] * gradient;min diffs);
-            modelAndMeta
-        ]
-    }/[(weightsBiases;1f);grouper[trainingInput;trainGrouping];grouper[trainingExpected;trainGrouping];grouper[testInput;testGrouping];grouper[testExpected;testGrouping]];
-    (hsym modelFileName) set newWeightsBiasesWithMinDiff[0];
+
+        show "t"$ ("t"$.z.Z) - "t"$oldTimer;
+        `oldTimer set .z.Z;
+        show "Min Diff:";
+        show min diffs;
+        show "Scale:";
+        show scales[first where (min diffs)=diffs];
+        show "Gradient:";
+        show gradient;
+        show "model update:";
+        show modelAndMeta - scales[first where (min diffs)=diffs] * gradient;
+
+        modelAndMeta - scales[first where (min diffs)=diffs] * gradient
+
+
+    }/[weightsBiases;grouper[trainingInput;trainGrouping];grouper[trainingExpected;trainGrouping];grouper[testInput;testGrouping];grouper[testExpected;testGrouping]];
+    (hsym modelFileName) set newWeightsBiasesWithMinDiff;
     newWeightsBiasesWithMinDiff
  }
 
