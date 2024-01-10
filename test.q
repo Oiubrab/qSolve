@@ -2,7 +2,7 @@
 
 system"python mnist_data_pull.py3 noshow";
 
-weightsBiases:weightBiasGen[784;784 10];
+weightsBiases:weightBiasGen[784;10 10];
 
 useNo:60;
 

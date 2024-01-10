@@ -107,7 +107,7 @@ backPropogation:{[weightsBiases;trainingInput;trainingExpected;testInput;testExp
     grouper:{[twoDim;grp] {x[z+til y]}[twoDim;grp;] each grp*til "j"$(count twoDim)%grp};
 
     newWeightsBiasesWithMinDiff:{[modelAndMeta;trainingInput;trainingExpected;testInput;testExpected]
-        scales: 0.1 + 0.1 * til 100;
+        scales: 9500f + 100f * til 10;
 
         gradient:gradBuild[modelAndMeta;trainingInput;trainingExpected];
 
