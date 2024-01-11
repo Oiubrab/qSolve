@@ -1,33 +1,40 @@
 \l defineEquation.q
 
-weightsBiases: weightBiasGen[2;100 1000 2];
+/system"python mnist_data_pull.py3 noshow";
 
-backPropogation:{[wb]
-    numOfEx:1000;
-    trainingInput:{(0.1*x?10),'(0.1*x?10)}[numOfEx];
-    trainingExpected:?[trainingInput[til count trainingInput - 1;0]>trainingInput[til count trainingInput - 1;1];numOfEx#enlist(1.0 0.0);numOfEx#enlist(0.0 1.0)];
+$[1b;
+    [
+    system"c 5000 5000";
+    system"P 0";
+    weightsBiases:weightBiasGen[784;784 10];
 
-    testInput:{(0.1*x?10),'(0.1*x?10)}[numOfEx];
-    testExpected:?[testInput[til count testInput - 1;0]>testInput[til count testInput - 1;1];numOfEx#enlist(1.0 0.0);numOfEx#enlist(0.0 1.0)];
+    useNo:600;
+    ratioConversion:0b;
 
-    scales: 0.001 * til 100000;
+    train_total:-1 + count system"ls eternalnightmare";
+    test_total:-1 + count system"ls byinheritance";
+    ratioConvert:til "j"$(train_total*useNo)%test_total;
 
-    gradient:gradBuild[wb;trainingInput;trainingExpected];
+    x_train:({(raze flip ("JJJJJJJJJJJJJJJJJJJJJJJJJJJJ";4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 3) 0: `$":eternalnightmare/eternalnightmare",(string x),".txt")%255} each til -1 + count system"ls eternalnightmare")[til useNo];
+    y_train:({this:10#0f;this[x]:1f;this} each ((enlist "J";enlist 1) 0: `$":eternalnightmare/eternalnightmareY.txt")[0])[til useNo];
 
-    diff:{
-        res:useModel[y[0] - x*y[1];] each z[0];
-        avg (sum each abs res - z[1])
-    }[;(wb;gradient);(testInput;testExpected)];
+    x_test:({(raze flip ("JJJJJJJJJJJJJJJJJJJJJJJJJJJJ";4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 3) 0: `$":byinheritance/byinheritance",(string x),".txt")%255} each til -1 + count system"ls byinheritance")[$[ratioConversion;ratioConvert;til useNo]];
+    y_test:({this:10#0f;this[x]:1f;this} each ((enlist "J";enlist 1) 0: `$":byinheritance/byinheritanceY.txt")[0])[$[ratioConversion;ratioConvert;til useNo]];
 
-    diffs:diff each scales;
-    (min diffs;wb - scales[first where (min diffs)=diffs] * gradient)
- }
+    model:backPropogation[weightsBiases;x_train;y_train;x_test;y_test;20;`model;enlist 1000.1]
+    ];[
 
-/ normalised:{[model;input]
-/     points:0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9;
-/     top:max useModel[model;] each points cross points;
-/     bottom:min useModel[model;] each points cross points;
-/     range:top - bottom;
-/     above:useModel[model;input] - bottom;
-/     above*(1%range)
-/  }
+    weightsBiases:weightBiasGen[4;4 2];
+
+    numOfEx:500000;
+    trainingInput:{"f"$x} each {(x?2),'(x?2),'(x?2),'(x?2)}[numOfEx];
+    trainingInput[5 * til floor (numOfEx%5)]:("j"$numOfEx%5)?(1 1 0 0f;0 0 1 1f);
+    trainingExpected:{$[x~1 1 0 0f;1 0f;x~0 0 1 1f;0 1f;0 0f]} each trainingInput;
+
+    testInput:{"f"$x} each {(x?2),'(x?2),'(x?2),'(x?2)}[numOfEx];
+    testInput[5 * til floor (numOfEx%5)]:("j"$numOfEx%5)?(1 1 0 0f;0 0 1 1f);
+    testExpected:{$[x~1 1 0 0f;1 0f;x~0 0 1 1f;0 1f;0 0f]} each testInput;
+
+    model:backPropogation[weightsBiases;trainingInput;trainingExpected;testInput;testExpected;20;`model;enlist 0.1]
+    ]
+ ]
