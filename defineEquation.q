@@ -86,10 +86,13 @@ gradBuild:{[weightsBiases;inputs;expected]
  }
 
 /runs the backpropogation on a model and saves it to disk/outputs a new model
-backPropogation:{[weightsBiases;trainingInput;trainingExpected;testInput;testExpected;trainGrouping;modelFileName]
+backPropogation:{[weightsBiases;trainingInput;trainingExpected;testInput;testExpected;trainGrouping;modelFileName;scale]
 
     / get the timer going
     `oldTimer set .z.Z;
+
+    / set scales because it's 00:42 and I want some sleep
+    `scales set scale;
 
     / base the number of groups used on the number of training examples
     noOfGroups:floor (count trainingExpected)%trainGrouping;
@@ -107,7 +110,6 @@ backPropogation:{[weightsBiases;trainingInput;trainingExpected;testInput;testExp
     grouper:{[twoDim;grp] {x[z+til y]}[twoDim;grp;] each grp*til "j"$(count twoDim)%grp};
 
     newWeightsBiasesWithMinDiff:{[modelAndMeta;trainingInput;trainingExpected;testInput;testExpected]
-        scales: 9500f + 100f * til 10;
 
         gradient:gradBuild[modelAndMeta;trainingInput;trainingExpected];
 
@@ -118,6 +120,7 @@ backPropogation:{[weightsBiases;trainingInput;trainingExpected;testInput;testExp
 
         diffs:diff each scales;
 
+        show " ";
         show "t"$ ("t"$.z.Z) - "t"$oldTimer;
         `oldTimer set .z.Z;
         show "Min Diff:";
