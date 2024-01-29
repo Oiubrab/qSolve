@@ -91,9 +91,6 @@ backPropogation:{[weightsBiases;trainingInput;trainingExpected;testInput;testExp
     / get the timer going
     `oldTimer set .z.Z;
 
-    / set scales because it's 00:42 and I want some sleep
-    `scales set scale;
-
     / base the number of groups used on the number of training examples
     noOfGroups:floor (count trainingExpected)%trainGrouping;
 
@@ -109,40 +106,36 @@ backPropogation:{[weightsBiases;trainingInput;trainingExpected;testInput;testExp
     /separates two dimensional lists (i.e becomes 3D) into groups of grp
     grouper:{[twoDim;grp] {x[z+til y]}[twoDim;grp;] each grp*til "j"$(count twoDim)%grp};
 
-    newWeightsBiasesWithMinDiff:{[modelAndMeta;trainingInput;trainingExpected;testInput;testExpected]
+    newWeightsBiasesWithMinDiff:{[modelAndMeta;scalar;trainingInput;trainingExpected;testInput;testExpected]
 
         gradient:gradBuild[modelAndMeta;trainingInput;trainingExpected];
 
-        diff:{
-            res:useModel[y[0] - x*y[1];] each z[0];
-            avg (sum each abs res - z[1])
-        }[;(modelAndMeta;gradient);(testInput;testExpected)];
+        newModel:modelAndMeta - scalar * gradient;
 
-        diffs:diff each scales;
+        res:useModel[newModel;] each testInput;
 
         show " ";
         show "t"$ ("t"$.z.Z) - "t"$oldTimer;
         `oldTimer set .z.Z;
-        show "Min Diff:";
-        show min diffs;
+        show "Diff:";
+        show avg[raze abs[res - testExpected]];
         show "Scale:";
-        show scales[first where (min diffs)=diffs];
+        show scalar;
         show "Gradient:";
         show gradient;
         show "model update:";
-        show modelAndMeta - scales[first where (min diffs)=diffs] * gradient;
+        show newModel;
 
-        modelAndMeta - scales[first where (min diffs)=diffs] * gradient
+        newModel
 
-
-    }/[weightsBiases;grouper[trainingInput;trainGrouping];grouper[trainingExpected;trainGrouping];grouper[testInput;testGrouping];grouper[testExpected;testGrouping]];
+    }/[weightsBiases;scale;grouper[trainingInput;trainGrouping];grouper[trainingExpected;trainGrouping];grouper[testInput;testGrouping];grouper[testExpected;testGrouping]];
     (hsym modelFileName) set newWeightsBiasesWithMinDiff;
     newWeightsBiasesWithMinDiff
  }
 
 / generates a set of random weights and biases
 weightBiasGen:{[noOfInputs;nodes]
-    gen:{0.1 + 0.1*x?10};
+    gen:{(0.1 + 0.1*x?10)%x};
     / start with first layer
     weight:enlist gen each nodes[0]#noOfInputs;
     weight,:{y each x[z]#x[z-1]}[nodes;gen;] each 1 + til -1 + count nodes;
