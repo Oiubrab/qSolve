@@ -6,7 +6,7 @@ spot binary black hole "chirps" in detector noise, using public LIGO/Virgo data,
 real detections it never saw.
 
 The earlier plan (qSolve's rewrite, dashboard and FX test, Phases 0–9) is in
-[completed/improvemet_plan.md](completed/improvemet_plan.md). Read its "q gotchas" section before writing
+[completed/improvemet_plan.md](../completed/improvemet_plan.md). Read its "q gotchas" section before writing
 q here: several of them (no closures, `x`/`y`/`z` making test lambdas take arguments, `sum` skipping nulls,
 one-letter string lists) will come up.
 
@@ -21,8 +21,10 @@ one-letter string lists) will come up.
   without asking.
 - Keep tests offline: anything needing downloaded data skips itself when the data is missing (`.t.skip`).
 
-**Current status (2026-10-24):** plan written; nothing built yet. The owner has to settle the open questions
-in section 4 before G1 starts.
+**Current status (2026-10-24):** G1.1 is complete; G1.2 is next. The owner chose pure-q
+waveforms and the plan's default download budget, and asked to include binary neutron stars and an LSTM/GRU.
+The BNS window and sampling configuration must be specified before G2/G4; do not silently force BNS into the
+1-second BBH setup.
 
 ---
 
@@ -103,14 +105,14 @@ long-duration signals (see scope).
 
 | # | Decision | Why |
 |---|---|---|
-| G-D1 | Scope: binary black holes, component masses 10–80 M☉, aligned spins, in 1-second windows. | Their chirps last well under a second in the band we use, so they fit a 1 s window (as in the thesis). Binary neutron stars like GW170817 last about a minute in band: out of scope, and expected to be missed. |
+| G-D1 | Scope: BBH component masses 10–80 M☉, aligned spins, in 1-second windows; include BNS as a second signal class with a longer window to be specified before G2/G4. | BBH chirps fit the thesis-style 1 s window. BNS signals last much longer in band and need a separate input/window design. |
 | G-D2 | Sample rate 2048 Hz after downsampling, band 20–512 Hz, two detectors (H1, L1), so 2 × 2048 inputs per window. | Black hole mergers in this mass range peak well below 512 Hz. Two detectors give coincidence, which is what makes real searches robust. 1024 Hz (2 × 1024 inputs) is the fallback if memory or speed bites. |
 | G-D3 | Whitening uses a PSD estimated by Welch's method (4 s Hann segments, 50% overlap) from nearby data (e.g. ±256 s, excluding the window being analysed). | It's the standard approach. It turns real coloured noise into roughly unit-variance white noise, so the network's inputs have a consistent scale. |
 | G-D4 | Injections happen in the frequency domain: the waveform h(f), projected onto each detector, divided by that detector's ASD, scaled to a target network SNR, inverse-FFT'd and added to *whitened* real noise. | Whitening is linear, so this equals injecting into raw strain and then whitening, and it is much cheaper. |
 | G-D5 | Waveforms are generated in pure q. **Recommended:** the TaylorF2 post-Newtonian inspiral (closed-form phase to 3.5PN), then the IMRPhenomB inspiral–merger–ringdown model (Ajith et al. 2011, closed-form frequency-domain amplitude and phase for aligned spins), checked against TaylorF2 in the early inspiral and end-to-end on real data (G3.4). LALSuite (`pip install lalsuite`) is an optional cross-check, never a dependency. | It keeps qSolve pure q, and both models are closed-form. Fidelity is lower than modern models like IMRPhenomXPHM, but it is enough to train a detector; the real-event test will show whether that matters. |
 | G-D6 | Detector response: H1 and L1 positions and arm orientations, antenna patterns F+ and F× from sky position, polarisation and Greenwich sidereal time, and the inter-detector time delay (up to about 10 ms). | Without it, the two detectors' signals would be unrealistically identical, and the network would learn the wrong coincidence pattern. |
 | G-D7 | Training data are generated fresh each epoch from a library of whitened noise plus random injections and glitches. This needs a qSolve core feature: `.qs.train` accepting a data *generator*. | It avoids storing gigabytes of examples and greatly reduces overfitting to particular noise. |
-| G-D8 | Models in order: an MLP baseline (the thesis's dense design), then 1-D convolution layers added to the qSolve core, then optionally an LSTM or GRU in homage to the thesis. | CNNs on whitened strain are the standard published approach (George & Huerta 2018; Gabbard et al. 2018). The thesis found an LSTM no better than dense layers. |
+| G-D8 | Models in order: an MLP baseline (the thesis's dense design), 1-D convolution layers added to the qSolve core, then an LSTM or GRU in homage to the thesis. | CNNs on whitened strain are the standard published approach (George & Huerta 2018; Gabbard et al. 2018). The recurrent model revisits the thesis result. |
 | G-D9 | Splits by time, never by window: training noise, validation noise and test noise come from different events' 4096 s files, and every test detection's surrounding data is excluded from training noise. | Overlapping windows from the same minute of noise would leak between sets. |
 | G-D10 | The false-alarm rate is measured by time slides: shift L1 against H1 by many multiples of more than 10 ms (in practice whole seconds) across held-out noise, score every window, and convert score thresholds to false alarms per hour or month. | This is the standard way to get much more background than real time provides, without real signals in it. |
 | G-D11 | New code goes in `signal.q` (`.qs.sig`: FFT and signal processing, general purpose) and `gw.q` (`.qs.gw`: GWOSC access, detectors, waveforms, injections, scanning), plus `bench/gw.q`. Downloads go in `data/gw/` (git-ignored), with parsed strain cached as q binary files so the text is parsed once. | It follows the existing layout (`fx.q`, `bench/fx.q`). |
@@ -119,13 +121,10 @@ long-duration signals (see scope).
 
 ## 4. Open questions for the owner
 
-1. **Waveforms:** pure q (G-D5, recommended), or allow a one-off Python/LALSuite step to generate a
-   higher-fidelity waveform bank as text?
-2. **Download budget:** about 2 GB of noise (6 events' 4096 s files, both detectors) and about 0.5 GB of test
-   events. More noise or more events is possible.
-3. **Model ambition:** stop at the MLP plus CNN, or also build the LSTM/GRU (G5.3) to revisit the thesis
-   question?
-4. **Scope:** binary black holes only (G-D1), or also try binary neutron stars with longer windows later?
+1. **Waveforms:** settled: pure q, with LALSuite only as an optional cross-check.
+2. **Download budget:** settled: about 2 GB of noise and about 0.5 GB of test events.
+3. **Model ambition:** settled: include an LSTM or GRU after the MLP and CNN.
+4. **Scope:** settled: include BNS. Specify its longer window and corresponding sampling/training design before G2/G4.
 
 ---
 
@@ -133,7 +132,7 @@ long-duration signals (see scope).
 
 ### G1 — Data access
 
-- [ ] **G1.1 Event catalogue.** `.qs.gw.events[]`: fetch `allevents` JSON (curl, cached in `data/gw/`), parse
+- [x] **G1.1 Event catalogue.** `.qs.gw.events[]`: fetch `allevents` JSON (curl, cached in `data/gw/`), parse
   with `.j.k` into a table (name, catalogue, GPS, source masses, distance, network SNR, p_astro), de-duplicate
   across catalogues (keep the latest version), and add selection helpers (confident BBH in mass range with H1
   and L1 data). *Accept:* tests on a saved small JSON sample; real fetch skips without network.
@@ -282,6 +281,12 @@ long-duration signals (see scope).
 
 ## Progress log
 
+- 2026-10-24: G1.1 complete. Added `gw.q` catalogue parsing/cache, newest-version de-duplication,
+  confidence/mass and detector-availability selectors, and offline fixture plus optional cached-live tests.
+  The live endpoint returned 671 versioned entries and 433 latest-per-name rows; null catalogue fields are
+  present and preserved, so selection must explicitly filter them.
+- 2026-10-24: Owner chose pure-q waveforms, the default download budget, an LSTM/GRU, and BNS in scope.
+  Updated G-D1/G-D8; BNS needs a separate longer-window design before signal-processing and training stages.
 - 2026-10-24: Plan written. Checked: GWOSC's event API (671 catalogue entries, 417 confident with an SNR),
   that strain comes as `txt.gz` at 4 and 16 kHz in 32 s and 4096 s files, and file sizes (32 s, 4 kHz: 1.3 MB;
   4096 s, 4 kHz: 164 MB). LALSuite isn't installed here, so waveforms are planned in pure q. Read the

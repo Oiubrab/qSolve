@@ -1,0 +1,52 @@
+{
+  "events": {
+    "GW150914-v2": {
+      "commonName": "GW150914",
+      "version": 2,
+      "catalog.shortName": "O1_O2-Preliminary",
+      "GPS": 1126259462.4,
+      "mass_1_source": null,
+      "mass_2_source": null,
+      "luminosity_distance": null,
+      "network_matched_filter_snr": null,
+      "p_astro": null,
+      "jsonurl": "https://gwosc.org/eventapi/json/O1_O2-Preliminary/GW150914/v2"
+    },
+    "GW150914-v3": {
+      "commonName": "GW150914",
+      "version": 3,
+      "catalog.shortName": "GWTC-1-confident",
+      "GPS": 1126259462.4,
+      "mass_1_source": 35.6,
+      "mass_2_source": 30.6,
+      "luminosity_distance": 440.0,
+      "network_matched_filter_snr": 25.2,
+      "p_astro": 1.0,
+      "jsonurl": "https://gwosc.org/eventapi/json/GWTC-1-confident/GW150914/v3"
+    },
+    "GW170817-v3": {
+      "commonName": "GW170817",
+      "version": 3,
+      "catalog.shortName": "GWTC-1-confident",
+      "GPS": 1187008882.4,
+      "mass_1_source": 1.4,
+      "mass_2_source": 1.3,
+      "luminosity_distance": 40.0,
+      "network_matched_filter_snr": 32.4,
+      "p_astro": 1.0,
+      "jsonurl": "https://gwosc.org/eventapi/json/GWTC-1-confident/GW170817/v3"
+    },
+    "GWTEST-v1": {
+      "commonName": "GWTEST",
+      "version": 1,
+      "catalog.shortName": "GWTC-1-confident",
+      "GPS": 1200000000.0,
+      "mass_1_source": null,
+      "mass_2_source": null,
+      "luminosity_distance": null,
+      "network_matched_filter_snr": null,
+      "p_astro": null,
+      "jsonurl": "https://gwosc.org/eventapi/json/GWTC-1-confident/GWTEST/v1"
+    }
+  }
+}
