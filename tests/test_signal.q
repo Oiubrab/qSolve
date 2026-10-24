@@ -41,3 +41,39 @@
     padded:.qs.sig.irfft .qs.sig.rfft short;
     .t.near[padded;1 2 3 4 5 0 0 0f;1e-12];
  }];
+
+.t.add[`signal_windows;{
+     hann:.qs.sig.hann 9;
+     .t.near[hann;reverse hann;1e-12];
+     .t.near[first hann;0f;1e-12];
+     .t.near[last hann;0f;1e-12];
+     .t.eq[.qs.sig.tukey[9;0];9#1f];
+     .t.near[.qs.sig.tukey[9;1];hann;1e-12];
+     .t.near[.qs.sig.tukey[9;0.5];reverse .qs.sig.tukey[9;0.5];1e-12];
+ }];
+
+.t.add[`signal_welch_white_noise;{
+     system "S 31";
+     rate:1024f;
+   samples:0.5*.qs.data.normal 65536;
+     spectrum:.qs.sig.welch[samples;rate;1024;512];
+     expected:2*0.25%rate;
+  psd:spectrum[`psd];
+   interior:psd[1+til (count[psd]-2)];
+   .t.near[avg interior;expected;0.03*expected];
+    freq:spectrum[`freq];
+    .t.eq[count freq;513];
+    .t.near[freq[0 1 512];0 1 512f;1e-12];
+ }];
+
+.t.add[`signal_welch_tone;{
+     rate:1024f;
+   phase:(2*.qs.sig.pi*73*til 8192)%rate;
+   samples:cos phase;
+     spectrum:.qs.sig.welch[samples;rate;1024;512];
+  psd:spectrum[`psd];
+  freq:spectrum[`freq];
+    peakValue:max psd;
+   peak:first where peakValue=psd;
+   .t.eq[freq[peak];73f];
+ }];

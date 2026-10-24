@@ -78,3 +78,57 @@
     full:.qs.sig.ifft[(real,innerReal;imag,neg innerImag)];
     full 0
  }
+
+.qs.sig.hann:{[n]
+    if[n<2; '"window length must be at least two"];
+    0.5-0.5*cos (2*.qs.sig.pi*til n)%(n-1)
+ }
+
+.qs.sig.tukeyInner:{[n;alpha]
+    edge:alpha*(n-1)%2;
+    i:til n;
+    left:0.5*(1+cos .qs.sig.pi*(2*i%(alpha*(n-1))-1));
+    right:reverse left;
+    ?[i<edge;left;?[i>(n-1)-edge;right;1f]]
+ }
+
+.qs.sig.tukey:{[n;alpha]
+    if[n<2; '"window length must be at least two"];
+    if[not alpha within 0 1; '"Tukey alpha must be between zero and one"];
+    $[alpha=0;n#1f;alpha=1;.qs.sig.hann n;.qs.sig.tukeyInner[n;alpha]]
+ }
+
+.qs.sig.periodogram:{[segment;window;rate]
+    n:count segment;
+    if[not n=.qs.sig.pow2ceil n; '"Welch segment length must be a power of two"];
+    if[not count window=n; '"window length must match segment length"];
+    spectrum:.qs.sig.rfft segment*window;
+    realSpectrum:spectrum 0;
+    imagSpectrum:spectrum 1;
+    realPower:realSpectrum*realSpectrum;
+    imagPower:imagSpectrum*imagSpectrum;
+    power:realPower+imagPower;
+    windowPower:window*window;
+    windowEnergy:sum windowPower;
+    normalization:rate*windowEnergy;
+    power:power%normalization;
+    bins:count power;
+    interior:1+til[bins-2];
+    power[interior]:2*power[interior];
+    `freq`psd!((rate*(til[bins])%n);power)
+ }
+
+/ Welch one-sided PSD in physical units per Hz. Overlap is a count of samples.
+.qs.sig.welch:{[samples;rate;segment;overlap]
+    samples:"f"$samples;
+    if[not segment=.qs.sig.pow2ceil segment; '"Welch segment length must be a power of two"];
+    if[overlap<0 or overlap>=segment; '"Welch overlap must be in [0, segment)"];
+    if[segment>count samples; '"Welch segment is longer than the input"];
+    stride:segment-overlap;
+    starts:stride*til[1+(count[samples]-segment) div stride];
+    window:.qs.sig.hann segment;
+    chunks:{[series;offset;size] series[offset+til size]}[samples;;segment] each starts;
+    spectra:.qs.sig.periodogram[;window;rate] each chunks;
+    psdRows:{[spectrum] spectrum[`psd]} each spectra;
+    `freq`psd!((first spectra)[`freq];avg psdRows)
+ }

@@ -151,7 +151,7 @@ long-duration signals (see scope).
   vectors, vectorised per stage; `rfft`/`irfft` for real signals; zero-padding to powers of two. *Accept:*
   matches a naive DFT to 1e-9 on random input; `ifft fft x = x`; Parseval's theorem; a pure tone peaks in the
   right bin; timing on 2^20 points recorded in the log.
-- [ ] **G2.2 Windows and PSD.** Hann and Tukey windows; Welch PSD (segment length, overlap, one-sided,
+- [x] **G2.2 Windows and PSD.** Hann and Tukey windows; Welch PSD (segment length, overlap, one-sided,
   physical units: strain²/Hz). *Accept:* white Gaussian noise of variance σ² at rate fs gives a flat PSD of
   2σ²/fs within a few percent; a tone's power lands in its bin.
 - [ ] **G2.3 Whitening, band-pass, resampling.** Whiten by an ASD (interpolated to the segment's frequency
@@ -300,6 +300,10 @@ long-duration signals (see scope).
 - 2026-10-25: G2.1 complete. Added radix-2 complex FFT/IFFT and real transforms with power-of-two padding.
   Seeded random complex input matched the naive DFT within 1e-9; round-trip, Parseval, tone-bin and padded
   real inverse checks passed. A 2^20-point forward FFT took 0.762 s in this environment.
+- 2026-10-25: G2.2 complete. Added Hann and Tukey windows and one-sided Welch PSD with physical strain²/Hz
+  normalization. Seeded white noise at variance 0.25 and 1024 Hz measured the expected interior-bin level
+  2σ²/fs within 3%; a 73 Hz tone landed in its bin. An initial compact power expression was invalid under
+  q's right-to-left evaluation; splitting real/imaginary squares fixed the PSD values.
 - 2026-10-24: Owner chose pure-q waveforms, the default download budget, an LSTM/GRU, and BNS in scope.
   Updated G-D1/G-D8; BNS needs a separate longer-window design before signal-processing and training stages.
 - 2026-10-24: Plan written. Checked: GWOSC's event API (671 catalogue entries, 417 confident with an SNR),
