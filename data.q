@@ -228,6 +228,36 @@
     `last`seasonal!(avg abs y-s t;$[(period>=horizon) and period<=lags-1+horizon; avg abs y-s t+horizon-period; 0n])
  }
 
+/ windows over several aligned series (inputs: name -> series, e.g. daily log returns of several pairs):
+/ row t holds the last lags values of every input up to and including t (input by input, oldest first),
+/ and the target is the sum of target's next horizon values (for log returns, the horizon-step return).
+/ Rows with a null anywhere are dropped. Returns `X`Y (unscaled) and `t, the time of each row
+.qs.data.laggedRows:{[inputs;target;lags;horizon]
+    S:"f"$value inputs; y:"f"$inputs target; n:count y;
+    if[n<lags+horizon+1; '"series too short for ",(string lags)," lags and horizon ",string horizon];
+    t:(lags-1)+til n-lags+horizon-1;
+    X:raze each flip {[t;lags;s] s t+\:neg reverse til lags}[t;lags] each S;
+    / (sum skips nulls, so a target spanning a missing value is null rather than a smaller sum)
+    Y:{$[any null x;0n;sum x]} each y t+\:1+til horizon;
+    ok:where not (any each null X) or null Y;
+    `X`Y`t!(X ok;Y ok;t ok)
+ }
+
+/ model data from laggedRows output: rows i train and rows j validate, scaled with the training rows'
+/ statistics (inputs per column, the target by its mean and sd); yraw and t keep the unscaled targets and times
+.qs.data.laggedSplit:{[rows;i;j]
+    st:.qs.data.stats rows[`X] i; y:rows`Y;
+    mu:avg y i; sd:dev y i; sd:$[sd=0;1f;sd];
+    `X`Y`Xval`Yval`mu`sd`xstats`yraw`yrawVal`t`tVal!(.qs.data.scale[st;rows[`X] i];enlist each (y[i]-mu)%sd;
+        .qs.data.scale[st;rows[`X] j];enlist each (y[j]-mu)%sd;mu;sd;st;y i;y j;rows[`t] i;rows[`t] j)
+ }
+
+/ the same split by time: the first frac of rows train, the rest validate
+.qs.data.lagged:{[inputs;target;lags;horizon;frac]
+    r:.qs.data.laggedRows[inputs;target;lags;horizon]; k:floor frac*count r`Y;
+    .qs.data.laggedSplit[r;til k;k+til count[r`Y]-k],`lags`horizon`names!(lags;horizon;key inputs)
+ }
+
 / a generated seasonal series of n points: slow trend, a daily-style cycle of length period with a
 / harmonic, and autocorrelated noise of sd about noise
 .qs.data.seasonal:{[n;period;noise]
@@ -242,6 +272,8 @@
 / datasets by name, split into training and validation: n rows and noise are used by the generated ones
 / the logic gates validate on their own four rows
 .qs.data.names:`and`or`xor`nand`fourBit`sine`circles`moons`spirals`houses`seasonal`iris`mnist`fashion
+/ datasets other modules add by name: name -> function of (n;noise), e.g. fx.q's currency pairs
+.qs.data.extra:(`symbol$())!();
 .qs.data.load:{[name;n;noise]
     $[name in key .qs.data.gates; {x,`Xval`Yval!x`X`Y} .qs.data.gate name;
         name in `fourBit`sine; .qs.data.split[.qs.data[name] n;0.8];
@@ -250,5 +282,6 @@
         name=`houses; .qs.data.fromTable[.qs.data.houses n;();`price;0.8];
         name=`seasonal; .qs.data.windows[.qs.data.seasonal[n;24;noise];48;1;0.8];
         name in `mnist`fashion; .qs.data.mnist `$":",.qs.data.dir,"/",string name;
+        name in key .qs.data.extra; .qs.data.extra[name][n;noise];
         '"unknown dataset: ",(string name),", expected one of ",", " sv string .qs.data.names]
  }

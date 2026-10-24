@@ -4,8 +4,12 @@
 / registry of tests: name -> niladic function
 .t.reg:(`symbol$())!()
 
-/ register a test
-.t.add:{[name;fn] .t.reg[name]:fn;}
+/ register a test; its function must take no arguments: a body that uses x, y or z as a variable makes q
+/ give it those parameters, so calling it would only build a projection and the test would "pass" unrun
+.t.add:{[name;fn]
+    if[1<count (value fn) 1; '"test ",(string name)," takes arguments: rename any variable called x, y or z"];
+    .t.reg[name]:fn;
+ }
 
 / fail unless c is true
 .t.ok:{[c;msg] if[not all (),c; 'msg];}

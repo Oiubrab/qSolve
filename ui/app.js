@@ -138,6 +138,8 @@ const PRESETS = {
   iris: { hidden: "8", epochs: 100, batch: 16, lr: 0.01 },
   mnist: { hidden: "128", act: "relu", epochs: 5, batch: 64, lr: 0.001, limit: "" },
   fashion: { hidden: "128", act: "relu", epochs: 5, batch: 64, lr: 0.001, limit: "" },
+  eurusd: { hidden: "", epochs: 30, batch: 64, lr: 0.001 },
+  gbpusd: { hidden: "", epochs: 30, batch: 64, lr: 0.001 },
 };
 
 const GROUPS = [

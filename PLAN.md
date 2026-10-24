@@ -12,10 +12,10 @@ It is written so that any engineer or LLM session can pick it up cold, see what 
 - If you change a design decision, edit the [Design decisions](#design-decisions) section and say why in the log.
 - Do not commit or push unless the repository owner asks you to.
 
-**Current status (2026-10-24):** Phases 0-8 are done: 83 tests pass (with and without threads), all 14
-benchmarks pass, and the dashboard's browser check (`node tests/ui/check.js`) passes. Phases 0-7 are
-committed on main; check `git status` for Phase 8. No further work is planned: the next step is the
-owner's choice. Start with `q tests/run.q` and read the Progress log.
+**Current status (2026-10-24):** Phases 0-9 are done: 90 tests pass (with and without threads), all
+benchmarks pass, and the browser check passes. Phases 0-8 are committed on main; Phase 9 is committed
+straight after this note (the owner's rule: commit each finished phase before starting the next). No
+further work is planned. Start with `q tests/run.q`, read the Progress log, and ask the owner.
 
 ---
 
@@ -125,6 +125,10 @@ These are settled unless the log says otherwise.
 - `get`, `distinct` and the like are keywords even as local names or table column names (`'assign`).
 - `pkill -f pattern` from this shell can match the shell's own command line and kill it (exit 144): find
   q processes with `pgrep -x q` and check their arguments instead.
+- **A test lambda that uses `x`, `y` or `z` as a variable takes them as parameters**, so `f[]` returns a
+  projection instead of running it, and the test "passes" without running. `.t.add` now refuses such tests.
+  q has no closures either: inner lambdas can't see the outer function's locals, so pass them in.
+- `sum` skips nulls (`sum 1 0n 2` is 3): guard multi-value targets with `$[any null x;0n;sum x]`.
 - A list of one-character strings is a string: `("x";"y")` is `"xy"`. Write `(1#"x";1#"y")` for a list of names.
 - Multi-line lambdas don't work when q code is piped in on stdin; put experiments in a script file.
 - This licence allows at most 4 secondary threads (`-s 4`).
@@ -143,6 +147,8 @@ data.q                  dataset generators and loaders (.qs.data)
 plot.q                  decision-boundary SVGs (.qs.plot2D)
 train.q                 command-line training script
 serve.q                 IPC model server (predict, predictTable, info)
+fx.q                    ECB exchange rates, pairs, returns, forecast scoring, controls, walk-forward (.qs.fx)
+bench/fx.q              the FX experiment (Phase 9)
 dashboard.q             web dashboard: HTTP for ui/, JSON over WebSocket, q IPC for KX Dashboards
 ui/                     the dashboard page: index.html, app.js, style.css (no external libraries)
 dashboards/qsolve.json  KX Dashboards connection for a dashboard on port 8080
@@ -352,6 +358,46 @@ data's own terms, an input method that fits the data, and real examples to compa
   data; the table form); results show the answer by name, probability bars per class, the true answer for
   examples, and a warning for inputs outside the training range. *Accept:* browser check covers spirals,
   iris, houses, MNIST (when downloaded) and a series upload.
+
+### Phase 9 — Real-world test: forecasting FX rates (owner's idea)
+
+Pull historical exchange rates, cut them into windows of recent history, and train the model to predict
+the next value of one currency pair; the loss is the gap between the forecast and what happened.
+
+**Read this first: what success looks like.** Daily FX rates are close to a random walk, so the benchmark is
+the naive forecast "no change from today", and beating it reliably is hard (that is what market
+efficiency means). The point of this phase is to *measure honestly*: forecast returns (changes), compare
+with naive baselines on later data than the model trained on, and run controls that show the pipeline
+finds a signal when one exists and none when there isn't. A large apparent edge means a bug (look-ahead
+or leakage), not a discovery.
+
+Data: the European Central Bank's euro reference rates (`eurofxref-hist.zip`): one rate per working day
+since 1999 for about 30 currencies against the euro, free and without a key. Any pair is a ratio of two
+columns (GBP/USD = USD per EUR / GBP per EUR).
+
+- [x] **9.1 Data.** `scripts/fetch_data.sh fx` (download and unzip into `data/fx/`); `.qs.data.ecb file` ->
+  table of date and one rate column per currency (ascending dates, `N/A` -> null, gaps forward-filled);
+  `.qs.data.fxRate[t;`GBPUSD]` for any pair of its currencies (and EUR); `.qs.data.logReturns`.
+  *Accept:* tests on a small hand-written file; real file loads if present.
+- [x] **9.2 Windows over several series.** `.qs.data.lagged[inputs;target;lags;horizon;frac]`: inputs a
+  dictionary name -> aligned series (e.g. log returns of several pairs), target one of them; row t holds the
+  last lags values of every input up to t, the target is the sum of the target's next horizon values (the
+  horizon-step log return); time-ordered split; scaling from training rows only; raw values kept for
+  decoding. *Accept:* alignment tests (the row's last input is time t, target from t+1), no use of
+  validation rows in scaling.
+- [x] **9.3 Scoring.** `.qs.fx.score`: on validation rows, MSE of model vs zero-change and vs
+  training-mean forecasts, skill = 1 - MSE(model)/MSE(zero change), directional accuracy (sign of forecast vs
+  sign of outcome), MAE in price terms. Also an `mae` loss in the core (the "difference" the owner
+  described), gradient-checked like the others.
+- [x] **9.4 Controls.** Shuffled-target control (skill must be about 0 or below) and a leak control (the
+  target's own next return given as an input: skill must be near 1). Both automated as tests on synthetic
+  data, and run on the real data in the experiment.
+- [x] **9.5 Experiments** (`bench/fx.q`, results table printed and recorded below in the log):
+  EUR/USD next day from its own 10 lagged returns; from 5 lagged returns of 6 major pairs; linear (no
+  hidden layer) vs MLP; 5-day horizon; up/down classification; walk-forward by year (train on all years
+  before, test on the next) to see whether any edge is stable.
+- [x] **9.6 Dashboard and docs.** FX datasets selectable in the dashboard (EUR/USD and GBP/USD next-day
+  forecasts, naive baseline shown as for other series); README section with the findings, stated plainly.
 
 ---
 
@@ -569,3 +615,46 @@ Environment used so far: q 5.0 (2026.05.01), Linux, 16 cores.
   inputs outside the training range. Checked in the browser on moons, houses, an uploaded series and
   MNIST (a drawn vertical stroke reads as 1 at 94%). Tests `dash_schema_examples`,
   `dash_series_forecast`. 83 tests pass.
+- 2026-10-24: Phase 8 committed (`7ed7429`). Owner proposed an FX forecasting test: added Phase 9, framed
+  around honest measurement against naive baselines with controls.
+- 2026-10-24: 9.1-9.4 done. `fx.q` (`.qs.fx`): `ecb` loader (fills interior gaps only, so currencies that
+  stopped, e.g. CYP, aren't carried forward), `rate` for any pair (quote per base, EUR included), `returns`
+  (log), `inputs`, `score` (skill vs zero change and vs training mean, direction vs upShare), `fit`,
+  controls `shuffled` and `leaky`, `walk` (walk-forward by year). `data.q`: `laggedRows`, `laggedSplit`,
+  `lagged` (several aligned series; row t holds inputs up to t, target sums t+1..t+h). Core: `mae` loss,
+  gradient-checked. `scripts/fetch_data.sh fx` (ECB zip, refetched each time). ECB file: 7,121 days,
+  1999-01-04 to 2026-10-23. Tests `tests/test_fx.q`: loader on a hand-written file and the real one,
+  alignment, train-only scaling, a synthetic AR(1) signal found (skill ~0.26, theory 0.25), noise and
+  shuffled controls show no skill, leak control near-perfect, walk-forward.
+  **Harness bug found:** tests whose bodies use `x`/`y`/`z` as variables never ran (they became 2- or
+  3-argument lambdas, so the runner built projections and recorded passes). `act_stable` and
+  `act_derivatives` from Phase 1 had never run; three new FX tests had the same problem. `.t.add` now
+  refuses such tests; all fixed. Running them for real exposed a real bug: `sum` skips nulls, so a
+  multi-day target spanning a gap counted the gap as zero change instead of dropping the row; fixed in
+  `laggedRows`. 89 tests pass with and without threads.
+- 2026-10-24: 9.5 and 9.6 done. `bench/fx.q` (about 30 s with `-s 4`), no early stopping on test data;
+  80/20 time split, testing from 2021-04-07 (1,423 days):
+
+  | experiment (next-day log return) | skill | direction | upShare |
+  |---|---|---|---|
+  | EURUSD own 10 lags, linear | +0.0054 | 0.510 | 0.489 |
+  | EURUSD own 10 lags, MLP 16 | -0.0012 | 0.503 | 0.489 |
+  | EURUSD 6 majors x 5 lags, linear | -0.0103 | 0.498 | 0.489 |
+  | EURUSD 6 majors x 5 lags, MLP | -0.0221 | 0.484 | 0.489 |
+  | same, mae loss | -0.0113 | 0.510 | 0.489 |
+  | same, 5-day horizon | -0.0176 | 0.511 | 0.485 |
+  | GBPUSD own 10 lags, MLP | -0.0080 | 0.476 | 0.508 |
+  | GBPUSD 6 majors, MLP | -0.0123 | 0.496 | 0.508 |
+  | control: shuffled targets | -0.0080 | 0.505 | 0.489 |
+  | control: answer leaked | +0.9864 | 0.991 | 0.489 |
+
+  Up/down classifier: EURUSD 51.1% vs 51.6% always-majority; GBPUSD 51.2% vs 50.8%. Walk-forward 2010-2026
+  (train on all earlier years): positive skill in 1/17 years for linear and MLP, mean -0.028 both; MLP
+  direction 49.3% vs upShare 49.6%. Conclusion: no out-of-sample edge on daily ECB rates (consistent with a
+  random walk); controls confirm the pipeline finds signal when present and none when absent.
+  Dashboard/CLI: `eurusd` and `gbpusd` datasets (20-day windows of the rate, relative to the latest) via a
+  new `.qs.data.extra` registry so `data.q` needn't depend on `fx.q`; train.q shows model MAE 0.0037 vs
+  naive 0.0037. Test `dash_fx_dataset`. README section with the results. 90 tests pass.
+  Ideas if the owner wants to push further: intraday data (needs another source), other inputs (interest
+  rate differentials, other asset classes), volatility forecasting (squared returns are far more
+  predictable than returns), or classifying large moves.

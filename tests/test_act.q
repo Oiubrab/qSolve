@@ -16,14 +16,14 @@
 
 / large inputs must not overflow into NaN
 .t.add[`act_stable;{
-    z:-800 -50 0 50 800f;
-    {.t.ok[not any null .qs.act.f[x] z;"null from ",string x]} each `sigmoid`tanh`relu`linear;
-    {.t.ok[not any null .qs.act.d[x][z;.qs.act.f[x] z];"null derivative from ",string x]} each `sigmoid`tanh`relu`linear;
+    zs:-800 -50 0 50 800f;
+    {[zs;f] .t.ok[not any null .qs.act.f[f] zs;"null from ",string f]}[zs] each `sigmoid`tanh`relu`linear;
+    {[zs;f] .t.ok[not any null .qs.act.d[f][zs;.qs.act.f[f] zs];"null derivative from ",string f]}[zs] each `sigmoid`tanh`relu`linear;
     .t.ok[not any null raze .qs.act.f[`softmax] enlist 1000 0 -1000f;"softmax overflow"];
  }];
 
 / derivative matches central differences (away from relu's kink)
 .t.add[`act_derivatives;{
-    z:-2.5 -0.7 0.3 1.9f; h:1e-6;
-    {[z;h;f] fd:(.qs.act.f[f][z+h]-.qs.act.f[f][z-h])%2*h; .t.near[.qs.act.d[f][z;.qs.act.f[f] z];fd;1e-8]}[z;h] each key .qs.act.d;
+    zs:-2.5 -0.7 0.3 1.9f; h:1e-6;
+    {[z;h;f] fd:(.qs.act.f[f][z+h]-.qs.act.f[f][z-h])%2*h; .t.near[.qs.act.d[f][z;.qs.act.f[f] z];fd;1e-8]}[zs;h] each key .qs.act.d;
  }];

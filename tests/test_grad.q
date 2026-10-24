@@ -24,7 +24,7 @@
  }
 
 / every hidden activation with every compatible output activation and loss, at three depths
-.t.gradOut:((`sigmoid;`mse);(`sigmoid;`bce);(`linear;`mse);(`tanh;`norm);(`softmax;`xent);(`sigmoid;`xent);(`relu;`mse));
+.t.gradOut:((`linear;`mae);(`sigmoid;`mse);(`sigmoid;`bce);(`linear;`mse);(`tanh;`norm);(`softmax;`xent);(`sigmoid;`xent);(`relu;`mse));
 .t.gradCases:raze raze (4 2;4 3 2;5 4 3 2) {[s;h] {[s;h;o] (s;h;o)}[s;h] each .t.gradOut}/:\: `sigmoid`tanh`relu`linear;
 
 .t.add[`grad_all_combinations;{

@@ -15,6 +15,7 @@ No Python and no dependencies beyond q itself (plus `curl` and `gunzip` to downl
 - Train on any kdb+ table or CSV: numeric columns standardised, categorical ones one-hot encoded,
   missing values filled; regression or classification chosen from the target column
 - Time-series forecasting from lagged windows, with a time-ordered split and naive baselines
+- Real-world test: daily exchange-rate forecasting with honest baselines, controls and walk-forward
 - Hyperparameter search (grid or random) returning a ranked results table, and k-fold cross-validation
 - Serve a trained model to other kdb+ processes over IPC
 - A web dashboard for all of the above: train with live charts, compare runs, search, predict
@@ -123,7 +124,7 @@ r`history                                               / one row per epoch
 | `epochs` | 10 | |
 | `batch` | 32 | the last batch of an epoch may be smaller |
 | `lr` | 0.1 | learning rate |
-| `loss` | `` `mse `` | `` `mse`bce`xent`norm `` (`norm` is qSolve's original loss) |
+| `loss` | `` `mse `` | `` `mse`mae`bce`xent`norm `` (`norm` is qSolve's original loss) |
 | `optimiser` | `` `sgd `` | `` `sgd`momentum`adam `` |
 | `momentum` | 0.9 | for `momentum` |
 | `beta1`, `beta2` | 0.9, 0.999 | for `adam` |
@@ -194,6 +195,47 @@ trend or a shift in level doesn't take validation outside what the model saw in 
 Or build a dictionary `` `X`Y `` yourself, where `X` has one row per example and `Y` is one-hot (or a single
 column), then call `.qs.data.split` and `.qs.data.standardise` and pass the result to `.qs.train`.
 
+## Forecasting exchange rates: a real-world test
+
+`fx.q` loads the European Central Bank's daily euro reference rates (since 1999, about 30 currencies;
+`scripts/fetch_data.sh fx`), builds any currency pair, and scores forecasts of daily returns against the
+naive forecast "no change". Skill is `1 - MSE(model) / MSE(no change)`: above 0 beats it, below 0 is worse.
+
+```bash
+q bench/fx.q -s 4          # the whole experiment, about 30 s
+```
+
+```q
+t:.qs.fx.ecb `:data/fx/eurofxref-hist.csv
+in:.qs.fx.inputs[t;`EURUSD`GBPUSD`USDJPY`USDCHF`AUDUSD`USDCAD]   / daily log returns of each pair
+d:.qs.data.lagged[in;`EURUSD;5;1;0.8]                            / last 5 days of all six -> tomorrow's EUR/USD
+.qs.fx.fit[d;`hidden`act`out`loss`optimiser`lr`epochs!(enlist 16;`tanh;`linear;`mse;`adam;0.001;30)]
+```
+
+Results (ECB data to 23 October 2026; tested on the last 20% of days, April 2021 onwards):
+
+| Forecast of tomorrow's return | Skill | Direction right | Up days |
+|---|---|---|---|
+| EUR/USD from its last 10 days, linear | +0.005 | 51.0% | 48.9% |
+| EUR/USD from its last 10 days, neural network | −0.001 | 50.3% | 48.9% |
+| EUR/USD from 6 major pairs' last 5 days, linear | −0.010 | 49.8% | 48.9% |
+| EUR/USD from 6 major pairs' last 5 days, neural network | −0.022 | 48.4% | 48.9% |
+| the same, 5 days ahead | −0.018 | 51.1% | 48.5% |
+| GBP/USD from its own or the majors' history | −0.008 to −0.012 | 47.6–49.6% | 50.8% |
+| Control: training targets shuffled | −0.008 | 50.5% | 48.9% |
+| Control: the answer leaked into the inputs | **+0.986** | **99.1%** | 48.9% |
+
+Walk-forward (retrained every year on all earlier years, EUR/USD from the six majors, 2010–2026): skill was
+above zero in 1 of 17 years for both the linear model and the network (mean −0.028), and the up/down
+classifier was right 51.1% of the time against 51.6% for always guessing the more common direction.
+
+**What this says:** daily exchange rates behave like a random walk, and nothing here beats "no change"
+out of sample. That is the expected answer for liquid markets, and the controls show the pipeline itself
+is sound: given the answer it finds it (skill 0.99), and given shuffled targets it finds nothing. The
+same tools would show an edge if one existed, so they're ready for data where one might: intraday data,
+other markets, or other inputs (rates, news, order flow). `eurusd` and `gbpusd` are also datasets in the
+dashboard and `train.q`, with the naive forecast shown alongside.
+
 ## Serving a model
 
 `train.q -save` stores the model, and for table or CSV data the column encoding too. `serve.q` answers
@@ -255,8 +297,10 @@ plot.q                  decision-boundary SVGs (.qs.plot2D)
 train.q                 command-line training
 serve.q                 IPC model server
 dashboard.q             web dashboard server (ui/ holds the page)
+fx.q                    exchange rates (ECB), currency pairs, forecast scoring and controls
 tests/                  test runner, assertion helpers, tests
 bench/benchmarks.q      benchmark suite
+bench/fx.q              the FX forecasting experiment
 scripts/fetch_data.sh   dataset downloader
 PLAN.md                 development plan and progress log
 ```

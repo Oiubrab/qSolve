@@ -10,6 +10,7 @@ if[not `root in key `.dash; .dash.root:{$[count x;x;"."]} "/" sv -1_ "/" vs stri
 system "l ",.dash.root,"/defineEquation.q";
 system "l ",.dash.root,"/data.q";
 system "l ",.dash.root,"/plot.q";
+system "l ",.dash.root,"/fx.q";
 .qs.data.dir:.dash.root,"/data";
 .dash.modelDir:.dash.root,"/models";
 
@@ -47,15 +48,15 @@ system "l ",.dash.root,"/plot.q";
 .dash.syms:{[x] $[10h=type x; `$enlist each x; -10h=type x; enlist `$enlist x; `$x]}
 
 / datasets the UI can offer: built-in ones (with whether their files are present) and uploads
-.dash.files:`iris`mnist`fashion!("iris/iris.data";"mnist/train-images-idx3-ubyte";"fashion/train-images-idx3-ubyte");
-.dash.kinds:`and`or`xor`nand`fourBit`sine`circles`moons`spirals`houses`seasonal`iris`mnist`fashion!
-    `logic`logic`logic`logic`classes`regression`2d`2d`2d`table`series`table`images`images;
-.dash.about:`and`or`xor`nand`fourBit`sine`circles`moons`spirals`houses`seasonal`iris`mnist`fashion!(
+.dash.files:`iris`mnist`fashion`eurusd`gbpusd!("iris/iris.data";"mnist/train-images-idx3-ubyte";"fashion/train-images-idx3-ubyte";"fx/eurofxref-hist.csv";"fx/eurofxref-hist.csv");
+.dash.kinds:`and`or`xor`nand`fourBit`sine`circles`moons`spirals`houses`seasonal`iris`mnist`fashion`eurusd`gbpusd!
+    `logic`logic`logic`logic`classes`regression`2d`2d`2d`table`series`table`images`images`series`series;
+.dash.about:`and`or`xor`nand`fourBit`sine`circles`moons`spirals`houses`seasonal`iris`mnist`fashion`eurusd`gbpusd!(
     "AND gate, 4 rows";"OR gate, 4 rows";"XOR gate, 4 rows: needs a hidden layer";"NAND gate, 4 rows";
     "4 random bits: 1100, 0011 or neither";"y = sin x, regression";"two concentric circles";
     "two interleaving half circles";"two spirals, the hard one";"house prices: numbers, categories, gaps";
     "a seasonal series with trend, 48 lags";"150 flowers, 3 species";"70,000 handwritten digits";
-    "70,000 clothing images, 10 kinds");
+    "70,000 clothing images, 10 kinds";"EUR/USD, the ECB's daily rate since 1999";"GBP/USD, from the ECB's daily rates since 1999");
 .dash.datasets:{[]
     b:{[n] `name`kind`about`available`generated!(n;.dash.kinds n;.dash.about n;
         $[n in key .dash.files; not ()~key hsym `$.qs.data.dir,"/",.dash.files n; 1b];
@@ -73,13 +74,15 @@ system "l ",.dash.root,"/plot.q";
 .dash.inputNames:`and`or`xor`nand`fourBit`sine`circles`moons`spirals!(
     (1#"a";1#"b");(1#"a";1#"b");(1#"a";1#"b");(1#"a";1#"b");("bit 1";"bit 2";"bit 3";"bit 4");enlist 1#"x";(1#"x";1#"y");(1#"x";1#"y");(1#"x";1#"y"));
 / what each built-in model learns to do, in a sentence
-.dash.purpose:`and`or`xor`nand`fourBit`sine`circles`moons`spirals`houses`seasonal`iris`mnist`fashion!(
+.dash.purpose:`and`or`xor`nand`fourBit`sine`circles`moons`spirals`houses`seasonal`iris`mnist`fashion`eurusd`gbpusd!(
     "compute a AND b for two bits";"compute a OR b for two bits";"compute a XOR b for two bits";"compute NOT (a AND b) for two bits";
     "spot the patterns 1100 and 0011 among four bits";"give y = sin x (x scaled so -1 is 0 and 1 is 2 pi, y scaled to 0..1)";
     "tell which ring a point on the plane is in";"tell which half circle a point on the plane is on";
     "tell which spiral a point on the plane is on";"estimate a house's price from its area, rooms, age and city";
     "forecast the next value of a seasonal series from its last 48";"tell an iris's species from its petal and sepal sizes";
-    "read a handwritten digit from a 28 x 28 image";"name the kind of clothing in a 28 x 28 image");
+    "read a handwritten digit from a 28 x 28 image";"name the kind of clothing in a 28 x 28 image";
+    "forecast tomorrow's EUR/USD rate from the last 20 days (hard: daily FX is close to a random walk)";
+    "forecast tomorrow's GBP/USD rate from the last 20 days (hard: daily FX is close to a random walk)");
 
 / everything the Predict view needs to know about a model trained on d: what it learned, its inputs (names
 / and training ranges), its answers (class names, or the target's name), and for series how to forecast
@@ -87,7 +90,8 @@ system "l ",.dash.root,"/plot.q";
     name:.dash.sym[r;`data;`]; nIn:count first d`X;
     enc:$[`enc in key d; d`enc; ()];
     kind:$[count enc; `table; `level in key d; `series; nIn=784; `image; nIn=2; `points; `numbers];
-    tcol:$[count enc; first exec col from enc where role=`target; kind=`series; .dash.sym[r;`series;`value]; `];
+    tcol:$[count enc; first exec col from enc where role=`target;
+        kind=`series; $[name in key .dash.uploads; .dash.sym[r;`series;`value]; name in `eurusd`gbpusd; `$"rate"; name]; `];
     classes:$[task=`regression; ();
         count enc; string (enc tcol)`levels;
         name in key .dash.classNames; .dash.classNames name;

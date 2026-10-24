@@ -28,6 +28,7 @@
 system "l ",.cli.root,"/defineEquation.q";
 system "l ",.cli.root,"/data.q";
 system "l ",.cli.root,"/plot.q";
+system "l ",.cli.root,"/fx.q";
 .qs.data.dir:.cli.root,"/data";
 
 .cli.o:.Q.opt .z.x;

@@ -168,3 +168,15 @@ system "l ",.t.root,"/dashboard.q";
     .t.eq[.t.types .t.ask `cmd`run!("example";l`run);enlist `error];
     hdel hsym `$.dash.modelDir,"/",n,".qsm";
  }];
+
+.t.add[`dash_fx_dataset;{
+    if[()~key .t.path "data/fx/eurofxref-hist.csv"; .t.skip "run scripts/fetch_data.sh fx"];
+    d:last .t.ask `cmd`data`hidden`epochs!("train";"eurusd";();3);
+    .t.eq[d`type;"done"];
+    .t.eq[d[`schema]`kind;"series"];
+    .t.ok[d[`schema][`purpose] like "*EUR/USD*";"purpose"];
+    / the naive "no change" forecast is reported, in the rate's own units (well under one cent a day)
+    .t.ok[d[`naiveMae] within 0.0005 0.02;"naive MAE ",string d`naiveMae];
+    p:first .t.ask `cmd`run`recent!("predict";d`run;d[`schema]`recent);
+    .t.ok[p[`forecast] within 0.8 1.6;"forecast out of range"];
+ }];

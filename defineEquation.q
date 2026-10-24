@@ -16,15 +16,18 @@
     {[z;a] 1f+0f*z})
 
 / losses averaged over the batch: values .qs.loss.v[A;Y] and gradients .qs.loss.g[A;Y] = dL/dA
+/ mae (mean absolute error) has the sign of the error as its gradient
 / norm is the original qSolve loss: the euclidean length of every error in the batch
 .qs.clip:{1e-12|x&1-1e-12}
-.qs.loss.v:`mse`bce`xent`norm!(
+.qs.loss.v:`mse`mae`bce`xent`norm!(
     {[A;Y] 0.5*(sum raze e*e:A-Y)%count Y};
+    {[A;Y] (sum raze abs A-Y)%count Y};
     {[A;Y] A:.qs.clip A; neg (sum raze (Y*log A)+(1-Y)*log 1-A)%count Y};
     {[A;Y] neg (sum raze Y*log .qs.clip A)%count Y};
     {[A;Y] sqrt sum raze e*e:A-Y})
-.qs.loss.g:`mse`bce`xent`norm!(
+.qs.loss.g:`mse`mae`bce`xent`norm!(
     {[A;Y] (A-Y)%count Y};
+    {[A;Y] (signum A-Y)%count Y};
     {[A;Y] A:.qs.clip A; ((A-Y)%A*1-A)%count Y};
     {[A;Y] neg (Y%.qs.clip A)%count Y};
     {[A;Y] e%sqrt sum raze e*e:A-Y})

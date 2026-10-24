@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Download the benchmark datasets into data/ (next to this script's parent directory).
-# Usage: scripts/fetch_data.sh [mnist] [fashion] [iris]    (no arguments fetches all three)
+# Usage: scripts/fetch_data.sh [mnist] [fashion] [iris] [fx]    (no arguments fetches all four)
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 data="$root/data"
-want=("$@"); [ ${#want[@]} -eq 0 ] && want=(mnist fashion iris)
+want=("$@"); [ ${#want[@]} -eq 0 ] && want=(mnist fashion iris fx)
 idx=(train-images-idx3-ubyte train-labels-idx1-ubyte t10k-images-idx3-ubyte t10k-labels-idx1-ubyte)
 
 # fetch URL DEST: download unless DEST already exists
@@ -30,6 +30,10 @@ for w in "${want[@]}"; do
         mnist)   idxset mnist https://storage.googleapis.com/cvdf-datasets/mnist ;;
         fashion) idxset fashion http://fashion-mnist.s3-website.eu-central-1.amazonaws.com ;;
         iris)    mkdir -p "$data/iris"; fetch https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data "$data/iris/iris.data" ;;
-        *)       echo "unknown dataset: $w (expected mnist, fashion or iris)" >&2; exit 1 ;;
+        # ECB euro reference rates, daily since 1999; refetched each time because it grows every day
+        fx)      mkdir -p "$data/fx"; rm -f "$data/fx/eurofxref-hist.zip"
+                 fetch https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist.zip "$data/fx/eurofxref-hist.zip"
+                 unzip -o -q "$data/fx/eurofxref-hist.zip" -d "$data/fx" ;;
+        *)       echo "unknown dataset: $w (expected mnist, fashion, iris or fx)" >&2; exit 1 ;;
     esac
 done
