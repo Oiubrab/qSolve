@@ -1,4 +1,4 @@
-/ train every benchmark dataset (PLAN.md section 5, T3-T12) and check it reaches its target
+/ train every benchmark dataset (plans/completed/improvemet_plan.md section 5, T3-T12) and check it reaches its target
 / q bench/benchmarks.q [-only name] [-skipLarge]
 / datasets that haven't been downloaded are skipped; exits 1 if any benchmark misses its target
 

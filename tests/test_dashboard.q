@@ -112,7 +112,7 @@ system "l ",.t.root,"/dashboard.q";
         .t.ok[(first fetch "") like "<!doctype html>*";"index not served"];
         .t.ok[(last fetch "app.js") like "* 200";"app.js not served"];
         .t.ok[(last fetch "style.css?v=1") like "* 200";"query string not ignored"];
-        {.t.ok[(last x) like "* 404";"served ",y]}'[fetch each ("../dashboard.q";"%2e%2e/PLAN.md";"nope.html";".hidden");("../dashboard.q";"%2e%2e/PLAN.md";"nope.html";".hidden")];
+        {.t.ok[(last x) like "* 404";"served ",y]}'[fetch each ("../dashboard.q";"%2e%2e/README.md";"nope.html";".hidden");("../dashboard.q";"%2e%2e/README.md";"nope.html";".hidden")];
         .t.eq[0#h ".dash.runs";0#.dash.runs];
         .t.eq[h ".dash.history[]";()];
         h "\\p"}[h;fetch[p]];::;{(`err;x)}];

@@ -302,5 +302,5 @@ tests/                  test runner, assertion helpers, tests
 bench/benchmarks.q      benchmark suite
 bench/fx.q              the FX forecasting experiment
 scripts/fetch_data.sh   dataset downloader
-PLAN.md                 development plan and progress log
+plans/                  development plans and progress logs (finished ones in plans/completed/)
 ```

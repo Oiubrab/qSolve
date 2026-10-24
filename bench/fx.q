@@ -1,4 +1,4 @@
-/ FX forecasting experiment (PLAN.md Phase 9): can the model forecast daily exchange-rate returns better
+/ FX forecasting experiment (plans/completed/improvemet_plan.md Phase 9): can the model forecast daily exchange-rate returns better
 / than "no change"?   q bench/fx.q [-s 4]        needs scripts/fetch_data.sh fx
 / every score is on later data than the model trained on; skill = 1 - MSE(model)/MSE(no change)
 
