@@ -105,8 +105,8 @@ long-duration signals (see scope).
 
 | # | Decision | Why |
 |---|---|---|
-| G-D1 | Scope: BBH component masses 10–80 M☉, aligned spins, in 1-second windows; include BNS as a second signal class with a longer window to be specified before G2/G4. | BBH chirps fit the thesis-style 1 s window. BNS signals last much longer in band and need a separate input/window design. |
-| G-D2 | Sample rate 2048 Hz after downsampling, band 20–512 Hz, two detectors (H1, L1), so 2 × 2048 inputs per window. | Black hole mergers in this mass range peak well below 512 Hz. Two detectors give coincidence, which is what makes real searches robust. 1024 Hz (2 × 1024 inputs) is the fallback if memory or speed bites. |
+| G-D1 | Scope: BBH component masses 10–80 M☉, aligned spins, in 1-second windows; BNS is a separate track for 1–3 M☉ components, 256-second windows, and its own model. | BBH chirps fit the thesis-style 1 s window. A 256 s BNS window covers inspiral from 20 Hz while keeping long inputs out of the BBH model. |
+| G-D2 | BBH: sample rate 2048 Hz after downsampling, band 20–512 Hz, two detectors (H1, L1), so 2 × 2048 inputs per 1 s window. BNS: same rate and band in 256 s windows, handled separately. | Black hole mergers in this mass range peak well below 512 Hz. Two detectors give coincidence. 1024 Hz is the BBH fallback if memory or speed bites; long BNS sequences must not be silently truncated to it. |
 | G-D3 | Whitening uses a PSD estimated by Welch's method (4 s Hann segments, 50% overlap) from nearby data (e.g. ±256 s, excluding the window being analysed). | It's the standard approach. It turns real coloured noise into roughly unit-variance white noise, so the network's inputs have a consistent scale. |
 | G-D4 | Injections happen in the frequency domain: the waveform h(f), projected onto each detector, divided by that detector's ASD, scaled to a target network SNR, inverse-FFT'd and added to *whitened* real noise. | Whitening is linear, so this equals injecting into raw strain and then whitening, and it is much cheaper. |
 | G-D5 | Waveforms are generated in pure q. **Recommended:** the TaylorF2 post-Newtonian inspiral (closed-form phase to 3.5PN), then the IMRPhenomB inspiral–merger–ringdown model (Ajith et al. 2011, closed-form frequency-domain amplitude and phase for aligned spins), checked against TaylorF2 in the early inspiral and end-to-end on real data (G3.4). LALSuite (`pip install lalsuite`) is an optional cross-check, never a dependency. | It keeps qSolve pure q, and both models are closed-form. Fidelity is lower than modern models like IMRPhenomXPHM, but it is enough to train a detector; the real-event test will show whether that matters. |
@@ -124,7 +124,7 @@ long-duration signals (see scope).
 1. **Waveforms:** settled: pure q, with LALSuite only as an optional cross-check.
 2. **Download budget:** settled: about 2 GB of noise and about 0.5 GB of test events.
 3. **Model ambition:** settled: include an LSTM or GRU after the MLP and CNN.
-4. **Scope:** settled: include BNS. Specify its longer window and corresponding sampling/training design before G2/G4.
+4. **Scope:** settled: include BNS as a separate track with 1–3 M☉ component masses, 256 s windows at 2048 Hz, and a separate model; keep BBH at 10–80 M☉ and 1 s.
 
 ---
 
@@ -147,7 +147,7 @@ long-duration signals (see scope).
 
 ### G2 — Signal processing (`signal.q`, general purpose)
 
-- [ ] **G2.1 FFT.** Iterative radix-2 FFT and inverse FFT on complex data held as (real; imaginary) float
+- [x] **G2.1 FFT.** Iterative radix-2 FFT and inverse FFT on complex data held as (real; imaginary) float
   vectors, vectorised per stage; `rfft`/`irfft` for real signals; zero-padding to powers of two. *Accept:*
   matches a naive DFT to 1e-9 on random input; `ifft fft x = x`; Parseval's theorem; a pure tone peaks in the
   right bin; timing on 2^20 points recorded in the log.
@@ -295,6 +295,11 @@ long-duration signals (see scope).
   preserve `nan` as null samples, remove temporary text, and cache the dictionary beside the source. The
   synthetic test reloads from cache after deleting its gzip input; the real GW150914 file yielded GPS
   1126259447, 4096 Hz and 131072 samples. Full suite: 95 passed.
+- 2026-10-25: Owner approved BNS as a separate 1–3 M☉ track using 256 s windows at 2048 Hz and its own
+  model; BBH remains 10–80 M☉ in 1 s windows. This resolves the G2/G4 window design gate.
+- 2026-10-25: G2.1 complete. Added radix-2 complex FFT/IFFT and real transforms with power-of-two padding.
+  Seeded random complex input matched the naive DFT within 1e-9; round-trip, Parseval, tone-bin and padded
+  real inverse checks passed. A 2^20-point forward FFT took 0.762 s in this environment.
 - 2026-10-24: Owner chose pure-q waveforms, the default download budget, an LSTM/GRU, and BNS in scope.
   Updated G-D1/G-D8; BNS needs a separate longer-window design before signal-processing and training stages.
 - 2026-10-24: Plan written. Checked: GWOSC's event API (671 catalogue entries, 417 confident with an SNR),
