@@ -77,3 +77,57 @@
    peak:first where peakValue=psd;
    .t.eq[freq[peak];73f];
  }];
+
+.t.add[`signal_whiten_unit_variance;{
+    system "S 37";
+    rate:1024f;
+   white:0.5*.qs.data.normal 65536;
+   n:.qs.sig.pow2ceil count white;
+   freq:rate*(til[1+(n div 2)])%n;
+   baseline:sqrt 0.5%rate;
+   asdValues:baseline*(1+4f*freq%rate);
+   asd:`freq`asd!(freq;asdValues);
+   sourceSpectrum:.qs.sig.rfft white;
+   coloured:.qs.sig.irfft[((sourceSpectrum 0)*(asdValues%baseline);(sourceSpectrum 1)*(asdValues%baseline))];
+   whitened:.qs.sig.whiten[coloured;rate;asd];
+    variance:avg (whitened-avg whitened)*(whitened-avg whitened);
+    .t.near[variance;1f;0.05];
+    spectrum:.qs.sig.welch[whitened;rate;1024;512];
+    psd:spectrum[`psd];
+    .t.near[avg psd[1+til[count[psd]-2]];2%rate;0.05*(2%rate)];
+ }];
+
+.t.add[`signal_bandpass_tones;{
+    rate:2048f;
+    n:2048;
+   time:(til[n])%rate;
+   lowPhase:(2*.qs.sig.pi*100*time);
+   highPhase:(2*.qs.sig.pi*700*time);
+   lowTone:cos lowPhase;
+   highTone:cos highPhase;
+    filtered:.qs.sig.bandpass[lowTone+highTone;rate;50;300;20];
+   filteredSpectrum:.qs.sig.rfft filtered;
+   sourceSpectrum:.qs.sig.rfft lowTone;
+   lowPeak:max sqrt (filteredSpectrum 0)*(filteredSpectrum 0)+(filteredSpectrum 1)*(filteredSpectrum 1);
+   sourcePeak:max sqrt (sourceSpectrum 0)*(sourceSpectrum 0)+(sourceSpectrum 1)*(sourceSpectrum 1);
+    .t.near[lowPeak;sourcePeak;0.05*sourcePeak];
+    filteredHigh:.qs.sig.bandpass[highTone;rate;50;300;20];
+    .t.ok[max abs filteredHigh<0.05;"out-of-band tone was not suppressed"];
+ }];
+
+.t.add[`signal_resample_tone;{
+    sourceRate:4096f;
+    targetRate:2048f;
+    n:4096;
+   time:(til[n])%sourceRate;
+   phase:(2*.qs.sig.pi*200*time);
+   tone:cos phase;
+    reduced:.qs.sig.resample[tone;sourceRate;targetRate];
+    .t.eq[count reduced;2048];
+    .t.near[max reduced;1f;1e-10];
+    spectrum:.qs.sig.rfft reduced;
+   real:spectrum 0;
+   peakValue:max real;
+   peak:first where peakValue=real;
+    .t.eq[peak;200];
+ }];

@@ -154,7 +154,7 @@ long-duration signals (see scope).
 - [x] **G2.2 Windows and PSD.** Hann and Tukey windows; Welch PSD (segment length, overlap, one-sided,
   physical units: strain²/Hz). *Accept:* white Gaussian noise of variance σ² at rate fs gives a flat PSD of
   2σ²/fs within a few percent; a tone's power lands in its bin.
-- [ ] **G2.3 Whitening, band-pass, resampling.** Whiten by an ASD (interpolated to the segment's frequency
+- [x] **G2.3 Whitening, band-pass, resampling.** Whiten by an ASD (interpolated to the segment's frequency
   grid) with the right normalisation, so white noise stays at unit variance; band-pass by frequency mask
   with tapered edges; downsample 4096 -> 2048 Hz in the frequency domain, which also removes aliasing.
   *Accept:* whitened coloured noise has variance 1 ± 0.05 and a flat PSD; a downsampled tone keeps its
@@ -304,6 +304,10 @@ long-duration signals (see scope).
   normalization. Seeded white noise at variance 0.25 and 1024 Hz measured the expected interior-bin level
   2σ²/fs within 3%; a 73 Hz tone landed in its bin. An initial compact power expression was invalid under
   q's right-to-left evaluation; splitting real/imaginary squares fixed the PSD values.
+- 2026-10-25: G2.3 complete. Added ASD interpolation, frequency-domain whitening, tapered band-pass, and
+  4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
+  and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
+  amplitude and bin. Full suite: 113 passed.
 - 2026-10-24: Owner chose pure-q waveforms, the default download budget, an LSTM/GRU, and BNS in scope.
   Updated G-D1/G-D8; BNS needs a separate longer-window design before signal-processing and training stages.
 - 2026-10-24: Plan written. Checked: GWOSC's event API (671 catalogue entries, 417 confident with an SNR),

@@ -132,3 +132,74 @@
     psdRows:{[spectrum] spectrum[`psd]} each spectra;
     `freq`psd!((first spectra)[`freq];avg psdRows)
  }
+
+.qs.sig.interpolate1:{[sourceFreq;sourceValue;target]
+    right:first where target<sourceFreq;
+    $[0=count where target<sourceFreq;last sourceValue;right=0;first sourceValue;
+        [left:right-1;
+         fraction:(target-sourceFreq[left])%(sourceFreq[right]-sourceFreq[left]);
+         sourceValue[left]+fraction*(sourceValue[right]-sourceValue[left])]]
+ }
+
+.qs.sig.interpolate:{[sourceFreq;sourceValue;targetFreq]
+    if[not count[sourceFreq]=count sourceValue; '"interpolation inputs must have equal lengths"];
+    if[not 1<count sourceFreq; '"interpolation needs at least two source points"];
+    .qs.sig.interpolate1[sourceFreq;sourceValue] each targetFreq
+ }
+
+.qs.sig.asdOnGrid:{[asd;freq]
+    if[not all `freq`asd in key asd; '"ASD needs freq and asd vectors"];
+    .qs.sig.interpolate[asd[`freq];asd[`asd];freq]
+ }
+
+/ Whiten strain using a one-sided ASD; the flat-white-noise ASD maps to unit time-domain variance.
+.qs.sig.whiten:{[samples;rate;asd]
+    samples:"f"$samples;
+    spectrum:.qs.sig.rfft samples;
+    bins:count spectrum 0;
+    frequencies:rate*(til[bins])%(.qs.sig.pow2ceil count samples);
+    amplitude:.qs.sig.asdOnGrid[asd;frequencies];
+    if[any amplitude<=0 or any null amplitude; '"ASD must be positive and non-null on the frequency grid"];
+    scale:sqrt 2%rate;
+    scale:scale%amplitude;
+    .qs.sig.irfft[((spectrum 0)*scale;(spectrum 1)*scale)]
+ }
+
+.qs.sig.edgeMask1:{[freq;low;high;edge]
+    lowPhase:.qs.sig.pi*(freq-(low-edge))%(2*edge);
+    highPhase:.qs.sig.pi*((high+edge)-freq)%(2*edge);
+    lowMask:$[freq<low-edge;0f;freq<low+edge;0.5-0.5*cos lowPhase;1f];
+    highMask:$[freq>high+edge;0f;freq>high-edge;0.5-0.5*cos highPhase;1f];
+    lowMask*highMask
+ }
+
+.qs.sig.edgeMask:{[frequencies;low;high;edge]
+    if[low<0 or high<=low or edge<0; '"invalid band-pass limits"];
+    $[edge=0; "f"$(frequencies>=low)&frequencies<=high;
+        .qs.sig.edgeMask1[;low;high;edge] each frequencies]
+ }
+
+.qs.sig.bandpass:{[samples;rate;low;high;edge]
+    samples:"f"$samples;
+    spectrum:.qs.sig.rfft samples;
+    bins:count spectrum 0;
+    frequencies:rate*(til[bins])%(.qs.sig.pow2ceil count samples);
+    mask:.qs.sig.edgeMask[frequencies;low;high;edge];
+    .qs.sig.irfft[((spectrum 0)*mask;(spectrum 1)*mask)]
+ }
+
+/ Downsample by truncating frequencies above the new Nyquist and preserving time-domain amplitude.
+.qs.sig.resample:{[samples;sourceRate;targetRate]
+    samples:"f"$samples;
+    if[targetRate<=0 or sourceRate<=targetRate; '"target rate must be positive and below source rate"];
+    scaled:count[samples]*targetRate%sourceRate;
+    targetCount:"j"$scaled;
+    if[not scaled=targetCount; '"resampled length must be an integer"];
+    if[not targetCount=.qs.sig.pow2ceil targetCount; '"resampled length must be a power of two"];
+    spectrum:.qs.sig.rfft samples;
+    targetBins:1+(targetCount div 2);
+    scale:targetCount%count samples;
+    real:scale*(targetBins#spectrum 0);
+    imag:scale*(targetBins#spectrum 1);
+    .qs.sig.irfft[(real;imag)]
+ }
