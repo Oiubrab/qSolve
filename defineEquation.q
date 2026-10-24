@@ -1,153 +1,170 @@
- / building the solver
+/ qSolve: a small multilayer perceptron in q
+/ model:  `weight`bias`act!(W;B;acts)  W[l] is n_l x n_(l-1), B[l] has n_l entries, acts one symbol per layer
+/ batches are matrices: one row per example
 
-/ sigmoid definition
-sigmoid:{reciprocal[1+exp[-1.0*x]]}
+/ activations: forward functions, and derivatives written in terms of (z;a) where a:f z
+.qs.act.f:`sigmoid`tanh`relu`linear`softmax!(
+    {reciprocal 1+exp neg x};
+    {1-2%1+exp 2*x};
+    {0f|x};
+    {x};
+    {{e%sum e:exp x-max x} each x})
+.qs.act.d:`sigmoid`tanh`relu`linear!(
+    {[z;a] a*1-a};
+    {[z;a] 1-a*a};
+    {[z;a] "f"$z>0};
+    {[z;a] 1f+0f*z})
 
-/ sigmoid gradient factor
-mSig:{exp[x]%xexp[1+exp[x];2]}
+/ losses averaged over the batch: values .qs.loss.v[A;Y] and gradients .qs.loss.g[A;Y] = dL/dA
+/ norm is the original qSolve loss: the euclidean length of every error in the batch
+.qs.clip:{1e-12|x&1-1e-12}
+.qs.loss.v:`mse`bce`xent`norm!(
+    {[A;Y] 0.5*(sum raze e*e:A-Y)%count Y};
+    {[A;Y] A:.qs.clip A; neg (sum raze (Y*log A)+(1-Y)*log 1-A)%count Y};
+    {[A;Y] neg (sum raze Y*log .qs.clip A)%count Y};
+    {[A;Y] sqrt sum raze e*e:A-Y})
+.qs.loss.g:`mse`bce`xent`norm!(
+    {[A;Y] (A-Y)%count Y};
+    {[A;Y] A:.qs.clip A; ((A-Y)%A*1-A)%count Y};
+    {[A;Y] neg (Y%.qs.clip A)%count Y};
+    {[A;Y] e%sqrt sum raze e*e:A-Y})
 
-/ build a linear function
-linear:{z + y mmu x};
+/ output activation and loss pairs whose combined gradient simplifies to (A-Y)/n
+.qs.paired:((`softmax;`xent);(`sigmoid;`bce))
 
-/ common pythagorean gradient factor
-mGoras:{reciprocal[sqrt sum xexp[;2] x]}
-
-/ takes a set of weights and biases and feeds through input
-useModel:{[weightsBiases;inputs] {sigmoid linear[x;y;z]}/[inputs;weightsBiases`weight;weightsBiases`bias]}
-
-/calculate the grad
-grad:{[weightsBiases;sigFactors;pyFactors;rezza;index]
-    /calculate the grad for the weights
-    weightGradList:{[weights;sigFactors;pyFactors;rezza;index]
-        sum { [weights;index;factors]
-            sigFactors:factors[0];
-            pyFactors:factors[1];
-            rezza:factors[2];
-            $[index[0]=-1 + count weights;
-                (last rezza)[index[2]]*(last sigFactors)[index[1]]*pyFactors[index[1]];
-                index[0]=-2 + count weights;
-                [
-                    bottomGrad:rezza[index[0];index[2]]*sigFactors[index[0];index[1]];
-                    sum[bottomGrad*weights[index[0]+1;til count weights[index[0]+1];index[1]]*sigFactors[index[0]+1]*pyFactors]
-                ];
-                [
-                    bottomGrad:rezza[index[0];index[2]]*sigFactors[index[0];index[1]];
-                    secondBottomGrad:bottomGrad*weights[index[0]+1;til count weights[index[0]+1];index[1]]*sigFactors[index[0]+1];
-                    finalSigGrad:{z*sum each y*(count y)#enlist x}/[secondBottomGrad;weights[(index[0] + 2) + til (count weights) - 2 + index[0]];sigFactors[(index[0] + 2) + til (count weights) - 2 + index[0]]];
-                    sum[finalSigGrad*pyFactors]
-                ]
-            ]
-        }[weights;index;] each ((enlist each sigFactors) ,' (enlist each pyFactors) ,' (enlist each rezza))
-    }[weightsBiases`weight;sigFactors;pyFactors;rezza;] peach index`weight;
-    weightGrad:{x[y[0];y[1];y[2]]:y[3];x}/[weightsBiases`weight;(index`weight),'weightGradList];
-
-    /calculate the grad for the biases
-    biasGradList:{[weights;sigFactors;pyFactors;index]
-        sum { [weights;index;factors]
-            sigFactors:factors[0];
-            pyFactors:factors[1];
-            rezza:factors[2];
-            $[index[0]=-1 + count weights;
-                (last sigFactors)[index[1]]*pyFactors[index[1]];
-            index[0]=-2 + count weights;
-                [
-                    bottomGrad:sigFactors[index[0];index[1]];
-                    sum[bottomGrad*weights[index[0]+1;til count weights[index[0]+1];index[1]]*sigFactors[index[0]+1]*pyFactors]
-                ];
-                [
-                    bottomGrad:sigFactors[index[0];index[1]];
-                    secondBottomGrad:bottomGrad*weights[index[0]+1;til count weights[index[0]+1];index[1]]*sigFactors[index[0]+1];
-                    finalSigGrad:{z*sum each y*(count y)#enlist x}/[secondBottomGrad;weights[(index[0] + 2) + til (count weights) - 2 + index[0]];sigFactors[(index[0] + 2) + til (count weights) - 2 + index[0]]];
-                    sum[finalSigGrad*pyFactors]
-                ]
-            ]
-        }[weights;index;] each ((enlist each sigFactors) ,' (enlist each pyFactors))
-    }[weightsBiases`weight;sigFactors;pyFactors;] peach index`bias;
-    biasGrad:{x[y[0];y[1]]:y[2];x}/[weightsBiases`bias;(index`bias),'biasGradList];
-    /build the grad dic
-    `weight`bias!(weightGrad;biasGrad)
+/ signal unless the model's shapes and activations are consistent
+.qs.check:{[m]
+    if[not all `weight`bias`act in key m; '"model needs weight, bias and act"];
+    if[not (count m`weight)=count m`bias; '"weight and bias have different numbers of layers"];
+    if[not (count m`weight)=count m`act; '"need one activation per layer"];
+    if[not all m[`act] in key .qs.act.f; '"unknown activation: ",-3!m[`act] except key .qs.act.f];
+    if[`softmax in -1_m`act; '"softmax is only allowed on the output layer"];
+    if[not (count each m`weight)~count each m`bias; '"bias length must match the number of nodes"];
+    if[not (-1_count each m`weight)~1_count each first each m`weight; '"layer sizes don't chain"];
+    m
  }
 
-/uses the gradient function to build a new grad from inputs
-gradBuild:{[weightsBiases;inputs;expected]
-    /calculate preliminary factors
-    results:{sigmoid linear[x;y;z]}\[;weightsBiases`weight;weightsBiases`bias] each inputs;
-    common:mGoras[raze (last each results) - expected];
-    /calculate common factors
-    pythagoreanFactors:common * (last each results) - expected;
-    resultInput:(enlist each inputs) ,' _[-1;] each results;
-    sigmoidFactors:mSig linear[;weightsBiases`weight;weightsBiases`bias] each resultInput;
-
-    /will need to build all the weight grad scalars
-    indexing:indexGen[count first inputs;weightsBiases];
-
-    /produce the grad
-    grad[weightsBiases;sigmoidFactors;pythagoreanFactors;resultInput;indexing]
+/ new model with nIn inputs and one layer per entry of sizes
+/ acts is one activation per layer, or a single one for every layer; seed is 0N to leave the generator alone
+/ weights are Xavier-uniform (He-uniform for relu), biases are zero
+.qs.init:{[nIn;sizes;acts;seed]
+    sizes:(),sizes;
+    acts:$[1=count acts:(),acts; count[sizes]#acts; acts];
+    if[not null seed; system "S ",string seed];
+    fanIn:nIn,-1_sizes;
+    lim:?[acts=`relu; sqrt 6%fanIn; sqrt 6%fanIn+sizes];
+    W:{[o;i;l] (o;i)#l*-1+2*(o*i)?1f}'[sizes;fanIn;lim];
+    .qs.check `weight`bias`act!(W;sizes#\:0f;acts)
  }
 
-/runs the backpropogation on a model and saves it to disk/outputs a new model
-backPropogation:{[weightsBiases;trainingInput;trainingExpected;testInput;testExpected;trainGrouping;modelFileName;scale]
-
-    / get the timer going
-    `oldTimer set .z.Z;
-
-    / base the number of groups used on the number of training examples
-    noOfGroups:floor (count trainingExpected)%trainGrouping;
-
-    /note: if the trainGrouping number is not an integer factor of the number of examples, the function will omit the remainder
-    trainingInput:trainingInput[til noOfGroups*trainGrouping];
-    trainingExpected:trainingExpected[til noOfGroups*trainGrouping];
-
-    /note: the testGrouping number is calculated from the trainGrouping number and will also leave out a remainder number of cases
-    testGrouping:floor (count testExpected)%noOfGroups;
-    testInput:testInput[til noOfGroups*testGrouping];
-    testExpected:testExpected[til noOfGroups*testGrouping];
-
-    /separates two dimensional lists (i.e becomes 3D) into groups of grp
-    grouper:{[twoDim;grp] {x[z+til y]}[twoDim;grp;] each grp*til "j"$(count twoDim)%grp};
-
-    newWeightsBiasesWithMinDiff:{[modelAndMeta;scalar;trainingInput;trainingExpected;testInput;testExpected]
-
-        gradient:gradBuild[modelAndMeta;trainingInput;trainingExpected];
-
-        newModel:modelAndMeta - scalar * gradient;
-
-        res:useModel[newModel;] each testInput;
-
-        show " ";
-        show "t"$ ("t"$.z.Z) - "t"$oldTimer;
-        `oldTimer set .z.Z;
-        show "Diff:";
-        show avg[raze abs[res - testExpected]];
-        show "Scale:";
-        show scalar;
-        show "Gradient:";
-        show gradient;
-        show "model update:";
-        show newModel;
-
-        newModel
-
-    }/[weightsBiases;scale;grouper[trainingInput;trainGrouping];grouper[trainingExpected;trainGrouping];grouper[testInput;testGrouping];grouper[testExpected;testGrouping]];
-    (hsym modelFileName) set newWeightsBiasesWithMinDiff;
-    newWeightsBiasesWithMinDiff
+/ forward pass over a batch matrix X, returns (Z;A): pre-activations per layer and activations with A[0]=X
+.qs.forward:{[m;X]
+    {[s;w;b;f] z:(last[s 1] mmu flip w)+\:b; (s[0],enlist z;s[1],enlist .qs.act.f[f] z)}/[(();enlist X);m`weight;m`bias;m`act]
  }
 
-/ generates a set of random weights and biases
-weightBiasGen:{[noOfInputs;nodes]
-    gen:{(0.1 + 0.1*x?10)%x};
-    / start with first layer
-    weight:enlist gen each nodes[0]#noOfInputs;
-    weight,:{y each x[z]#x[z-1]}[nodes;gen;] each 1 + til -1 + count nodes;
-    bias:gen each nodes;
-    `weight`bias!(weight;bias)
+/ model outputs for a batch matrix X, or for a single example vector
+.qs.predict:{[m;X]
+    v:0h<type X;
+    A:last last .qs.forward[m;"f"$$[v;enlist X;X]];
+    $[v;first A;A]
  }
 
-/ generate combinations of all indexes for the 3D weight list
-indexGen:{[noOfInputs;weightBias]
-    structure:count each weightBias`weight;
-    weightCombination:{,[x;] each raze({,[x;] each til y}[;z] each til y)}[0;first structure;noOfInputs];
-    weightCombination,:raze{{,[x;] each raze({,[x;] each til y}[;z] each til y)}[x;y[x];y[x-1]]}[;structure] each 1 + til -1 + count structure;
-    biasCombination:raze {{(x;y)}[x[0];] each 1_x} each (til count structure),'til each structure;
-    `weight`bias!(weightCombination;biasCombination)
+/ gradient of loss over batch (X;Y), returns `weight`bias!(gW;gB) shaped like the model
+.qs.grad:{[m;X;Y;loss]
+    za:.qs.forward[m;X]; Z:za 0; A:za 1; out:last A; f:last m`act;
+    dOut:$[any (f;loss)~/:.qs.paired; (out-Y)%count Y;
+        f=`softmax; '"softmax output needs xent loss";
+        .qs.loss.g[loss][out;Y]*.qs.act.d[f][last Z;out]];
+    / deltas from the output layer back: d_l = (d_(l+1) mmu W[l+1]) * f_l'(Z[l])
+    D:{[ds;w;z;a;f] (enlist .qs.act.d[f][z;a]*first[ds] mmu w),ds}/[enlist dOut;reverse 1_m`weight;reverse -1_Z;reverse -1_1_A;reverse -1_m`act];
+    `weight`bias!({flip[x] mmu y}'[D;-1_A];sum each D)
  }
+
+/ predicted class per row: argmax, or a 0.5 threshold for single-output models
+.qs.classes:{[A] $[1=count first A; "j"$0.5<=first each A; {x?max x} each A]}
+
+/ fraction of rows whose predicted class matches the target's class
+.qs.accuracy:{[A;Y] avg .qs.classes[A]=.qs.classes Y}
+
+/ loss and accuracy of a model on (X;Y)
+.qs.evaluate:{[m;X;Y;loss]
+    A:.qs.predict[m;"f"$X];
+    `loss`acc!(.qs.loss.v[loss][A;"f"$Y];.qs.accuracy[A;Y])
+ }
+
+/ confusion matrix: row is the true class, column the predicted class
+.qs.confusion:{[m;X;Y]
+    t:.qs.classes Y; p:.qs.classes .qs.predict[m;"f"$X]; k:max 2,count first Y;
+    {.[x;y;+;1]}/[(k;k)#0;flip (t;p)]
+ }
+
+/ optimisers: each takes (opts;state;grad) and returns (update;state), the update being subtracted from the model
+.qs.opt.init:`sgd`momentum`adam!(
+    {[g] ::};
+    {[g] 0f*g};
+    {[g] `t`m1`m2!(0;0f*g;0f*g)})
+.qs.opt.step:`sgd`momentum`adam!(
+    {[o;s;g] (o[`lr]*g;s)};
+    {[o;s;g] v:(o[`momentum]*s)+g; (o[`lr]*v;v)};
+    {[o;s;g]
+        t:1+s`t; b1:o`beta1; b2:o`beta2;
+        m1:(b1*s`m1)+(1-b1)*g;
+        m2:(b2*s`m2)+(1-b2)*g*g;
+        ((o[`lr]*m1%1-b1 xexp t)%1e-8+sqrt m2%1-b2 xexp t;`t`m1`m2!(t;m1;m2))})
+
+/ training options; verbose is 0 for silent, or log every n epochs
+.qs.defaults:`epochs`batch`lr`loss`optimiser`momentum`beta1`beta2`l2`shuffle`seed`verbose!(10;32;0.1;`mse;`sgd;0.9;0.9;0.999;0f;1b;42;1)
+
+/ one gradient step on batch rows b; s holds `model`state (and anything else, passed through)
+.qs.step:{[o;X;Y;s;b]
+    m:s`model;
+    g:.qs.grad[m;X b;Y b;o`loss];
+    if[o[`l2]>0; g[`weight]+:o[`l2]*m`weight];
+    r:.qs.opt.step[o`optimiser][o;s`state;g];
+    m[`weight]-:r[0]`weight; m[`bias]-:r[0]`bias;
+    s[`model]:m; s[`state]:r 1;
+    s
+ }
+
+/ one epoch: shuffle, then a step for every batch, including a smaller final one
+.qs.epoch:{[o;X;Y;s]
+    i:$[o`shuffle; neg[n]?n:count X; til count X];
+    .qs.step[o;X;Y]/[s;o[`batch] cut i]
+ }
+
+/ train model m on data (`X`Y and optionally `Xval`Yval) with options merged over .qs.defaults
+/ returns `model`history, history being one row per epoch
+.qs.train:{[m;data;opts]
+    o:.qs.defaults,opts;
+    m:.qs.check m; X:"f"$data`X; Y:"f"$data`Y;
+    if[not count[X]=count Y; '"X and Y have different numbers of rows"];
+    if[not count[first X]=count first first m`weight; '"X has ",(string count first X)," columns, the model expects ",string count first first m`weight];
+    if[not count[first Y]=count last m`bias; '"Y has ",(string count first Y)," columns, the model outputs ",string count last m`bias];
+    if[not o[`optimiser] in key .qs.opt.step; '"unknown optimiser: ",string o`optimiser];
+    if[not o[`loss] in key .qs.loss.v; '"unknown loss: ",string o`loss];
+    if[not null o`seed; system "S ",string o`seed];
+    val:all `Xval`Yval in key data;
+    s:`model`state`history!(m;.qs.opt.init[o`optimiser] `weight`bias#m;());
+    s:{[o;X;Y;data;val;s;e]
+        t0:.z.p;
+        s:.qs.epoch[o;X;Y;s];
+        tr:.qs.evaluate[s`model;X;Y;o`loss];
+        va:$[val; .qs.evaluate[s`model;data`Xval;data`Yval;o`loss]; `loss`acc!0n 0n];
+        row:`epoch`trainLoss`trainAcc`valLoss`valAcc`seconds!(e;tr`loss;tr`acc;va`loss;va`acc;1e-9*.z.p-t0);
+        if[(o[`verbose]>0) and (0=e mod o`verbose) or e=o`epochs; -1 .qs.fmt row];
+        s[`history],:enlist row;
+        s
+    }[o;X;Y;data;val]/[s;1+til o`epochs];
+    `model`history!(s`model;s`history)
+ }
+
+/ one log line for a history row
+.qs.fmt:{[r]
+    f:{.Q.fmt[x+1+count string floor y;x;y]};
+    "epoch ",(string r`epoch),"  train loss ",f[5;r`trainLoss]," acc ",f[4;r`trainAcc],
+        $[null r`valLoss; ""; "  val loss ",f[5;r`valLoss]," acc ",f[4;r`valAcc]],"  ",f[2;r`seconds],"s"
+ }
+
+/ save and load models with q's native serialisation
+.qs.save:{[file;m] (hsym file) set .qs.check m}
+.qs.load:{[file] .qs.check get hsym file}
