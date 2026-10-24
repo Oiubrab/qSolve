@@ -12,9 +12,10 @@ It is written so that any engineer or LLM session can pick it up cold, see what 
 - If you change a design decision, edit the [Design decisions](#design-decisions) section and say why in the log.
 - Do not commit or push unless the repository owner asks you to.
 
-**Current status (2026-10-24):** Phases 0-7 are done (79 tests, 14 benchmarks, browser check pass); Phases
-0-7 are committed on main. **Phase 8 (a clearer Predict tab) is in
-progress**: continue with its first unticked item. Start with `q tests/run.q` and read the Progress log.
+**Current status (2026-10-24):** Phases 0-8 are done: 83 tests pass (with and without threads), all 14
+benchmarks pass, and the dashboard's browser check (`node tests/ui/check.js`) passes. Phases 0-7 are
+committed on main; check `git status` for Phase 8. No further work is planned: the next step is the
+owner's choice. Start with `q tests/run.q` and read the Progress log.
 
 ---
 
@@ -124,6 +125,7 @@ These are settled unless the log says otherwise.
 - `get`, `distinct` and the like are keywords even as local names or table column names (`'assign`).
 - `pkill -f pattern` from this shell can match the shell's own command line and kill it (exit 144): find
   q processes with `pgrep -x q` and check their arguments instead.
+- A list of one-character strings is a string: `("x";"y")` is `"xy"`. Write `(1#"x";1#"y")` for a list of names.
 - Multi-line lambdas don't work when q code is piped in on stdin; put experiments in a script file.
 - This licence allows at most 4 secondary threads (`-s 4`).
 
@@ -336,16 +338,16 @@ The owner trained spirals, opened Predict, and got "2 input values, comma-separa
 with no link to what was trained. Each model needs a description of its inputs and outputs in the training
 data's own terms, an input method that fits the data, and real examples to compare against.
 
-- [ ] **8.1 Model schema.** For every run (and saved model) the server describes the model: dataset and
+- [x] **8.1 Model schema.** For every run (and saved model) the server describes the model: dataset and
   description, task, input kind (`table`, `points` for 2-D, `image`, `series`, `numbers`), input names with
   training ranges, class names (built-ins named, e.g. moons "upper moon"/"lower moon", Fashion-MNIST item
   names; tables and uploads from the encoding), target name, validation score. Saved models carry it.
-- [ ] **8.2 Examples.** `example` command: a random validation row in raw terms (table row, point, image
+- [x] **8.2 Examples.** `example` command: a random validation row in raw terms (table row, point, image
   pixels, or the window of recent series values) with its true answer. Needs the raw validation rows: table
   data keeps them (`Tval`), windows keep the series and validation times, and the column scaling stats.
-- [ ] **8.3 Series forecasting from recent values.** Predict takes `recent` raw values for series models and
+- [x] **8.3 Series forecasting from recent values.** Predict takes `recent` raw values for series models and
   returns the forecast in the series' units (`.qs.data.windowRow`).
-- [ ] **8.4 UI.** "About this model" card; inputs by kind (named fields with ranges; clickable boundary map
+- [x] **8.4 UI.** "About this model" card; inputs by kind (named fields with ranges; clickable boundary map
   for 2-D; 28x28 drawing pad for images, centred like MNIST; recent values for series, prefilled from the
   data; the table form); results show the answer by name, probability bars per class, the true answer for
   examples, and a warning for inputs outside the training range. *Accept:* browser check covers spirals,
@@ -552,3 +554,18 @@ Environment used so far: q 5.0 (2026.05.01), Linux, 16 cores.
 - 2026-10-24: Owner found the Predict tab confusing (spirals: two unnamed numbers, "class 0"). Added
   Phase 8.
 - 2026-10-24: Owner asked for Phase 7 to be committed before any Phase 8 changes.
+- 2026-10-24: Phase 8 done. Data: `fitCol` records `lo`/`hi` for numeric columns; `fromTable` keeps the raw
+  validation rows as `Tval`; `windows` keeps `xstats`, `lags`, `horizon`, the raw `series`, window `times`
+  and `k`, and new `.qs.data.windowRow[d;recent]` encodes the latest values for a forecast (tests
+  `series_window_row`, `table_raw_validation_rows`). Dashboard: `.dash.schema` (what the model learned in a
+  sentence, its dataset, kind `table`/`points`/`image`/`series`/`numbers`, input names and training ranges,
+  class names with built-ins named, target, score, and for series the recent values and window stats),
+  sent in every report, saved with models as `info` and returned by `load`; `example` returns a random
+  validation row in raw terms with its true answer; `predict` takes `recent` for series. UI Predict view
+  rebuilt: "What it learned / Trained on / Takes / Answers with" card; inputs by kind (named fields with
+  training ranges, clickable boundary map with a marker, drawing pad centred and scaled like MNIST with a
+  28x28 "what the model sees" preview, recent values with a forecast chart, table form and pasted rows);
+  answers by name with probability bars, the true answer and right/wrong for examples, and a warning for
+  inputs outside the training range. Checked in the browser on moons, houses, an uploaded series and
+  MNIST (a drawn vertical stroke reads as 1 at 94%). Tests `dash_schema_examples`,
+  `dash_series_forecast`. 83 tests pass.

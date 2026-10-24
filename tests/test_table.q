@@ -81,3 +81,13 @@
     r:.qs.train[.qs.init[7;16 1;`tanh`linear;1];d;`loss`optimiser`lr`epochs`verbose!(`mse;`adam;0.01;60;0)];
     .t.ok[0.9<.qs.evaluate[r`model;d`Xval;d`Yval;`mse]`r2;"houses R squared below 0.9"];
  }];
+
+.t.add[`table_raw_validation_rows;{
+    system "S 1"; d:.qs.data.fromTable[.qs.data.houses 100;`area`city;`price;0.8];
+    .t.eq[cols d`Tval;`area`city`price];
+    .t.eq[count d`Tval;20];
+    .t.near[.qs.data.encodeX[d`enc;d`Tval];d`Xval;1e-12];
+    e:d`enc;
+    .t.ok[(e[`area]`lo)<e[`area]`hi;"no training range"];
+    .t.ok[null e[`city]`lo;"no range for categories"];
+ }];

@@ -36,8 +36,11 @@ The dashboard is a web page served by q itself. Nothing else needs installing:
 - **Runs:** every run this session; tick up to 8 to compare their validation-loss curves.
 - **Search:** try combinations of learning rates, layer sizes, activations, batch sizes and dropout on the
   Train tab's data; results stream in ranked by validation loss, and one click copies the best into Train.
-- **Predict:** a form built from the model's input columns (or raw numbers), plus batch prediction from
-  pasted CSV.
+- **Predict:** says what the model learned, what it takes and what it answers with, then asks for inputs
+  in the data's own terms: a form for table models (with each column's training range), a clickable map
+  for 2-D models, a drawing pad for MNIST and Fashion-MNIST, or recent values for a forecast. Answers come
+  by name with each class's probability. "Try a validation example" fills in a row the model didn't train
+  on and shows whether it got it right. Inputs outside the training range get a warning.
 - **Models:** models saved to `models/`, which can be loaded back for predictions.
 
 Training runs in the dashboard's q process, so the page waits for each run to finish, but every epoch is

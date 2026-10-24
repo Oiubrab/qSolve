@@ -104,11 +104,11 @@
 / symbols for string columns, otherwise the column as it is
 .qs.data.asSym:{[x] $[0h=type x; `$x; 10h=type x; `$enlist each x; x]}
 
-/ encoding of one column
+/ encoding of one column; lo and hi are the training range of a numeric column
 .qs.data.fitCol:{[x]
     x:.qs.data.asSym x;
-    $[11h=type x; `kind`mu`sd`levels!(`cat;0n;1f;asc distinct x where not null x);
-        [f:"f"$x; sd:dev f; `kind`mu`sd`levels!(`num;avg f;$[(null sd) or sd=0;1f;sd];`symbol$())]]
+    $[11h=type x; `kind`mu`sd`levels`lo`hi!(`cat;0n;1f;asc distinct x where not null x;0n;0n);
+        [f:"f"$x; sd:dev f; `kind`mu`sd`levels`lo`hi!(`num;avg f;$[(null sd) or sd=0;1f;sd];`symbol$();min f;max f)]]
  }
 
 / encode one column with its encoding, one row per value
@@ -142,12 +142,13 @@
  }
 
 / shuffle table t, split it frac/1-frac, fit the encoding on the training rows only, and encode both parts
-/ returns `X`Y`Xval`Yval`enc (no Xval and Yval when frac is 1); generated rows are reproducible after system "S n"
+/ returns `X`Y`Xval`Yval`Tval`enc (no Xval, Yval and Tval when frac is 1), Tval being the validation rows as
+/ they were (the used columns only); generated rows are reproducible after system "S n"
 .qs.data.fromTable:{[t;features;target;frac]
     t:t neg[n]?n:count t; k:floor frac*n;
     enc:.qs.data.fit[k#t;features;target];
     d:`X`Y!(.qs.data.encodeX[enc;k#t];.qs.data.encodeY[enc;k#t]);
-    if[k<n; d,:`Xval`Yval!(.qs.data.encodeX[enc;k _t];.qs.data.encodeY[enc;k _t])];
+    if[k<n; d,:`Xval`Yval`Tval!(.qs.data.encodeX[enc;k _t];.qs.data.encodeY[enc;k _t];(exec col from enc)#k _t)];
     d,enlist[`enc]!enlist enc
  }
 
@@ -196,14 +197,24 @@
 / value horizon steps later, all relative to the window's last value, so a trend or level shift doesn't
 / carry validation outside the range seen in training; inputs are standardised per column and the target by
 / its own mean and sd, all from training rows only. Returns `X`Y`Xval`Yval`mu`sd`level`levelVal, levels being
-/ each row's last value, so .qs.data.unwindow can put predictions back in the series' units
+/ each row's last value, so .qs.data.unwindow can put predictions back in the series' units, plus what
+/ .qs.data.windowRow needs to encode new values (xstats, lags, horizon) and the raw series and window times
 .qs.data.windows:{[s;lags;horizon;frac]
     s:"f"$s; tk:.qs.data.windowTimes[count s;lags;horizon;frac]; t:tk 0; k:tk 1;
     L:s t; X:(s t+\:neg reverse 1_til lags)-L; y:s[t+horizon]-L;
-    d:.qs.data.standardise `X`Y`Xval`Yval!(k#X;();k _X;());
+    st:.qs.data.stats k#X;
+    d:`X`Y`Xval`Yval!(.qs.data.scale[st;k#X];();.qs.data.scale[st;k _X];());
     mu:avg k#y; sd:dev k#y; sd:$[sd=0;1f;sd];
     d[`Y]:enlist each (k#y-mu)%sd; d[`Yval]:enlist each (k _y-mu)%sd;
-    d,`mu`sd`level`levelVal!(mu;sd;k#L;k _L)
+    d,`mu`sd`level`levelVal`xstats`lags`horizon`series`times`k!(mu;sd;k#L;k _L;st;lags;horizon;s;t;k)
+ }
+
+/ the model input for the most recent values of a series (oldest first, at least lags of them), as for
+/ .qs.data.windows d: `X (one row) and `level, so .qs.data.unwindow[d;predict X;level] is the forecast
+.qs.data.windowRow:{[d;recent]
+    if[d[`lags]>count recent; '"need the last ",(string d`lags)," values"];
+    r:"f"$(neg d`lags)#recent; L:last r;
+    `X`level!(.qs.data.scale[d`xstats;enlist (-1_r)-L];enlist L)
  }
 
 / windowed predictions A back in the series' units, given the rows' levels (d`level or d`levelVal)

@@ -119,3 +119,52 @@ system "l ",.t.root,"/dashboard.q";
     pid:h ".z.i"; hclose h; system "kill ",string pid;
     if[`err~first res; e:res 1; 'e];
  }];
+
+/ every model describes itself for the Predict view, and examples come back in the data's own terms
+.t.add[`dash_schema_examples;{
+    d:last .t.ask `cmd`data`hidden`epochs!("train";"moons";enlist 8;3);
+    sc:d`schema;
+    .t.eq[sc`kind;"points"];
+    .t.eq[sc`inputs;(1#"x";1#"y")];
+    .t.eq[sc`classes;("upper moon";"lower moon")];
+    .t.eq[count sc`ranges;2];
+    .t.ok[sc[`purpose] like "*half circle*";"no purpose"];
+    e:first .t.ask `cmd`run!("example";d`run);
+    .t.eq[e`kind;"points"];
+    .t.eq[count e`inputs;2];
+    .t.ok[(e`actual) in sc`classes;"example answer isn't a class name"];
+    / tables: a raw row without the target, and the target's value
+    h:last .t.ask `cmd`data`rows`hidden`epochs!("train";"houses";200;enlist 8;3);
+    .t.eq[h[`schema]`kind;"table"];
+    .t.eq[h[`schema]`target;"price"];
+    .t.eq[`$(h`features)@\:`col;`area`rooms`age`city];
+    f:h`features;
+    .t.ok[all not null f[`hi] where f[`kind]~\:"num";"no ranges for numeric columns"];
+    .t.ok[all null f[`hi] where f[`kind]~\:"cat";"ranges for a category"];
+    x:first .t.ask `cmd`run!("example";h`run);
+    .t.eq[asc key x`row;`age`area`city`rooms];
+    .t.ok[100<x`actual;"price not in its own units"];
+ }];
+
+.t.add[`dash_series_forecast;{
+    system "S 5";
+    .t.ask `cmd`name`csv!("upload";"demand";"\n" sv csv 0: ([] v:100+20*.qs.data.seasonal[400;24;0.1]));
+    d:last .t.ask `cmd`data`series`lags`hidden`epochs!("train";"demand";"v";24;();10);
+    sc:d`schema;
+    .t.eq[sc`kind;"series"];
+    .t.eq[`long$sc`lags;24];
+    .t.eq[count sc`recent;24];
+    e:first .t.ask `cmd`run!("example";d`run);
+    .t.eq[count e`recent;24];
+    p:first .t.ask `cmd`run`recent!("predict";d`run;e`recent);
+    .t.ok[5>abs p[`forecast]-e`actual;"forecast far from the actual value"];
+    .t.eq[.t.types .t.ask `cmd`run`recent!("predict";d`run;5#e`recent);enlist `error];
+    / a saved and reloaded series model still forecasts, but has no examples without its data
+    n:"qsolve_series_",string .z.i;
+    .t.ask `cmd`run`name!("save";d`run;n);
+    l:first .t.ask `cmd`name!("load";n);
+    .t.eq[l[`schema]`kind;"series"];
+    .t.near[first[.t.ask `cmd`run`recent!("predict";l`run;e`recent)]`forecast;p`forecast;1e-9];
+    .t.eq[.t.types .t.ask `cmd`run!("example";l`run);enlist `error];
+    hdel hsym `$.dash.modelDir,"/",n,".qsm";
+ }];

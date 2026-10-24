@@ -151,15 +151,27 @@
   <!-- predict -->
   <section class="view" id="view-predict">
     <div class="split">
-      <div class="card settings">
-        <h2>Predict</h2>
-        <div class="field"><label for="p-run">Model</label><select id="p-run"></select></div>
-        <form id="predict-form"></form>
-        <button class="btn primary wide" id="predict-btn" style="margin-top:8px">Predict</button>
+      <div class="stack">
+        <div class="card">
+          <h2>Model</h2>
+          <select id="p-run" aria-label="Model"></select>
+          <div id="p-about" class="about"></div>
+        </div>
+        <div class="card" id="p-input-card">
+          <h2 id="p-inputs-title">Inputs</h2>
+          <div id="p-inputs"></div>
+          <p class="hint warn" id="p-warn" hidden></p>
+          <div class="btns" style="margin-top:12px">
+            <button class="btn primary" id="predict-btn">Predict</button>
+            <button class="btn" id="p-example">Try a validation example</button>
+          </div>
+        </div>
       </div>
       <div class="stack">
-        <div class="card"><h2>Result</h2><div id="predict-out" class="empty" style="min-height:120px"><div>Fill in the inputs and press Predict.</div></div></div>
-        <div class="card" id="batch-card"><h2>Many rows <span class="sub">paste CSV with a header row</span></h2><textarea id="p-csv" rows="6"></textarea><div class="btns" style="margin-top:8px"><button class="btn small" id="predict-csv">Predict these rows</button></div><div class="table-wrap" id="predict-batch" style="margin-top:12px"></div></div>
+        <div class="card"><h2>Answer</h2><div id="predict-out"></div></div>
+        <div class="card" id="p-map-card" hidden><h2>Click anywhere on the map <span class="sub">the colours are the model's answers; dots are the training data</span></h2><div class="boundary" id="p-map"></div></div>
+        <div class="card" id="p-series-card" hidden><h2>Recent values and the forecast</h2><div class="chart" id="p-series-chart"></div></div>
+        <div class="card" id="batch-card" hidden><h2>Many rows <span class="sub">paste CSV with a header row</span></h2><textarea id="p-csv" rows="6"></textarea><div class="btns" style="margin-top:8px"><button class="btn small" id="predict-csv">Predict these rows</button></div><div class="table-wrap" id="predict-batch" style="margin-top:12px"></div></div>
       </div>
     </div>
   </section>

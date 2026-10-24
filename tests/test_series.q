@@ -41,3 +41,15 @@
     nb:.qs.data.naive[s;48;1;0.8;24];
     .t.ok[mae<0.8*nb`seasonal;"model MAE ",(string mae)," vs seasonal naive ",string nb`seasonal];
  }];
+
+/ encoding new recent values matches the windows built in training
+.t.add[`series_window_row;{
+    system "S 2"; s:.qs.data.seasonal[300;24;0.1];
+    d:.qs.data.windows[s;12;2;0.8];
+    t:last d`times;
+    w:.qs.data.windowRow[d;s til 1+t];
+    .t.near[w`X;-1#d`Xval;1e-12];
+    .t.eq[w`level;-1#d`levelVal];
+    .t.near[.qs.data.unwindow[d;-1#d`Yval;w`level];enlist s t+2;1e-9];
+    .t.throws[.qs.data.windowRow[d;];5#s];
+ }];

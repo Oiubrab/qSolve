@@ -51,16 +51,58 @@ async function scenario({ ev, until, shot, size, sleep }) {
   await ev(`(document.querySelector('nav button[data-view=search]').click(), document.querySelector('#search-btn').click(), true)`);
   await until(`!document.querySelector('#train-best').disabled`, 120000);
   await shot("06-search");
-  await ev(`(document.querySelector('nav button[data-view=predict]').click(), document.querySelector('#p-run').value='2', document.querySelector('#p-run').dispatchEvent(new Event('change')), true)`);
+  const predictRun = async (id) => {
+    await ev(`(document.querySelector('nav button[data-view=predict]').click(), document.querySelector('#p-run').value='${id}', document.querySelector('#p-run').dispatchEvent(new Event('change')), true)`);
+    await until(`P.info && document.querySelector('#p-about').textContent.includes('What it learned')`);
+  };
+  const example = async () => {
+    await ev(`(document.querySelector('#predict-out').replaceChildren(), document.querySelector('#p-example').click(), true)`);
+    await until(`document.querySelector('#predict-out .verdict')`);
+  };
+  // moons: the map is clickable, and examples show the true answer
+  await predictRun(1);
+  await until(`!document.querySelector('#p-map-card').hidden && document.querySelector('#p-map canvas')`);
+  await ev(`(() => { const c = document.querySelector('#p-map canvas'), r = c.getBoundingClientRect(); c.dispatchEvent(new MouseEvent('click', {clientX: r.left + r.width * 0.3, clientY: r.top + r.height * 0.3, bubbles: true})); return true; })()`);
+  await until(`document.querySelector('#predict-out .big') && document.querySelector('#predict-out .big').textContent.includes('moon')`);
+  await example();
+  await shot("07-predict-moons");
+  // houses: a table row, a validation example, and pasted rows
+  await predictRun(2);
   await until(`document.querySelector('#p-in-area')`);
   await ev(`(document.querySelector('#p-in-area').value='150', document.querySelector('#p-in-rooms').value='4', document.querySelector('#p-in-city').value='north', document.querySelector('#predict-btn').click(), true)`);
   await until(`document.querySelector('#predict-out .big')`);
+  await example();
   await ev(`(document.querySelector('#p-csv').value='area,rooms,age,city\\n100,2,30,south\\n180,5,,west\\n60,1,70,zzz', document.querySelector('#predict-csv').click(), true)`);
   await until(`document.querySelectorAll('#predict-batch tbody tr').length === 3`);
-  await shot("07-predict");
+  await shot("08-predict-houses");
+  // the uploaded series: forecast from an example window
+  await predictRun(3);
+  await until(`document.querySelector('#p-recent') && !document.querySelector('#p-series-card').hidden`);
+  await example();
+  await until(`document.querySelectorAll('#p-series-chart path.line').length >= 1 && document.querySelectorAll('#p-series-chart circle').length >= 3`);
+  await shot("09-predict-series");
+  // MNIST when it has been downloaded: a validation image, then a drawn digit
+  if (await ev(`dataset.call ? state.datasets.some(d => d.name === 'mnist' && d.available) : false`)) {
+    await ev(`document.querySelector('nav button[data-view=train]').click(), true`);
+    await pick("mnist");
+    await ev(`(document.querySelector('#f-limit').value='3000', document.querySelector('#f-epochs').value='3', document.querySelector('#f-hidden').value='64', true)`);
+    await train();
+    const id = await ev(`state.current`);
+    await predictRun(id);
+    await until(`document.querySelector('#p-inputs canvas.pad')`);
+    await example();
+    await shot("10-predict-mnist-example");
+    await ev(`(() => { const c = document.querySelector('canvas.pad'), r = c.getBoundingClientRect();
+      const pt = (u, v, type) => c.dispatchEvent(new PointerEvent(type, {clientX: r.left + u * r.width, clientY: r.top + v * r.height, pointerId: 1, bubbles: true}));
+      document.querySelector('#p-inputs .btn.small').click();
+      pt(0.5, 0.15, 'pointerdown'); for (let i = 1; i <= 20; i++) pt(0.5, 0.15 + 0.7 * i / 20, 'pointermove'); pt(0.5, 0.85, 'pointerup'); return true; })()`);
+    await until(`document.querySelector('#predict-out .big') && !document.querySelector('#predict-out .verdict')`);
+    await shot("11-predict-mnist-drawn");
+  }
   const name = "uicheck_" + process.pid;
   await ev(`(document.querySelector('nav button[data-view=train]').click(), openRun(2), true)`);
   await until(`document.querySelector('#run-title').textContent.startsWith('Run 2')`);
+  await sleep(300);
   await ev(`(document.querySelector('#save-name').value=${JSON.stringify(name)}, document.querySelector('#save-run').click(), true)`);
   await until(`state.models.some(m => m.name === ${JSON.stringify(name)})`);
   await ev(`document.querySelector('nav button[data-view=models]').click(), true`);
@@ -70,9 +112,9 @@ async function scenario({ ev, until, shot, size, sleep }) {
   await ev(`(document.documentElement.dataset.theme='dark', document.querySelector('nav button[data-view=train]').click(), openRun(1), true)`);
   await until(`!document.querySelector('#boundary-card').hidden`);
   await sleep(300);
-  await shot("08-dark");
+  await shot("12-dark");
   await size(390, 844); await sleep(600);
-  await shot("09-phone");
+  await shot("13-phone");
 }
 
 (async () => {

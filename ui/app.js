@@ -94,7 +94,7 @@ function connect() {
 function call(cmd, payload = {}, onMsg, long = false) {
   const id = conn.next++;
   const final = { hello: ["hello"], upload: ["uploaded"], train: ["done"], search: ["searched"], predict: ["predicted"],
-    save: ["saved"], load: ["loaded"], report: ["done"], forget: ["runs"], runs: ["runs"], datasets: ["datasets"] }[cmd];
+    save: ["saved"], load: ["loaded"], report: ["done"], forget: ["runs"], runs: ["runs"], datasets: ["datasets"], example: ["example"] }[cmd] || [];
   const msg = JSON.stringify({ ...payload, cmd, id });
   return new Promise((resolve, reject) => {
     if (long) { conn.busy++; updateBusy(); }
@@ -393,10 +393,10 @@ function showReport(rep) {
   }
   const hasPlot = rep.plot && rep.plot.n;
   $("#boundary-card").hidden = !hasPlot;
-  if (hasPlot) drawBoundary(rep.plot);
+  if (hasPlot) drawBoundary(rep.plot, rep.schema && rep.schema.classes);
   const hasConf = rep.confusion && rep.confusion.length;
   $("#confusion-card").hidden = !hasConf;
-  if (hasConf) drawConfusion(rep.confusion, rep.labels);
+  if (hasConf) drawConfusion(rep.confusion, rep.schema && rep.schema.classes && rep.schema.classes.length === rep.confusion.length ? rep.schema.classes : rep.labels);
   $("#layers-card").hidden = false;
   renderTable($("#layers"), rep.layers, [["layer", "Layer"], ["inputs", "Inputs", "num"], ["outputs", "Outputs", "num"], ["act", "Activation"], ["params", "Parameters", "num"]]);
   $("#save-name").value = (row.data || "model") + "_" + rep.run;
@@ -487,8 +487,9 @@ function lineChart(el, lines, opts = {}) {
   for (const l of lines) {
     const p = l.points.filter((q) => isNum(q[1]));
     if (!p.length) continue;
-    svg.append(s("path", { d: p.map((q, i) => (i ? "L" : "M") + X(q[0]).toFixed(1) + "," + Y(q[1]).toFixed(1)).join(""), class: "line", stroke: l.colour }));
     const e = p[p.length - 1];
+    if (l.ring) { svg.append(s("circle", { cx: X(e[0]), cy: Y(e[1]), r: 7, fill: "none", stroke: l.colour, "stroke-width": 2 })); continue; }
+    svg.append(s("path", { d: p.map((q, i) => (i ? "L" : "M") + X(q[0]).toFixed(1) + "," + Y(q[1]).toFixed(1)).join(""), class: "line", stroke: l.colour }));
     svg.append(s("circle", { cx: X(e[0]), cy: Y(e[1]), r: 4, fill: l.colour, class: "end" }));
   }
   // end labels, unless they would collide
@@ -572,9 +573,12 @@ function scatterChart(el, pts) {
 }
 
 // decision boundary from the server's grid: cells tinted by predicted class, points on top
-function drawBoundary(p) {
-  const box = $("#boundary");
+function drawBoundary(p, names) { drawBoundaryInto($("#boundary"), p, { names }); }
+
+// opts: names (class names), marker ([x, y] to ring), onClick (called with plane coordinates)
+function drawBoundaryInto(box, p, opts = {}) {
   box.replaceChildren();
+  const name = (i) => (opts.names && opts.names[i]) || "class " + i;
   const size = Math.min(Math.max(box.clientWidth, 240), 520);
   const dpr = window.devicePixelRatio || 1;
   const c = h("canvas", { width: size * dpr, height: size * dpr, style: `max-width:${size}px`, role: "img", "aria-label": "decision boundary" });
@@ -606,15 +610,23 @@ function drawBoundary(p) {
     const [a, b] = px(x, y);
     g.beginPath(); g.arc(a, b, 3.5, 0, 2 * Math.PI); g.lineWidth = 2; g.strokeStyle = series(cl); g.stroke();
   }
+  if (opts.marker) {
+    const [a, b] = px(opts.marker[0], opts.marker[1]);
+    g.lineWidth = 3; g.strokeStyle = css("--surface"); g.beginPath(); g.arc(a, b, 9, 0, 2 * Math.PI); g.stroke();
+    g.lineWidth = 2; g.strokeStyle = css("--ink"); g.beginPath(); g.arc(a, b, 9, 0, 2 * Math.PI); g.stroke();
+  }
+  const plane = (ev) => { const r = c.getBoundingClientRect(); const u = (ev.clientX - r.left) / r.width, v = (ev.clientY - r.top) / r.height;
+    return [p.lo[0] + u * (p.hi[0] - p.lo[0]), p.hi[1] - v * (p.hi[1] - p.lo[1])]; };
+  if (opts.onClick) { c.style.cursor = "crosshair"; c.addEventListener("click", (ev) => opts.onClick(...plane(ev))); }
   c.addEventListener("pointermove", (ev) => {
     const r = c.getBoundingClientRect();
     const u = (ev.clientX - r.left) / r.width, v = (ev.clientY - r.top) / r.height;
     const i = Math.min(n - 1, Math.floor(v * n)) * n + Math.min(n - 1, Math.floor(u * n));
     const x = p.lo[0] + u * (p.hi[0] - p.lo[0]), y = p.hi[1] - v * (p.hi[1] - p.lo[1]);
-    showTip(ev.clientX, ev.clientY, `x ${fmt(x, 2)}, y ${fmt(y, 2)}`, [[series(p.classes[i]), "class " + p.classes[i], pct(p.prob[i])]]);
+    showTip(ev.clientX, ev.clientY, `x ${fmt(x, 2)}, y ${fmt(y, 2)}`, [[series(p.classes[i]), name(p.classes[i]), pct(p.prob[i])]]);
   });
   c.addEventListener("pointerleave", hideTip);
-  box.append(h("div", { class: "legend", style: "margin-top:8px" }, [...Array(k).keys()].map((i) => h("span", {}, h("i", { class: "box", style: `background:${series(i)}` }), "class " + i))));
+  box.append(h("div", { class: "legend", style: "margin-top:8px" }, [...Array(k).keys()].map((i) => h("span", {}, h("i", { class: "box", style: `background:${series(i)}` }), name(i)))));
 }
 
 // confusion matrix as a one-hue heatmap
@@ -800,6 +812,11 @@ $("#train-best").addEventListener("click", () => {
 });
 
 // ---------- predict ----------
+// the server describes each model (its schema): what it learned, its inputs and their training ranges, its
+// answers; the inputs adapt to the kind of model: a table row, a point on the plane, an image, recent values
+// of a series, or plain numbers
+
+const P = { info: null, example: null, imageInputs: null, mapMarker: null };
 
 function renderPredictRuns() {
   const sel = $("#p-run");
@@ -810,71 +827,280 @@ function renderPredictRuns() {
 }
 $("#p-run").addEventListener("change", () => renderPredictForm());
 
-function runInfo(id) {
-  const rep = state.reports[id];
-  if (rep) return { features: rep.features || [], nIn: rep.layers[0].inputs, target: null };
-  return state.loaded && state.loaded[id] ? state.loaded[id] : null;
+// schema, input columns and boundary map for a run: from its report, or from what loading it returned
+async function modelInfo(id) {
+  if (state.loaded && state.loaded[id]) return state.loaded[id];
+  const rep = await getReport(id);
+  return { schema: rep.schema, features: rep.features || [], plot: rep.plot && rep.plot.n ? rep.plot : null, canExample: true };
+}
+
+const plural = (n, w) => `${n.toLocaleString()} ${w}${n === 1 ? "" : "s"}`;
+const listText = (xs, max = 6) => (xs.length > max ? xs.slice(0, max).join(", ") + `, and ${xs.length - max} more` : xs.join(", "));
+
+function renderAbout(info) {
+  const sc = info.schema, box = $("#p-about");
+  const score = !isNum(sc.score) ? null : sc.task === "regression" ? `validation R² ${fmt(sc.score, 3)}` : `validation accuracy ${pct(sc.score)}`;
+  const inputs = sc.kind === "table" ? info.features.map((f) => f.col)
+    : sc.kind === "series" ? [`the last ${sc.lags} values of ${sc.target}`]
+    : sc.kind === "image" ? ["a 28 × 28 greyscale image"] : sc.inputs;
+  const answers = sc.task === "regression" ? `${sc.target || "a number"} (a number)`
+    : sc.classes.length === 2 && sc.classes[0] === "false" ? "true or false" : listText(sc.classes, 10);
+  box.replaceChildren(
+    h("div", {}, h("div", { class: "k" }, "What it learned"), h("b", {}, sc.purpose ? sc.purpose[0].toUpperCase() + sc.purpose.slice(1) + "." : "–")),
+    h("div", {}, h("div", { class: "k" }, "Trained on"), [sc.dataset, sc.about ? ` (${sc.about})` : "", isNum(sc.rows) ? `, ${plural(sc.rows, "row")}` : ""].join(""), score ? h("div", {}, score) : null),
+    h("div", {}, h("div", { class: "k" }, "Takes"), listText(inputs)),
+    h("div", {}, h("div", { class: "k" }, "Answers with"), answers));
 }
 
 async function renderPredictForm() {
-  const form = $("#predict-form");
   const id = Number($("#p-run").value);
-  form.replaceChildren();
-  $("#predict-out").replaceChildren(h("div", {}, "Fill in the inputs and press Predict."));
-  if (!id) { form.append(h("p", { class: "hint" }, "Train or load a model first.")); return; }
-  let info = runInfo(id);
-  if (!info) { try { await getReport(id); info = runInfo(id); } catch { info = null; } }
-  if (!info) { form.append(h("p", { class: "hint" }, "No details for this run.")); return; }
-  $("#batch-card").hidden = !info.features.length;
-  if (info.features.length) {
-    for (const f of info.features) {
-      const fid = "p-in-" + f.col;
-      const input = f.kind === "cat"
-        ? h("select", { id: fid, "data-col": f.col, "data-kind": "cat" }, h("option", { value: "" }, "(missing)"), f.levels.map((l) => h("option", { value: l }, l)))
-        : h("input", { type: "number", step: "any", id: fid, "data-col": f.col, "data-kind": "num", placeholder: "average " + fmt(f.mu) });
-      form.append(h("div", { class: "field" }, h("label", { for: fid }, f.col), input));
-    }
-    $("#p-csv").placeholder = info.features.map((f) => f.col).join(",") + "\n...";
-  } else {
-    form.append(h("div", { class: "field" }, h("label", { for: "p-inputs" }, `${info.nIn} input value${info.nIn > 1 ? "s" : ""}, comma-separated`),
-      h("input", { type: "text", id: "p-inputs", placeholder: Array(info.nIn).fill("0").join(", ") })));
-    if (info.nIn > 20) form.append(h("p", { class: "hint" }, "This model takes many inputs (an image?): predict from q instead, or paste them all."));
+  const box = $("#p-inputs");
+  box.replaceChildren(); $("#p-about").replaceChildren(); $("#p-warn").hidden = true;
+  P.info = null; P.example = null; P.imageInputs = null; P.mapMarker = null;
+  for (const c of ["#p-map-card", "#p-series-card", "#batch-card"]) $(c).hidden = true;
+  showAnswer(null);
+  $("#p-input-card").hidden = !id;
+  if (!id) { $("#p-about").append(h("p", { class: "hint" }, "Train a model in the Train tab, or load one from Models.")); return; }
+  let info;
+  try { info = await modelInfo(id); } catch (e) { $("#p-about").append(h("p", { class: "hint warn" }, e.message)); return; }
+  if (Number($("#p-run").value) !== id) return;
+  P.info = info;
+  renderAbout(info);
+  $("#p-example").disabled = !info.canExample;
+  $("#p-example").title = info.canExample ? "Fill in a row the model didn't train on and show the true answer" : "Examples need the training data: train the model in this session";
+  const sc = info.schema;
+  const title = { table: "Inputs", points: "A point on the plane", image: "Draw an image", series: "Recent values", numbers: "Inputs" }[sc.kind];
+  $("#p-inputs-title").textContent = title;
+  if (sc.kind === "table") tableInputs(box, info.features);
+  else if (sc.kind === "image") imageInputs(box);
+  else if (sc.kind === "series") seriesInputs(box, sc);
+  else numberInputs(box, sc);
+  if (sc.kind === "points" && info.plot) { $("#p-map-card").hidden = false; drawPredictMap(); }
+  if (sc.kind === "table") { $("#batch-card").hidden = false; $("#p-csv").placeholder = info.features.map((f) => f.col).join(",") + "\n..."; }
+}
+
+const rangeText = (lo, hi) => (isNum(lo) && isNum(hi) ? `trained on ${fmt(lo)} to ${fmt(hi)}` : "");
+
+function tableInputs(box, features) {
+  for (const f of features) {
+    const fid = "p-in-" + f.col;
+    const input = f.kind === "cat"
+      ? h("select", { id: fid, "data-col": f.col, "data-kind": "cat" }, h("option", { value: "" }, "(missing)"), f.levels.map((l) => h("option", { value: l }, l)))
+      : h("input", { type: "number", step: "any", id: fid, "data-col": f.col, "data-kind": "num", placeholder: "missing: uses " + fmt(f.mu), "data-lo": f.lo, "data-hi": f.hi });
+    box.append(h("div", { class: "field" }, h("label", { for: fid }, f.col, h("span", { class: "range" }, f.kind === "cat" ? `one of ${f.levels.length}` : rangeText(f.lo, f.hi))), input));
   }
 }
 
-$("#predict-btn").addEventListener("click", async () => {
-  const id = Number($("#p-run").value);
-  if (!id) return;
-  const fields = [...document.querySelectorAll("#predict-form [data-col]")];
-  let p;
-  if (fields.length) {
-    const row = {};
-    for (const f of fields) row[f.dataset.col] = f.dataset.kind === "num" ? (f.value === "" ? null : Number(f.value)) : f.value;
-    p = { run: id, rows: [row] };
-  } else {
-    const xs = $("#p-inputs").value.split(/[,\s]+/).filter(Boolean).map(Number);
-    if (!xs.length || xs.some((x) => !isNum(x))) return toast("Enter numbers separated by commas.", "error");
-    p = { run: id, inputs: [xs] };
+function numberInputs(box, sc) {
+  sc.inputs.forEach((name, i) => {
+    const r = sc.ranges && sc.ranges[i];
+    box.append(h("div", { class: "field" }, h("label", { for: "p-in-" + i }, name, h("span", { class: "range" }, r ? rangeText(r[0], r[1]) : "")),
+      h("input", { type: "number", step: "any", id: "p-in-" + i, "data-index": i, "data-lo": r ? r[0] : null, "data-hi": r ? r[1] : null, placeholder: r ? fmt((r[0] + r[1]) / 2) : "0" })));
+  });
+}
+
+function seriesInputs(box, sc) {
+  const ta = h("textarea", { id: "p-recent", rows: 5 });
+  ta.value = (sc.recent || []).map((v) => +v.toFixed(4)).join(", ");
+  box.append(h("div", { class: "field" }, h("label", { for: "p-recent" }, `The last ${sc.lags} values of ${sc.target}, oldest first`), ta),
+    h("p", { class: "hint" }, "Filled in with the end of the training data. Paste your own to forecast from them; only the last " + sc.lags + " count."));
+  $("#p-series-card").hidden = false;
+  drawSeries(null);
+}
+
+// ----- images: a drawing pad, centred and scaled like MNIST before it is sent -----
+
+function imageInputs(box) {
+  const pad = h("canvas", { class: "pad", width: 280, height: 280, "aria-label": "drawing pad" });
+  const seen = h("canvas", { class: "seen", width: 28, height: 28, "aria-label": "what the model sees" });
+  box.append(h("div", { class: "pad-wrap" }, pad, h("div", {}, seen, h("div", { class: "seen-label" }, "what the model sees"),
+    h("button", { class: "btn small", style: "margin-top:12px", onclick: () => { clearPad(pad, seen); showAnswer(null); } }, "Clear"))),
+    h("p", { class: "hint" }, "Draw one digit or item, large and centred, or try a validation example."));
+  const g = pad.getContext("2d");
+  clearPad(pad, seen);
+  let drawing = false, last = null;
+  const at = (ev) => { const r = pad.getBoundingClientRect(); return [(ev.clientX - r.left) * 280 / r.width, (ev.clientY - r.top) * 280 / r.height]; };
+  pad.addEventListener("pointerdown", (ev) => { drawing = true; last = at(ev); pad.setPointerCapture(ev.pointerId); P.imageInputs = null; P.example = null; stroke(last, last); });
+  pad.addEventListener("pointermove", (ev) => { if (!drawing) return; const p = at(ev); stroke(last, p); last = p; });
+  pad.addEventListener("pointerup", () => { drawing = false; const x = padToInputs(pad, seen); if (x) predictWith({ inputs: [x] }); });
+  function stroke(a, b) { g.strokeStyle = "#ffffff"; g.lineWidth = 22; g.lineCap = "round"; g.lineJoin = "round"; g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
+  P.pad = pad; P.seen = seen;
+}
+
+function clearPad(pad, seen) {
+  const g = pad.getContext("2d"); g.fillStyle = "#000000"; g.fillRect(0, 0, 280, 280);
+  seen.getContext("2d").fillStyle = "#000000"; seen.getContext("2d").fillRect(0, 0, 28, 28);
+  P.imageInputs = null;
+}
+
+// the drawing's bounding box scaled into 20 x 20, then shifted so its centre of mass is at (14, 14)
+function padToInputs(pad, seen) {
+  const src = pad.getContext("2d").getImageData(0, 0, 280, 280).data;
+  let x0 = 280, y0 = 280, x1 = -1, y1 = -1;
+  for (let y = 0; y < 280; y++) for (let x = 0; x < 280; x++) if (src[4 * (y * 280 + x)] > 30) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  if (x1 < 0) return null;
+  const w = x1 - x0 + 1, hgt = y1 - y0 + 1, k = 20 / Math.max(w, hgt);
+  const tmp = document.createElement("canvas"); tmp.width = tmp.height = 28;
+  const t = tmp.getContext("2d"); t.fillStyle = "#000000"; t.fillRect(0, 0, 28, 28); t.imageSmoothingEnabled = true;
+  t.drawImage(pad, x0, y0, w, hgt, (28 - w * k) / 2, (28 - hgt * k) / 2, w * k, hgt * k);
+  let d = t.getImageData(0, 0, 28, 28).data, sum = 0, cx = 0, cy = 0;
+  for (let i = 0; i < 784; i++) { const v = d[4 * i] / 255; sum += v; cx += v * (i % 28); cy += v * Math.floor(i / 28); }
+  const dx = Math.round(13.5 - cx / sum), dy = Math.round(13.5 - cy / sum);
+  const out = document.createElement("canvas"); out.width = out.height = 28;
+  const o = out.getContext("2d"); o.fillStyle = "#000000"; o.fillRect(0, 0, 28, 28); o.drawImage(tmp, dx, dy);
+  d = o.getImageData(0, 0, 28, 28).data;
+  const x = []; for (let i = 0; i < 784; i++) x.push(+(d[4 * i] / 255).toFixed(3));
+  showImage(seen, x);
+  return x;
+}
+
+function showImage(canvas, x) {
+  const g = canvas.getContext("2d"), img = g.createImageData(28, 28);
+  for (let i = 0; i < 784; i++) { const v = Math.round(255 * Math.max(0, Math.min(1, x[i]))); img.data.set([v, v, v, 255], 4 * i); }
+  g.putImageData(img, 0, 0);
+}
+
+// ----- 2-D points: the decision boundary, clickable -----
+
+function drawPredictMap() {
+  const p = P.info.plot, box = $("#p-map");
+  drawBoundaryInto(box, p, { names: P.info.schema.classes, marker: P.mapMarker, onClick: (x, y) => {
+    $("#p-in-0").value = +x.toFixed(3); $("#p-in-1").value = +y.toFixed(3);
+    P.example = null; predictNow();
+  } });
+}
+
+// ----- series -----
+
+function drawSeries(forecast) {
+  const sc = P.info.schema;
+  const recent = readRecent() || sc.recent || [];
+  const n = recent.length;
+  const lines = [{ name: "recent values", colour: series(0), points: recent.map((v, i) => [i - n + 1, v]) }];
+  if (isNum(forecast)) lines.push({ name: `forecast, ${sc.horizon} step${sc.horizon > 1 ? "s" : ""} ahead`, colour: series(1), points: [[0, recent[n - 1]], [sc.horizon, forecast]] });
+  if (P.example && isNum(P.example.actual)) lines.push({ name: "actual", colour: series(2), points: [[sc.horizon, P.example.actual]], ring: true });
+  lineChart($("#p-series-chart"), lines, { xLabel: "step", label: "recent values and forecast" });
+}
+
+function readRecent() {
+  const t = $("#p-recent");
+  if (!t) return null;
+  const xs = t.value.split(/[,\s]+/).filter(Boolean).map(Number);
+  return xs.length && xs.every(isNum) ? xs : null;
+}
+
+// ----- predicting -----
+
+function outOfRange() {
+  const out = [];
+  for (const el of document.querySelectorAll("#p-inputs input[data-lo]")) {
+    if (el.value === "") continue;
+    const v = Number(el.value), lo = Number(el.dataset.lo), hi = Number(el.dataset.hi), pad = 0.05 * (hi - lo);
+    if (isNum(lo) && isNum(hi) && (v < lo - pad || v > hi + pad)) out.push(`${el.closest(".field").querySelector("label").firstChild.textContent} = ${fmt(v)} (trained on ${fmt(lo)} to ${fmt(hi)})`);
   }
+  return out;
+}
+
+async function predictNow() {
+  const info = P.info;
+  if (!info) return;
+  const sc = info.schema;
+  const warn = $("#p-warn");
+  warn.hidden = true;
+  if (sc.kind === "table") {
+    const row = {};
+    for (const f of document.querySelectorAll("#p-inputs [data-col]")) row[f.dataset.col] = f.dataset.kind === "num" ? (f.value === "" ? null : Number(f.value)) : f.value;
+    return predictWith({ rows: [row] });
+  }
+  if (sc.kind === "series") {
+    const xs = readRecent();
+    if (!xs || xs.length < sc.lags) return toast(`Enter at least ${sc.lags} numbers.`, "error");
+    return predictWith({ recent: xs });
+  }
+  if (sc.kind === "image") {
+    const x = P.imageInputs || padToInputs(P.pad, P.seen);
+    if (!x) return toast("Draw something first, or try a validation example.", "error");
+    return predictWith({ inputs: [x] });
+  }
+  const xs = [...document.querySelectorAll("#p-inputs input[data-index]")].map((e) => (e.value === "" ? NaN : Number(e.value)));
+  if (xs.some((x) => !isNum(x))) return toast("Fill in every input.", "error");
+  return predictWith({ inputs: [xs] });
+}
+
+async function predictWith(payload) {
+  const id = Number($("#p-run").value);
+  const far = outOfRange();
+  if (far.length) { $("#p-warn").textContent = "Outside what the model saw: " + far.join("; ") + ". Treat the answer as a guess."; $("#p-warn").hidden = false; }
   try {
-    const m = await call("predict", p);
-    const out = $("#predict-out");
-    out.replaceChildren();
-    out.classList.remove("empty");
+    const m = await call("predict", { run: id, ...payload });
+    if (Number($("#p-run").value) !== id) return;
+    const sc = P.info.schema;
+    if (isNum(m.forecast)) { showAnswer({ value: m.forecast, label: `${sc.target}, ${sc.horizon} step${sc.horizon > 1 ? "s" : ""} ahead` }); drawSeries(m.forecast); return; }
     if (m.rows) {
       const r = m.rows[0];
-      out.append(h("div", { class: "big" }, isNum(r.prediction) ? fmt(r.prediction) : r.prediction),
-        isNum(r.confidence) ? h("p", { class: "hint" }, `confidence ${pct(r.confidence)}`) : h("p", { class: "hint" }, "predicted value"));
-    } else {
-      const o = m.outputs[0];
-      if (o.length === 1) out.append(h("div", { class: "big" }, fmt(o[0])), h("p", { class: "hint" }, "model output"));
-      else {
-        const best = o.indexOf(Math.max(...o));
-        out.append(h("div", { class: "big" }, "class " + best), h("p", { class: "hint" }, `probability ${pct(o[best])}`),
-          h("div", { class: "result-grid" }, o.map((v, i) => h("div", {}, h("span", { class: "swatch", style: `background:${series(i)}` }), `class ${i}: ${pct(v)}`))));
-      }
+      if (sc.task === "regression") showAnswer({ value: r.prediction, label: sc.target });
+      else showAnswer({ classes: sc.classes, probs: null, top: r.prediction, conf: r.confidence });
+      return;
     }
+    const o = m.outputs[0];
+    if (sc.task === "regression") showAnswer({ value: o[0], label: sc.target || "output" });
+    else {
+      const probs = o.length === 1 ? [1 - o[0], o[0]] : o;
+      showAnswer({ classes: sc.classes, probs });
+    }
+    if (sc.kind === "points" && payload.inputs) { P.mapMarker = payload.inputs[0]; if (P.info.plot) drawPredictMap(); }
   } catch (e) { toast("Prediction failed: " + e.message, "error"); }
+}
+
+// the answer card: a class with every class's probability, or a number; with the true answer for examples
+function showAnswer(a) {
+  const out = $("#predict-out");
+  out.replaceChildren();
+  if (!a) { out.append(h("p", { class: "hint" }, "Fill in the inputs and press Predict, or try a validation example to see how the model does on data it didn't train on.")); return; }
+  const ex = P.example;
+  if (a.classes) {
+    let top = a.top, conf = a.conf;
+    if (a.probs) { const i = a.probs.indexOf(Math.max(...a.probs)); top = a.classes[i] ?? String(i); conf = a.probs[i]; }
+    out.append(h("div", { class: "answer-label" }, "The model says"), h("div", { class: "big" }, top),
+      isNum(conf) ? h("div", { class: "hint" }, `${pct(conf)} sure`) : null);
+    if (ex) out.append(h("div", { class: "verdict" }, `Actually: ${ex.actual}`, ex.actual === top ? h("span", { class: "ok" }, "✓ right") : h("span", { class: "no" }, "✗ wrong")));
+    if (a.probs) {
+      const order = a.probs.map((p, i) => [p, i]).sort((x, y) => y[0] - x[0]).slice(0, 10);
+      out.append(h("div", { class: "bars", role: "img", "aria-label": "probability of each answer" }, order.flatMap(([p, i], j) => [
+        h("div", { class: "name" + (j === 0 ? " top" : ""), title: a.classes[i] }, a.classes[i] ?? String(i)),
+        h("div", { class: "track" }, h("div", { class: "fill" + (j === 0 ? "" : " rest"), style: `width:${(100 * p).toFixed(1)}%` })),
+        h("div", { class: "val" }, pct(p))])));
+    }
+  } else {
+    out.append(h("div", { class: "answer-label" }, a.label ? `Predicted ${a.label}` : "Predicted value"), h("div", { class: "big" }, fmt(a.value)));
+    if (ex && isNum(ex.actual)) out.append(h("div", { class: "verdict" }, `Actually: ${fmt(ex.actual)}`, h("span", {}, `(off by ${fmt(Math.abs(a.value - ex.actual))})`)));
+  }
+}
+
+$("#predict-btn").addEventListener("click", () => { P.example = null; predictNow(); });
+
+$("#p-example").addEventListener("click", async () => {
+  const id = Number($("#p-run").value);
+  if (!id || !P.info) return;
+  try {
+    const e = await call("example", { run: id });
+    P.example = e;
+    const sc = P.info.schema;
+    if (e.kind === "table") {
+      for (const f of document.querySelectorAll("#p-inputs [data-col]")) { const v = e.row[f.dataset.col]; f.value = v === null || v === undefined ? "" : (isNum(v) ? +v.toFixed(4) : v); }
+    } else if (e.kind === "series") {
+      $("#p-recent").value = e.recent.map((v) => +v.toFixed(4)).join(", ");
+    } else if (e.kind === "image") {
+      P.imageInputs = e.inputs;
+      showImage(P.seen, e.inputs);
+      const g = P.pad.getContext("2d"); g.imageSmoothingEnabled = false; g.drawImage(P.seen, 0, 0, 280, 280);
+    } else {
+      e.inputs.forEach((v, i) => { const el = $("#p-in-" + i); if (el) el.value = +v.toFixed(4); });
+    }
+    P.example = e;
+    await predictNow();
+    P.example = e;
+  } catch (err) { toast(err.message, "error"); }
 });
 
 // a small CSV reader for pasted rows: commas, optional double quotes, header row first
@@ -887,8 +1113,8 @@ function parseCsv(text) {
 
 $("#predict-csv").addEventListener("click", async () => {
   const id = Number($("#p-run").value);
-  const info = runInfo(id);
-  if (!info || !info.features.length) return;
+  const info = P.info;
+  if (!info || info.schema.kind !== "table") return;
   const raw = parseCsv($("#p-csv").value);
   if (!raw.length) return toast("Paste a header row and at least one row.", "error");
   const missing = info.features.map((f) => f.col).filter((c) => !(c in raw[0]));
@@ -897,8 +1123,8 @@ $("#predict-csv").addEventListener("click", async () => {
   try {
     const m = await call("predict", { run: id, rows });
     const cols = info.features.map((f) => [f.col, f.col, f.kind === "num" ? "num" : null]);
-    cols.push(["prediction", "Prediction", "num", (v) => (isNum(v) ? fmt(v) : v)]);
-    if (m.rows.some((r) => isNum(r.confidence))) cols.push(["confidence", "Confidence", "num", pct]);
+    cols.push(["prediction", info.schema.target ? "Predicted " + info.schema.target : "Prediction", "num", (v) => (isNum(v) ? fmt(v) : v)]);
+    if (m.rows.some((r) => isNum(r.confidence))) cols.push(["confidence", "Sure", "num", pct]);
     renderTable($("#predict-batch"), m.rows, cols);
   } catch (e) { toast("Prediction failed: " + e.message, "error"); }
 });
@@ -917,7 +1143,7 @@ async function loadModel(name) {
     const m = await call("load", { name });
     state.runs = m.runs;
     state.loaded = state.loaded || {};
-    state.loaded[m.run] = { features: m.features || [], nIn: m.nIn, target: m.target };
+    state.loaded[m.run] = { schema: m.schema, features: m.features || [], plot: null, canExample: false };
     renderRuns(); renderPredictRuns();
     $("#p-run").value = m.run;
     await renderPredictForm();

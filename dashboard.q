@@ -64,6 +64,51 @@ system "l ",.dash.root,"/plot.q";
     b,u
  }
 
+/ the built-in datasets' classes and inputs by name, so predictions read in the data's own terms
+.dash.classNames:`and`or`xor`nand`fourBit`circles`moons`spirals`mnist`fashion!(
+    ("false";"true");("false";"true");("false";"true");("false";"true");("1100";"0011";"neither");
+    ("outer ring";"inner ring");("upper moon";"lower moon");("spiral A";"spiral B");string til 10;
+    ("T-shirt or top";"Trouser";"Pullover";"Dress";"Coat";"Sandal";"Shirt";"Sneaker";"Bag";"Ankle boot"));
+/ (one-letter names are enlisted: ("x";"y") would be the string "xy")
+.dash.inputNames:`and`or`xor`nand`fourBit`sine`circles`moons`spirals!(
+    (1#"a";1#"b");(1#"a";1#"b");(1#"a";1#"b");(1#"a";1#"b");("bit 1";"bit 2";"bit 3";"bit 4");enlist 1#"x";(1#"x";1#"y");(1#"x";1#"y");(1#"x";1#"y"));
+/ what each built-in model learns to do, in a sentence
+.dash.purpose:`and`or`xor`nand`fourBit`sine`circles`moons`spirals`houses`seasonal`iris`mnist`fashion!(
+    "compute a AND b for two bits";"compute a OR b for two bits";"compute a XOR b for two bits";"compute NOT (a AND b) for two bits";
+    "spot the patterns 1100 and 0011 among four bits";"give y = sin x (x scaled so -1 is 0 and 1 is 2 pi, y scaled to 0..1)";
+    "tell which ring a point on the plane is in";"tell which half circle a point on the plane is on";
+    "tell which spiral a point on the plane is on";"estimate a house's price from its area, rooms, age and city";
+    "forecast the next value of a seasonal series from its last 48";"tell an iris's species from its petal and sepal sizes";
+    "read a handwritten digit from a 28 x 28 image";"name the kind of clothing in a 28 x 28 image");
+
+/ everything the Predict view needs to know about a model trained on d: what it learned, its inputs (names
+/ and training ranges), its answers (class names, or the target's name), and for series how to forecast
+.dash.schema:{[r;d;task;va]
+    name:.dash.sym[r;`data;`]; nIn:count first d`X;
+    enc:$[`enc in key d; d`enc; ()];
+    kind:$[count enc; `table; `level in key d; `series; nIn=784; `image; nIn=2; `points; `numbers];
+    tcol:$[count enc; first exec col from enc where role=`target; kind=`series; .dash.sym[r;`series;`value]; `];
+    classes:$[task=`regression; ();
+        count enc; string (enc tcol)`levels;
+        name in key .dash.classNames; .dash.classNames name;
+        string til max 2,count first d`Y];
+    inputs:$[kind=`table; string exec col from enc where role=`feature; kind=`series; ();
+        name in key .dash.inputNames; .dash.inputNames name; {"input ",string x} each 1+til nIn];
+    purpose:$[name in key .dash.purpose; .dash.purpose name;
+        kind=`series; "forecast ",(string tcol)," ",(string d`horizon)," step",$[1<d`horizon;"s";""]," ahead from its last ",(string d`lags)," values";
+        task=`regression; "estimate ",(string tcol)," from ",", " sv inputs;
+        "tell the ",(string tcol)," (",(", " sv classes),") from ",", " sv inputs];
+    about:$[name in key .dash.about; .dash.about name; name in key .dash.uploads; "your upload ",string name; ""];
+    `dataset`about`purpose`task`kind`inputs`ranges`classes`target`rows`score`lags`horizon`recent`window!(
+        name;about;purpose;task;kind;inputs;
+        $[kind in `points`numbers; flip (min d`X;max d`X); ()];
+        classes;$[null tcol; ""; string tcol];count d`X;
+        $[task=`regression; va`r2; va`acc];
+        $[kind=`series; d`lags; 0N];$[kind=`series; d`horizon; 0N];
+        $[kind=`series; (neg d`lags)#d`series; ()];
+        $[kind=`series; `mu`sd`xstats`lags`horizon#d; ()!()])
+ }
+
 / saved models in models/
 .dash.saved:{[]
     f:$[()~key hsym `$.dash.modelDir; `symbol$(); f where (f:key hsym `$.dash.modelDir) like "*.qsm"];
@@ -75,7 +120,7 @@ system "l ",.dash.root,"/plot.q";
 .dash.runList:{[] 0!.dash.runs}
 
 / the input columns of a table encoding, for building a prediction form: name, kind, levels (categories), mean
-.dash.features:{[enc] $[count enc; select col,kind,levels,mu from 0!enc where role=`feature; ()]}
+.dash.features:{[enc] $[count enc; select col,kind,levels,mu,lo,hi from 0!enc where role=`feature; ()]}
 
 / the data a request asks for: a built-in dataset, or an upload used as a table or as a time series
 .dash.loadData:{[r]
@@ -131,8 +176,8 @@ system "l ",.dash.root,"/plot.q";
             dec:{[d;ser;i;A] $[ser; .qs.data.unwindow[d;A;d[`levelVal] i]; `enc in key d; .qs.data.decodeY[d`enc;A]; first each A]}[d;ser;i];
             `series`actual`predicted!(ser;dec d[`Yval] i;dec .qs.predict[m;d[`Xval] i])];
         ()!()];
-    `type`run`row`history`train`val`confusion`labels`plot`layers`unitScale`naiveMae`fit`inputs`features`bestEpoch`config!(
-        `done;id;.dash.runs id;h;tr;va;conf;labels;plot;.qs.summary m;sd;naive;fit;
+    `type`run`row`history`train`val`confusion`labels`plot`layers`unitScale`naiveMae`fit`schema`inputs`features`bestEpoch`config!(
+        `done;id;.dash.runs id;h;tr;va;conf;labels;plot;.qs.summary m;sd;naive;fit;`window _ mt`schema;
         $[`enc in key d; .qs.data.inputNames d`enc; `$()];.dash.features $[`enc in key d;d`enc;()];mt`bestEpoch;
         `hidden`act`out`loss`epochs`lr`optimiser#mt`config)
  }
@@ -175,7 +220,7 @@ system "l ",.dash.root,"/plot.q";
     va:$[`Xval in key d; .qs.evaluate[res`model;d`Xval;d`Yval;c`loss]; `loss`acc`r2!3#0n];
     `.dash.runs upsert (id;.z.p;.dash.sym[r;`data;`];.dash.arch[nIn;nOut;c];task;c`loss;count res`history;va`loss;va`acc;$[task=`regression;va`r2;0n];1e-9*.z.p-t0;`trained);
     .dash.model[id]:res`model; .dash.hist[id]:res`history;
-    .dash.meta[id]:`data`loss`task`config`bestEpoch!(d;c`loss;task;c;res`bestEpoch);
+    .dash.meta[id]:`data`loss`task`config`bestEpoch`schema!(d;c`loss;task;c;res`bestEpoch;.dash.schema[r;d;task;va]);
     .dash.report id
  }
 
@@ -195,12 +240,17 @@ system "l ",.dash.root,"/plot.q";
     `type`results!(`searched;`valLoss xasc res)
  }
 
-/ predictions: rows (objects keyed by column) for table models, or inputs (numbers) for any model
+/ predictions: rows (objects keyed by column) for table models, recent (values, oldest first) for series
+/ models, or inputs (numbers) for any model
 .dash.api.predict:{[r]
     id:.dash.int[r;`run;0N];
     if[not id in key .dash.model; '"no such run: ",string id];
-    m:.dash.model id; d:.dash.meta[id]`data;
-    $[`rows in key r;
+    m:.dash.model id; d:.dash.meta[id]`data; sc:.dash.meta[id]`schema;
+    $[`recent in key r;
+        [if[not `series=sc`kind; '"this model doesn't forecast a series"];
+            w:.qs.data.windowRow[sc`window;"f"$r`recent];
+            `type`run`forecast!(`predicted;id;first .qs.data.unwindow[sc`window;.qs.predict[m;w`X];w`level])];
+      `rows in key r;
         [if[not `enc in key d; '"this model wasn't trained on a table: send inputs"];
             t:r`rows; if[99h=type t; t:enlist t]; if[not 98h=type t; '"rows must be objects with the same columns"];
             A:.qs.predict[m;.qs.data.encodeX[d`enc;t]];
@@ -219,6 +269,7 @@ system "l ",.dash.root,"/plot.q";
     n:ssr[string .dash.sym[r;`name;`$"run",string id];"[^A-Za-z0-9_-]";"_"];
     m:.dash.model id; d:.dash.meta[id]`data;
     if[`enc in key d; m[`enc]:d`enc];
+    m[`info]:.dash.meta[id]`schema;
     .qs.save[`$":",.dash.modelDir,"/",n,".qsm";m];
     `type`name`models!(`saved;`$n;.dash.saved[])
  }
@@ -236,9 +287,30 @@ system "l ",.dash.root,"/plot.q";
     a:("-" sv string nIn,count each m`weight),$[1<count m`act; " ",string first m`act; ""]," ",string last m`act;
     `.dash.runs upsert (id;.z.p;`$n;a;$[`enc in key m; $[`cat=(m[`enc] first exec col from m[`enc] where role=`target)`kind;`classes;`regression]; `saved];`;0;0n;0n;0n;0n;`loaded);
     .dash.model[id]:`weight`bias`act#m; .dash.hist[id]:();
-    .dash.meta[id]:`data`loss`task`config`bestEpoch!(d;`;`saved;()!();0N);
-    `type`run`runs`inputs`features`nIn`target!(`loaded;id;.dash.runList[];$[`enc in key m; .qs.data.inputNames m`enc; `$()];
-        .dash.features $[`enc in key m;m`enc;()];nIn;$[`enc in key m; first exec col from m[`enc] where role=`target; `])
+    / models saved before schemas existed get a plain one
+    sc:$[`info in key m; m`info;
+        @[.dash.schema[enlist[`data]!enlist n;d;$[`enc in key m;`regression;`classes];`acc`r2!0n 0n];`ranges;:;()]];
+    .dash.meta[id]:`data`loss`task`config`bestEpoch`schema!(d;`;`saved;()!();0N;sc);
+    `type`run`runs`inputs`features`nIn`target`schema!(`loaded;id;.dash.runList[];$[`enc in key m; .qs.data.inputNames m`enc; `$()];
+        .dash.features $[`enc in key m;m`enc;()];nIn;$[`enc in key m; first exec col from m[`enc] where role=`target; `];`window _ sc)
+ }
+
+/ a random validation example in the data's own terms, with its true answer: a table row, a point or other
+/ inputs, an image's pixels, or a series window's recent values
+.dash.api.example:{[r]
+    id:.dash.int[r;`run;0N];
+    if[not id in key .dash.meta; '"no such run: ",string id];
+    mt:.dash.meta id; d:mt`data; sc:mt`schema;
+    if[not `Xval in key d; '"examples need the training data: train this model in this session to get them"];
+    j:first 1?count d`Xval;
+    answer:{[sc;y] $[`regression=sc`task; first y; sc[`classes] first .qs.classes enlist y]}[sc];
+    $[`table=sc`kind;
+        [row:d[`Tval] j; tc:`$sc`target;
+            `type`run`kind`row`actual!(`example;id;`table;tc _ row;row tc)];
+      `series=sc`kind;
+        [t:d[`times] d[`k]+j; lags:d`lags;
+            `type`run`kind`recent`actual!(`example;id;`series;d[`series] (1+t-lags)+til lags;d[`series] t+d`horizon)];
+        `type`run`kind`inputs`actual!(`example;id;sc`kind;d[`Xval] j;answer d[`Yval] j)]
  }
 
 .dash.api.report:{[r] id:.dash.int[r;`run;0N]; if[not id in key .dash.hist; '"no such run"]; .dash.report id}
