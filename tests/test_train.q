@@ -109,3 +109,9 @@
     .t.throws[f;enlist[`patience]!enlist 0];
  }];
 
+.t.add[`train_on_epoch;{
+    .t.seen:();
+    r:.qs.train[.qs.init[2;4 1;`tanh`sigmoid;1];.t.gate {x<>y};`epochs`verbose`onEpoch!(6;0;{.t.seen,:enlist x})];
+    .t.eq[count .t.seen;6];
+    .t.eq[.t.seen;r`history];
+ }];

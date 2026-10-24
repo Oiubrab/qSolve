@@ -157,8 +157,9 @@
 / schedule step multiplies lr by decay every stepEvery epochs, cosine anneals it to minLr
 / patience stops after that many epochs without a lower monitored loss (validation loss if there is
 / validation data, else training loss); keepBest returns the model from the epoch with the lowest one
-.qs.defaults:`epochs`batch`lr`loss`optimiser`momentum`beta1`beta2`l2`dropout`schedule`decay`stepEvery`minLr`patience`keepBest`shuffle`seed`verbose!(
-    10;32;0.1;`mse;`sgd;0.9;0.9;0.999;0f;0f;`none;0.5;10;0f;0N;0b;1b;42;1)
+/ onEpoch is called with each epoch's history row, e.g. to report progress
+.qs.defaults:`epochs`batch`lr`loss`optimiser`momentum`beta1`beta2`l2`dropout`schedule`decay`stepEvery`minLr`patience`keepBest`shuffle`seed`verbose`onEpoch!(
+    10;32;0.1;`mse;`sgd;0.9;0.9;0.999;0f;0f;`none;0.5;10;0f;0N;0b;1b;42;1;{[r]})
 
 / one gradient step on batch rows b; s holds `model`state (and anything else, passed through)
 .qs.step:{[o;X;Y;s;b]
@@ -206,6 +207,7 @@
         va:$[val; .qs.evaluate[s`model;data`Xval;data`Yval;o`loss]; `loss`acc!0n 0n];
         row:`epoch`lr`trainLoss`trainAcc`valLoss`valAcc`seconds!(e;lr;tr`loss;tr`acc;va`loss;va`acc;1e-9*.z.p-t0);
         s[`history],:enlist row;
+        o[`onEpoch] row;
         l:$[val;va`loss;tr`loss];
         $[l<s`bestLoss; s[`best`bestLoss`bestEpoch`wait]:(s`model;l;e;0); s[`wait]+:1];
         s[`stop]:(not null o`patience) and s[`wait]>=o`patience;
@@ -252,6 +254,15 @@
     `valLoss`valAcc`valR2`bestEpoch`seconds!(e`loss;e`acc;$[null e`acc;e`r2;0n];r`bestEpoch;1e-9*.z.p-t0)
  }
 
+/ the configurations of a search space (option -> candidate values): every combination, or n of them sampled
+/ without replacement when n is not null; each is a dictionary option -> value
+.qs.grid:{[space;n]
+    k:key space; v:value space;
+    ix:{raze x,/:\:y}/[enlist `long$();til each count each v];
+    if[not null n; ix:ix neg[n&count ix]?count ix];
+    {[k;v;i] k!v@'i}[k;v] each ix
+ }
+
 / hyperparameter search: train one model per configuration and rank them by validation loss
 / space maps option names to candidate values; hidden (a list of layer-size lists) and act (hidden activation)
 / shape the model, everything else is a training option; base holds fixed values for both, including the
@@ -261,12 +272,10 @@
 / (regression), bestEpoch, seconds; configurations run one after another, each using threads as usual
 .qs.search:{[d;space;base;n]
     if[not all `Xval`Yval in key d; '"search needs validation data (Xval and Yval)"];
-    k:key space; v:value space;
-    ix:{raze x,/:\:y}/[enlist `long$();til each count each v];
-    if[not null n; ix:ix neg[n&count ix]?count ix];
     if[not null s:(.qs.defaults,base)`seed; system "S ",string s];
+    g:.qs.grid[space;n];
     base:.qs.spec[d;base];
-    `valLoss xasc {[d;k;v;base;i] (k!v@'i),.qs.fitScore[d;base,k!v@'i]}[d;k;v;base] each ix
+    `valLoss xasc {[d;base;c] c,.qs.fitScore[d;base,c]}[d;base] each g
  }
 
 / k-fold cross-validation of configuration base on d (`X`Y; any Xval/Yval are added in first)

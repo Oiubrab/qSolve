@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>qSolve dashboard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">qSolve <span>dashboard</span></div>
+  <nav role="tablist">
+    <button role="tab" data-view="train" aria-selected="true">Train</button>
+    <button role="tab" data-view="runs">Runs</button>
+    <button role="tab" data-view="search">Search</button>
+    <button role="tab" data-view="predict">Predict</button>
+    <button role="tab" data-view="models">Models</button>
+  </nav>
+  <div class="status"><span class="dot" id="conn-dot"></span><span class="text" id="conn-text">connecting</span></div>
+  <button class="icon-btn" id="theme" title="Switch light or dark theme" aria-label="Switch theme"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
+</header>
+
+<main>
+  <!-- train -->
+  <section class="view active" id="view-train">
+    <div class="split">
+      <div class="settings card">
+        <form id="train-form" autocomplete="off" novalidate>
+          <fieldset>
+            <legend>Data</legend>
+            <div class="field">
+              <label for="f-data">Dataset</label>
+              <select id="f-data" name="data"></select>
+              <p class="hint" id="data-about"></p>
+            </div>
+            <div class="row2" id="gen-opts">
+              <div class="field"><label for="f-rows">Rows</label><input type="number" id="f-rows" name="rows" value="1000" min="20" step="1"></div>
+              <div class="field"><label for="f-noise">Noise</label><input type="number" id="f-noise" name="noise" value="0.1" min="0" step="0.05"></div>
+            </div>
+            <div class="field" id="limit-opt">
+              <label for="f-limit">Use first N training rows</label>
+              <input type="number" id="f-limit" name="limit" placeholder="all" min="10" step="1">
+            </div>
+            <div id="upload-opts" class="upload hidden">
+              <div class="field">
+                <label for="f-mode">Use the table to</label>
+                <select id="f-mode"><option value="target">predict a column from the others</option><option value="series">forecast a column from its past</option></select>
+              </div>
+              <div class="field" id="target-field"><label for="f-target">Column to predict</label><select id="f-target"></select></div>
+              <div class="field" id="features-field"><label>Input columns</label><div class="features" id="f-features"></div></div>
+              <div class="row2 hidden" id="series-fields">
+                <div class="field"><label for="f-lags">Lags</label><input type="number" id="f-lags" value="24" min="2"></div>
+                <div class="field"><label for="f-horizon">Steps ahead</label><input type="number" id="f-horizon" value="1" min="1"></div>
+              </div>
+            </div>
+            <div class="btns"><button type="button" class="btn small" id="upload-btn">Upload CSV…</button><input type="file" id="upload-file" accept=".csv,text/csv" hidden></div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Model</legend>
+            <div class="field">
+              <label for="f-hidden">Hidden layers</label>
+              <input type="text" id="f-hidden" name="hidden" value="16" placeholder="e.g. 32, 16  (blank for none)">
+            </div>
+            <div class="row2">
+              <div class="field"><label for="f-act">Activation</label><select id="f-act" name="act"><option>tanh</option><option>relu</option><option>sigmoid</option><option>linear</option></select></div>
+              <div class="field"><label for="f-out">Output</label><select id="f-out" name="out"><option value="auto">auto</option><option>softmax</option><option>sigmoid</option><option>linear</option></select></div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Training</legend>
+            <div class="row3">
+              <div class="field"><label for="f-epochs">Epochs</label><input type="number" id="f-epochs" name="epochs" value="50" min="1"></div>
+              <div class="field"><label for="f-batch">Batch</label><input type="number" id="f-batch" name="batch" value="32" min="1"></div>
+              <div class="field"><label for="f-lr">Learning rate</label><input type="number" id="f-lr" name="lr" value="0.01" step="any" min="0"></div>
+            </div>
+            <div class="row2">
+              <div class="field"><label for="f-optimiser">Optimiser</label><select id="f-optimiser" name="optimiser"><option>adam</option><option>momentum</option><option>sgd</option></select></div>
+              <div class="field"><label for="f-schedule">Schedule</label><select id="f-schedule" name="schedule"><option>none</option><option>cosine</option><option>step</option></select></div>
+            </div>
+            <div class="row3">
+              <div class="field"><label for="f-dropout">Dropout</label><input type="number" id="f-dropout" name="dropout" value="0" min="0" max="0.9" step="0.05"></div>
+              <div class="field"><label for="f-l2">L2</label><input type="number" id="f-l2" name="l2" value="0" min="0" step="0.0001"></div>
+              <div class="field"><label for="f-seed">Seed</label><input type="number" id="f-seed" name="seed" value="42"></div>
+            </div>
+            <div class="row2">
+              <div class="field"><label for="f-patience">Stop after</label><input type="number" id="f-patience" name="patience" placeholder="never" min="1" title="epochs without improvement"></div>
+              <div class="field"><label for="f-cv">Cross-validate</label><select id="f-cv" name="cv"><option value="0">no</option><option value="3">3 folds</option><option value="5">5 folds</option><option value="10">10 folds</option></select></div>
+            </div>
+            <label class="check"><input type="checkbox" id="f-keepBest" name="keepBest"> Keep the best epoch's model</label>
+          </fieldset>
+          <button type="submit" class="btn primary wide" id="train-btn" style="margin-top:16px">Train</button>
+        </form>
+      </div>
+
+      <div id="result">
+        <div class="card empty" id="train-empty">
+          <div><strong>Pick a dataset and press Train</strong>Progress appears here as each epoch finishes.</div>
+        </div>
+        <div id="train-out" hidden>
+          <div class="run-head"><h1 id="run-title"></h1><div class="meta" id="run-meta"></div></div>
+          <div class="progress"><div id="run-progress"></div></div>
+          <div class="tiles" id="tiles"></div>
+          <div class="grid2">
+            <div class="card"><h2>Loss <span class="sub">per epoch, lower is better</span></h2><div class="chart" id="chart-loss"></div></div>
+            <div class="card" id="acc-card"><h2 id="acc-title">Accuracy <span class="sub">per epoch</span></h2><div class="chart" id="chart-acc"></div></div>
+          </div>
+          <div class="grid2" style="margin-top:16px" id="detail-row">
+            <div class="card" id="boundary-card" hidden><h2>Decision boundary <span class="sub">filled: training, hollow: validation</span></h2><div class="boundary" id="boundary"></div></div>
+            <div class="card" id="confusion-card" hidden><h2>Confusion matrix <span class="sub">validation rows</span></h2><div id="confusion"></div></div>
+            <div class="card" id="cv-card" hidden><h2>Cross-validation</h2><div class="table-wrap" id="cv"></div></div>
+            <div class="card" id="layers-card" hidden><h2>Layers</h2><div class="table-wrap" id="layers"></div><div class="save-row"><input type="text" id="save-name" aria-label="Model name"><button class="btn small" id="save-run">Save model</button><button class="btn small" id="predict-run">Predict with it</button></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- runs -->
+  <section class="view" id="view-runs">
+    <div class="card"><h2>Runs this session <span class="sub">tick up to 8 to compare</span></h2><div class="table-wrap" id="runs-table"></div></div>
+    <div class="card" id="compare-card" hidden><h2>Validation loss <span class="sub">per epoch</span></h2><div class="chart" id="chart-compare"></div></div>
+  </section>
+
+  <!-- search -->
+  <section class="view" id="view-search">
+    <div class="split">
+      <div class="card settings">
+        <h2>Search <span class="sub">uses the Train tab's data and settings</span></h2>
+        <p class="hint" id="search-data"></p>
+        <div class="field"><label for="s-lr">Learning rates</label><input type="text" id="s-lr" value="0.01, 0.001"></div>
+        <div class="field"><label for="s-hidden">Hidden layers <span class="hint">(; between options)</span></label><input type="text" id="s-hidden" value="8; 16; 16, 16"></div>
+        <div class="field"><label for="s-act">Activations</label><input type="text" id="s-act" value="tanh, relu"></div>
+        <div class="field"><label for="s-batch">Batch sizes</label><input type="text" id="s-batch" value="" placeholder="as in Train"></div>
+        <div class="field"><label for="s-dropout">Dropout</label><input type="text" id="s-dropout" value="" placeholder="as in Train"></div>
+        <div class="field"><label for="s-trials">Try</label><select id="s-trials"><option value="">every combination</option><option value="5">5 at random</option><option value="10">10 at random</option><option value="20">20 at random</option></select></div>
+        <p class="hint" id="search-count"></p>
+        <button class="btn primary wide" id="search-btn">Run search</button>
+      </div>
+      <div>
+        <div class="card empty" id="search-empty"><div><strong>Compare settings side by side</strong>Each configuration trains in turn; results are ranked by validation loss.</div></div>
+        <div id="search-out" hidden>
+          <div class="progress"><div id="search-progress"></div></div>
+          <div class="card"><h2 id="search-title">Results</h2><div class="table-wrap" id="search-table"></div><div class="btns" style="margin-top:12px"><button class="btn small primary" id="train-best" disabled>Train the best in Train</button></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- predict -->
+  <section class="view" id="view-predict">
+    <div class="split">
+      <div class="card settings">
+        <h2>Predict</h2>
+        <div class="field"><label for="p-run">Model</label><select id="p-run"></select></div>
+        <form id="predict-form"></form>
+        <button class="btn primary wide" id="predict-btn" style="margin-top:8px">Predict</button>
+      </div>
+      <div class="stack">
+        <div class="card"><h2>Result</h2><div id="predict-out" class="empty" style="min-height:120px"><div>Fill in the inputs and press Predict.</div></div></div>
+        <div class="card" id="batch-card"><h2>Many rows <span class="sub">paste CSV with a header row</span></h2><textarea id="p-csv" rows="6"></textarea><div class="btns" style="margin-top:8px"><button class="btn small" id="predict-csv">Predict these rows</button></div><div class="table-wrap" id="predict-batch" style="margin-top:12px"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- models -->
+  <section class="view" id="view-models">
+    <div class="card"><h2>Saved models <span class="sub">in models/</span></h2><div class="table-wrap" id="models-table"></div></div>
+  </section>
+</main>
+<div id="toasts" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>

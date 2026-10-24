@@ -12,10 +12,9 @@ It is written so that any engineer or LLM session can pick it up cold, see what 
 - If you change a design decision, edit the [Design decisions](#design-decisions) section and say why in the log.
 - Do not commit or push unless the repository owner asks you to.
 
-**Current status (2026-10-24):** Phases 0-6 are done: 69 tests pass with and without threads, and all 14
-benchmarks pass (46 s with `-s 4`). Phases 0-6 are committed on main. There is no further planned work: the
-next step is the owner's choice (a real problem to point qSolve at, or new features). A new session should
-begin with `q tests/run.q`, read the Progress log, and ask.
+**Current status (2026-10-24):** Phases 0-7 are done (79 tests, 14 benchmarks, browser check pass); Phases
+0-7 are committed on main. **Phase 8 (a clearer Predict tab) is in
+progress**: continue with its first unticked item. Start with `q tests/run.q` and read the Progress log.
 
 ---
 
@@ -118,6 +117,13 @@ These are settled unless the log says otherwise.
 - `sum` of booleans is an int (`6401i`), not a long; cast with `"j"$` before `.t.eq` against a long.
 - `'x 1` signals `x` (then fails), not `x 1`: assign the message first, `e:x 1; 'e`.
 - In this shell `cp` and `rm` are aliased to interactive/trash versions: use `command cp -f`, `command rm`.
+- `.j.k` turns a JSON list of one-character strings into one string: `["t","v"]` -> `"tv"`. The dashboard's
+  `.dash.syms` handles it.
+- `.j.j` writes infinities as `inf` (invalid JSON): `.dash.clean` replaces them with nulls before sending.
+- `.Q.trp`'s error handler takes two arguments (message, backtrace); a one-argument one fails with `rank`.
+- `get`, `distinct` and the like are keywords even as local names or table column names (`'assign`).
+- `pkill -f pattern` from this shell can match the shell's own command line and kill it (exit 144): find
+  q processes with `pgrep -x q` and check their arguments instead.
 - Multi-line lambdas don't work when q code is piped in on stdin; put experiments in a script file.
 - This licence allows at most 4 secondary threads (`-s 4`).
 
@@ -135,6 +141,11 @@ data.q                  dataset generators and loaders (.qs.data)
 plot.q                  decision-boundary SVGs (.qs.plot2D)
 train.q                 command-line training script
 serve.q                 IPC model server (predict, predictTable, info)
+dashboard.q             web dashboard: HTTP for ui/, JSON over WebSocket, q IPC for KX Dashboards
+ui/                     the dashboard page: index.html, app.js, style.css (no external libraries)
+dashboards/qsolve.json  KX Dashboards connection for a dashboard on port 8080
+tests/ui/check.js       browser check of the dashboard (headless Chromium over DevTools; not in run.q)
+models/                 models saved from the dashboard (git-ignored)
 tests/assert.q          assertion helpers (.t namespace)
 tests/run.q             test runner: loads library, runs every tests/test_*.q, exits non-zero on failure
 tests/test_*.q          test files
@@ -281,6 +292,64 @@ strength), then the rest as wanted.
 - [x] **6.5 k-fold cross-validation** for small datasets, reporting mean and spread of validation scores.
 - [x] **6.6 Model summary**: layer table (inputs, outputs, activation, parameter count) for logs and the CLI.
 
+
+### Phase 7 — Dashboard (owner asked for a usable UI)
+
+The owner asked for better usability and "some kind of dashboard". KX Dashboards is installed at
+`~/.kx/dashboards` (a drag-and-drop builder that queries q processes over IPC). Decision: build qSolve's
+own web dashboard, served by q itself (HTTP + WebSocket on one port, no other dependencies), because it can
+drive training interactively and stream progress, lives in the repo and can be tested; and let the same
+process act as a KX Dashboards data source for anyone who wants to build their own views.
+
+Design: `dashboard.q` loads the library, serves files from `ui/` over HTTP (`.z.ph`; only files in `ui/`, no
+path traversal), and speaks JSON over a WebSocket (`.z.ws`): each message is `{"cmd":...}` and the reply
+messages carry a `type`. Training runs inside the WebSocket handler (q is single-threaded, so the UI waits,
+but each epoch is pushed to the browser as it finishes through the `onEpoch` callback). Runs, their
+histories and models are kept in memory for the session; models can be saved to `models/` (git-ignored).
+Binds to 127.0.0.1 by default.
+
+- [x] **7.1 Progress callback.** `onEpoch` training option: a function called with each history row (default
+  does nothing). *Accept:* test that it is called once per epoch with the row.
+- [x] **7.2 `dashboard.q` server.** HTTP static files from `ui/`; WebSocket JSON API with commands `hello`
+  (datasets with availability, saved models, runs, defaults), `upload` (CSV text -> table kept in memory;
+  returns columns, types, preview), `train` (any dataset including uploads, as table or time series; streams
+  `epoch` messages then `done` with metrics, history, confusion matrix, decision-boundary SVG for 2-D data,
+  layer summary), `search` (streams one `trial` per configuration), `predict` (rows for table models; points
+  for 2-D models), `save` / `load` / `models`, `forget`. Errors come back as `{"type":"error"}`, never kill
+  the server. *Accept:* API tests call the handler directly with a stub sender; HTTP tests via a spawned
+  process and curl, including a refused traversal path.
+- [x] **7.3 UI** (`ui/index.html`, `ui/app.js`, `ui/style.css`; no external libraries, charts are
+  hand-written SVG): Train view (dataset picker incl. CSV upload with target/series selection, layers,
+  options with sensible defaults, live loss/accuracy charts, metric tiles, confusion heatmap, decision
+  boundary, layer table), Runs view (compare runs' validation curves and metrics), Search view (grid input,
+  streamed results table, train-the-best button), Predict view (form or pasted CSV for table models), Models
+  view (save/load). Light and dark themes. *Accept:* checked in a real browser (headless Chromium
+  screenshots) at desktop and narrow widths.
+- [x] **7.4 KX Dashboards data source.** The dashboard process also answers q IPC queries from localhost
+  (tables `.dash.runs`, `.dash.history[]`), plus a connection file and README steps for adding it in KX
+  Dashboards.
+- [x] **7.5 Docs and launcher.** README section, `q dashboard.q -port 8080` printing the URL.
+
+### Phase 8 — A Predict tab that explains itself (owner feedback)
+
+The owner trained spirals, opened Predict, and got "2 input values, comma-separated" and "class 0, 100%"
+with no link to what was trained. Each model needs a description of its inputs and outputs in the training
+data's own terms, an input method that fits the data, and real examples to compare against.
+
+- [ ] **8.1 Model schema.** For every run (and saved model) the server describes the model: dataset and
+  description, task, input kind (`table`, `points` for 2-D, `image`, `series`, `numbers`), input names with
+  training ranges, class names (built-ins named, e.g. moons "upper moon"/"lower moon", Fashion-MNIST item
+  names; tables and uploads from the encoding), target name, validation score. Saved models carry it.
+- [ ] **8.2 Examples.** `example` command: a random validation row in raw terms (table row, point, image
+  pixels, or the window of recent series values) with its true answer. Needs the raw validation rows: table
+  data keeps them (`Tval`), windows keep the series and validation times, and the column scaling stats.
+- [ ] **8.3 Series forecasting from recent values.** Predict takes `recent` raw values for series models and
+  returns the forecast in the series' units (`.qs.data.windowRow`).
+- [ ] **8.4 UI.** "About this model" card; inputs by kind (named fields with ranges; clickable boundary map
+  for 2-D; 28x28 drawing pad for images, centred like MNIST; recent values for series, prefilled from the
+  data; the table form); results show the answer by name, probability bars per class, the true answer for
+  examples, and a warning for inputs outside the training range. *Accept:* browser check covers spirals,
+  iris, houses, MNIST (when downloaded) and a series upload.
 
 ---
 
@@ -447,3 +516,39 @@ Environment used so far: q 5.0 (2026.05.01), Linux, 16 cores.
   Tests `cross_validate` (fold partition incl. uneven folds, bad k) and `model_summary`. 69 tests pass.
 - 2026-10-24: Phase 6 complete. Full benchmark with `-s 4`: 14/14 pass (adds houses R2 0.983 and seasonal
   R2-of-change 0.883 to the earlier 12, which are unchanged).
+- 2026-10-24: Owner asked for better usability and a dashboard UI. Found KX Dashboards installed at
+  `~/.kx/dashboards`. Added Phase 7 (own q-served web dashboard, plus KX Dashboards data-source hook).
+- 2026-10-24: Owner asked for Phase 6 to be committed before Phase 7: done as `5cb7890` (Phase 7 edits were
+  set aside and restored around the commit).
+- 2026-10-24: 7.1 done. `onEpoch` option (default `{[r]}`) is called with each history row after it is
+  appended; test `train_on_epoch`. Checked that q pushes WebSocket frames immediately from inside a busy
+  `.z.ws` handler (`neg[h] msg; neg[h][]`): a client got 4 messages 400 ms apart while the handler worked,
+  so live progress works without threads or a second process.
+- 2026-10-24: 7.2 done. Refactors first: `.qs.grid` (search configurations, shared by `.qs.search` and the
+  dashboard's streamed search), `.qs.plot.svg` / `.qs.plot.grid` (plot data without writing a file),
+  `.qs.data.parseCsv` (CSV from text). `dashboard.q`: HTTP for files directly inside `ui/` (anything else
+  404s, including `../` and encoded traversal), WebSocket JSON API (`hello datasets upload train search
+  predict save load report forget runs`), replies carry the request's `id`; `train` streams `start`, `cv`,
+  `epoch`..., then `done` with the report (scores, history, confusion, plot grid, fit, layers, input schema);
+  `search` streams `trial`s. Errors return `{"type":"error"}` and never stop the server. Binds 127.0.0.1.
+  Bugs met and fixed: `forget` used `where id=id` (local shadowed the column), `enlist[i]_` doesn't drop
+  from a keyed table (`delete ... where`), `$[...]` condition was a vector for strings in `.dash.f`, a
+  column named `distinct`, `.Q.trp` handler arity, one-letter column lists from `.j.k`.
+  `tests/test_dashboard.q`: 9 tests through the handler with a stub sender, plus a real process checked
+  over HTTP (curl) and q IPC.
+- 2026-10-24: 7.3 done. `ui/`: Train, Runs, Search, Predict and Models views; hand-written SVG line charts
+  with crosshair tooltips, canvas decision boundary (grid painted at n x n then scaled, so no seams),
+  heatmap confusion matrix with text colour chosen by luminance, predicted-vs-actual scatter and
+  forecast-vs-actual line for regression; light and dark tokens from the dataviz reference palette; phone
+  layout. Checked in headless Chromium driven over the DevTools protocol; problems found that way and fixed:
+  the browser's own form validation silently blocked Train (`step=100` on rows), the placeholder card ignored
+  `hidden`, a resize redraw replaced the live run with the previous report, a queued live redraw overwrote
+  the final tiles, dark-mode heatmap text was unreadable, the phone header overflowed. The driver is now
+  `tests/ui/check.js` and passes.
+- 2026-10-24: 7.4 and 7.5 done. The dashboard port answers q IPC (tested: `.dash.runs`, `.dash.history[]`);
+  `dashboards/qsolve.json` is a KX Dashboards connection in the format of the installed samples. Not done:
+  adding it to `~/.kx/dashboards` or building a Dashboards layout, since that changes the owner's install.
+  README has a Dashboard section. 79 tests pass with and without threads.
+- 2026-10-24: Owner found the Predict tab confusing (spirals: two unnamed numbers, "class 0"). Added
+  Phase 8.
+- 2026-10-24: Owner asked for Phase 7 to be committed before any Phase 8 changes.

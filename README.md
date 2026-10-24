@@ -17,8 +17,47 @@ No Python and no dependencies beyond q itself (plus `curl` and `gunzip` to downl
 - Time-series forecasting from lagged windows, with a time-ordered split and naive baselines
 - Hyperparameter search (grid or random) returning a ranked results table, and k-fold cross-validation
 - Serve a trained model to other kdb+ processes over IPC
+- A web dashboard for all of the above: train with live charts, compare runs, search, predict
 
 MNIST with one hidden layer of 128 relu nodes reaches 97.5% test accuracy in 5 epochs (under 20 seconds with 4 threads).
+
+## Dashboard
+
+```bash
+q dashboard.q -s 4                    # then open http://127.0.0.1:8080/   (-port to change, -host to bind elsewhere)
+```
+
+The dashboard is a web page served by q itself. Nothing else needs installing:
+- **Train:** pick a built-in dataset or upload a CSV (choose the column to predict, or a column to forecast
+  from its past), set the layers and options, and watch loss and accuracy update after every epoch. When
+  training finishes you get validation scores, a confusion matrix, the decision boundary for 2-D data,
+  predicted-against-actual or forecast-against-actual for numeric targets, optional cross-validation, and
+  the layer table.
+- **Runs:** every run this session; tick up to 8 to compare their validation-loss curves.
+- **Search:** try combinations of learning rates, layer sizes, activations, batch sizes and dropout on the
+  Train tab's data; results stream in ranked by validation loss, and one click copies the best into Train.
+- **Predict:** a form built from the model's input columns (or raw numbers), plus batch prediction from
+  pasted CSV.
+- **Models:** models saved to `models/`, which can be loaded back for predictions.
+
+Training runs in the dashboard's q process, so the page waits for each run to finish, but every epoch is
+pushed to the browser as it completes. Runs live for the session; save the ones you want to keep. The
+dashboard listens on 127.0.0.1 only, unless you pass `-host`.
+
+### Using it from KX Dashboards
+
+The same port also answers ordinary q queries, so KX Dashboards (or any q process) can read the
+session's results. Start the dashboard, then add `dashboards/qsolve.json` as a connection: copy it into
+your Dashboards `data/connections/` folder, or enter the same host and port in the connection editor.
+Useful queries:
+
+```q
+0!.dash.runs                                  / one row per run: data, model, epochs, validation scores, time
+.dash.history[]                               / every epoch of every run, with a run column
+select epoch,trainLoss,valLoss from .dash.history[] where run=1
+```
+
+These queries can run any q code, which is why the dashboard listens on localhost only by default.
 
 ## Quick start
 
@@ -180,6 +219,10 @@ q tests/run.q                    # unit tests; exits 1 on failure; -only <substr
 q bench/benchmarks.q             # trains every benchmark dataset and checks its target; -skipLarge, -only <names>
 ```
 
+`node tests/ui/check.js [dir]` checks the dashboard in a real browser: it starts a dashboard, uses every view in
+headless Chromium, saves screenshots to `dir` (default `/tmp/qsolve-ui`), and fails on any page error. It
+needs `chromium` and Node 22 or later, so it isn't part of `tests/run.q`.
+
 The tests compare every gradient with finite differences, across activations, losses and network depths.
 Tests and benchmarks that need downloaded data are skipped if it isn't there.
 
@@ -208,6 +251,7 @@ data.q                  datasets (.qs.data)
 plot.q                  decision-boundary SVGs (.qs.plot2D)
 train.q                 command-line training
 serve.q                 IPC model server
+dashboard.q             web dashboard server (ui/ holds the page)
 tests/                  test runner, assertion helpers, tests
 bench/benchmarks.q      benchmark suite
 scripts/fetch_data.sh   dataset downloader

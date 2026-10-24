@@ -153,9 +153,13 @@
 
 / read a CSV with a header row; column names are made q-safe, and a column becomes float if every
 / non-empty value parses as a number, otherwise symbol (empty fields are nulls)
-.qs.data.readCsv:{[file]
-    h:"," vs first read0 hsym file;
-    t:.Q.id (count[h]#"*";enlist ",") 0: hsym file;
+.qs.data.readCsv:{[file] .qs.data.parseCsv read0 hsym file}
+
+/ the same from CSV text already split into lines (blank lines are ignored)
+.qs.data.parseCsv:{[lines]
+    lines:lines where 0<count each lines;
+    if[2>count lines; '"CSV needs a header row and at least one data row"];
+    t:.Q.id (count["," vs first lines]#"*";enlist ",") 0: lines;
     {[x] v:x where 0<count each x; $[(count v) and not any null "F"$v; "F"$x; `$x]} each flip t
  }
 

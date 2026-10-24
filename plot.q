@@ -10,10 +10,25 @@
 / svg element text: name, attribute names and values (anything; strings are used as-is)
 .qs.plot.el:{[name;attrs;vals] "<",name,(raze {" ",(string x),"='",$[10h=type y;y;string y],"'"}'[attrs;vals]),"/>"}
 
+/ the data behind a decision-boundary plot: the plane covering d's points (padded by a tenth) cut into
+/ n x n cells, row-major from the top-left, with each cell's predicted class and the probability of that class
+.qs.plot.grid:{[m;d;n]
+    if[not 2=count first first m`weight; '"plots need a model with 2 inputs"];
+    pts:d[`X],$[`Xval in key d;d`Xval;()];
+    lo:min pts; hi:max pts; pad:0.1*hi-lo; lo-:pad; hi+:pad;
+    i:til n*n; u:(0.5+i mod n)%n; v:(0.5+i div n)%n;
+    P:.qs.predict[m;flip (lo[0]+u*hi[0]-lo 0;hi[1]-v*hi[1]-lo 1)];
+    P:$[1=count first P; {(1-x;x)} each first each P; P];
+    `lo`hi`n`classes`prob!(lo;hi;n;{x?max x} each P;max each P)
+ }
+
 / write an SVG of model m's predicted class over the plane covering data d (`X`Y, optionally `Xval`Yval)
 / cells are coloured by predicted class, paler where the model is less sure; training points are filled
 / circles in their true class colour, validation points hollow ones
-.qs.plot2D:{[m;d;file;title]
+.qs.plot2D:{[m;d;file;title] (hsym file) 0: .qs.plot.svg[m;d;title]; hsym file}
+
+/ the same SVG as a list of lines
+.qs.plot.svg:{[m;d;title]
     if[not 2=count first first m`weight; '"plot2D needs a model with 2 inputs"];
     pts:d[`X],$[`Xval in key d;d`Xval;()];
     lo:min pts; hi:max pts; pad:0.1*hi-lo; lo-:pad; hi+:pad;
@@ -34,6 +49,5 @@
     head:"<svg xmlns='http://www.w3.org/2000/svg' width='",(string px),"' height='",(string px+28),"' viewBox='0 -28 ",(string px)," ",(string px+28),"' shape-rendering='crispEdges'>";
     bg:.qs.plot.el["rect";`x`y`width`height`fill;(0;-28;px;px+28;"#ffffff")];
     txt:"<text x='8' y='-9' font-family='sans-serif' font-size='14' fill='#111827'>",title,"</text>";
-    (hsym file) 0: (head;bg;txt),rects,(enlist "<g shape-rendering='auto'>"),tr,va,("</g>";"</svg>");
-    hsym file
+    (head;bg;txt),rects,(enlist "<g shape-rendering='auto'>"),tr,va,("</g>";"</svg>")
  }
