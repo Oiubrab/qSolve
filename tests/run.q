@@ -4,7 +4,7 @@
 .t.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f;
 system "l ",.t.root,"/tests/assert.q";
 system "l ",.t.root,"/defineEquation.q";
-if[not ()~key hsym `$.t.root,"/data.q"; system "l ",.t.root,"/data.q"];
+{if[not ()~key hsym `$.t.root,"/",x; system "l ",.t.root,"/",x]} each ("data.q";"plot.q");
 
 .t.files:asc f where (f:key hsym `$.t.root,"/tests") like "test_*.q";
 {system "l ",.t.root,"/tests/",string x} each .t.files;

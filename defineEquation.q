@@ -58,25 +58,52 @@
  }
 
 / forward pass over a batch matrix X, returns (Z;A): pre-activations per layer and activations with A[0]=X
-.qs.forward:{[m;X]
-    {[s;w;b;f] z:(last[s 1] mmu flip w)+\:b; (s[0],enlist z;s[1],enlist .qs.act.f[f] z)}/[(();enlist X);m`weight;m`bias;m`act]
+.qs.forward:{[m;X] f:.qs.forwardMasked[m;X;(count m`weight)#1f]; (f 0;f 2)}
+
+/ forward pass with each layer's activations multiplied by a mask (a matrix, or 1f for none)
+/ returns (Z;U;A): pre-activations, unmasked activations, and masked activations with A[0]=X
+.qs.forwardMasked:{[m;X;M]
+    {[s;w;b;f;k] z:(last[s 2] mmu flip w)+\:b; u:.qs.act.f[f] z; (s[0],enlist z;s[1],enlist u;s[2],enlist $[k~1f;u;u*k])}/[(();();enlist X);m`weight;m`bias;m`act;M]
  }
 
-/ model outputs for a batch matrix X, or for a single example vector
+/ inverted dropout masks for n rows: each hidden node kept with probability 1-p and scaled by 1/(1-p), none on the output layer
+.qs.dropMasks:{[m;n;p]
+    $[p=0; (count m`weight)#1f; ({[n;p;k] (1%1-p)*p<(n;k)#(n*k)?1f}[n;p] each -1_count each m`bias),1f]
+ }
+
+/ row indices split into one shard per secondary thread, each at least .qs.minShard rows (one shard if threads are off)
+.qs.minShard:32
+.qs.threads:{system "s"}
+.qs.shards:{[n] p:1|.qs.threads[]&n div .qs.minShard; ceiling[n%p] cut til n}
+
+/ model outputs for a batch matrix X, or for a single example vector; large batches are spread over threads
 .qs.predict:{[m;X]
-    v:0h<type X;
-    A:last last .qs.forward[m;"f"$$[v;enlist X;X]];
+    v:0h<type X; X:"f"$$[v;enlist X;X];
+    out:{[m;X] last last .qs.forward[m;X]}[m];
+    A:$[1<count i:.qs.shards count X; raze {[f;X;i] f X i}[out;X] peach i; out X];
     $[v;first A;A]
  }
 
 / gradient of loss over batch (X;Y), returns `weight`bias!(gW;gB) shaped like the model
-.qs.grad:{[m;X;Y;loss]
-    za:.qs.forward[m;X]; Z:za 0; A:za 1; out:last A; f:last m`act;
+.qs.grad:{[m;X;Y;loss] .qs.gradDrop[m;X;Y;loss;0f]}
+
+/ gradient with dropout rate p on the hidden layers
+/ large batches are spread over threads, each shard's mean gradient weighted by its share of the rows
+/ (not for norm, whose gradient depends on the whole batch at once); masks are drawn first so results are seeded
+.qs.gradDrop:{[m;X;Y;loss;p]
+    M:.qs.dropMasks[m;count X;p];
+    if[(loss=`norm) or 2>count i:.qs.shards count X; :.qs.grad1[m;X;Y;loss;M]];
+    (+/){[m;X;Y;loss;M;i] (count[i]%count X)*.qs.grad1[m;X i;Y i;loss;{$[x~1f;x;x y]}[;i] each M]}[m;X;Y;loss;M] peach i
+ }
+
+/ gradient of loss over a single shard, with one mask per layer as for .qs.forwardMasked
+.qs.grad1:{[m;X;Y;loss;M]
+    za:.qs.forwardMasked[m;X;M]; Z:za 0; U:za 1; A:za 2; out:last A; f:last m`act;
     dOut:$[any (f;loss)~/:.qs.paired; (out-Y)%count Y;
         f=`softmax; '"softmax output needs xent loss";
         .qs.loss.g[loss][out;Y]*.qs.act.d[f][last Z;out]];
-    / deltas from the output layer back: d_l = (d_(l+1) mmu W[l+1]) * f_l'(Z[l])
-    D:{[ds;w;z;a;f] (enlist .qs.act.d[f][z;a]*first[ds] mmu w),ds}/[enlist dOut;reverse 1_m`weight;reverse -1_Z;reverse -1_1_A;reverse -1_m`act];
+    / deltas from the output layer back: d_l = (d_(l+1) mmu W[l+1]) * f_l'(Z[l]) * mask_l
+    D:{[ds;w;z;u;k;f] (enlist k*.qs.act.d[f][z;u]*first[ds] mmu w),ds}/[enlist dOut;reverse 1_m`weight;reverse -1_Z;reverse -1_U;reverse -1_M;reverse -1_m`act];
     `weight`bias!({flip[x] mmu y}'[D;-1_A];sum each D)
  }
 
@@ -112,13 +139,25 @@
         m2:(b2*s`m2)+(1-b2)*g*g;
         ((o[`lr]*m1%1-b1 xexp t)%1e-8+sqrt m2%1-b2 xexp t;`t`m1`m2!(t;m1;m2))})
 
-/ training options; verbose is 0 for silent, or log every n epochs
-.qs.defaults:`epochs`batch`lr`loss`optimiser`momentum`beta1`beta2`l2`shuffle`seed`verbose!(10;32;0.1;`mse;`sgd;0.9;0.9;0.999;0f;1b;42;1)
+/ learning rate for epoch e (counting from 1) under each schedule
+.qs.pi:acos -1
+.qs.schedule:`none`step`cosine!(
+    {[o;e] o`lr};
+    {[o;e] o[`lr]*o[`decay] xexp floor (e-1)%o`stepEvery};
+    {[o;e] o[`minLr]+0.5*(o[`lr]-o`minLr)*1+cos .qs.pi*(e-1)%o`epochs})
+
+/ training options
+/ verbose is 0 for silent, or log every n epochs; dropout is the rate on hidden layers during training
+/ schedule step multiplies lr by decay every stepEvery epochs, cosine anneals it to minLr
+/ patience stops after that many epochs without a lower monitored loss (validation loss if there is
+/ validation data, else training loss); keepBest returns the model from the epoch with the lowest one
+.qs.defaults:`epochs`batch`lr`loss`optimiser`momentum`beta1`beta2`l2`dropout`schedule`decay`stepEvery`minLr`patience`keepBest`shuffle`seed`verbose!(
+    10;32;0.1;`mse;`sgd;0.9;0.9;0.999;0f;0f;`none;0.5;10;0f;0N;0b;1b;42;1)
 
 / one gradient step on batch rows b; s holds `model`state (and anything else, passed through)
 .qs.step:{[o;X;Y;s;b]
     m:s`model;
-    g:.qs.grad[m;X b;Y b;o`loss];
+    g:.qs.gradDrop[m;X b;Y b;o`loss;o`dropout];
     if[o[`l2]>0; g[`weight]+:o[`l2]*m`weight];
     r:.qs.opt.step[o`optimiser][o;s`state;g];
     m[`weight]-:r[0]`weight; m[`bias]-:r[0]`bias;
@@ -132,30 +171,43 @@
     .qs.step[o;X;Y]/[s;o[`batch] cut i]
  }
 
-/ train model m on data (`X`Y and optionally `Xval`Yval) with options merged over .qs.defaults
-/ returns `model`history, history being one row per epoch
-.qs.train:{[m;data;opts]
-    o:.qs.defaults,opts;
-    m:.qs.check m; X:"f"$data`X; Y:"f"$data`Y;
+/ signal unless the training data and options make sense for model m
+.qs.checkTrain:{[m;X;Y;o]
     if[not count[X]=count Y; '"X and Y have different numbers of rows"];
     if[not count[first X]=count first first m`weight; '"X has ",(string count first X)," columns, the model expects ",string count first first m`weight];
     if[not count[first Y]=count last m`bias; '"Y has ",(string count first Y)," columns, the model outputs ",string count last m`bias];
     if[not o[`optimiser] in key .qs.opt.step; '"unknown optimiser: ",string o`optimiser];
     if[not o[`loss] in key .qs.loss.v; '"unknown loss: ",string o`loss];
+    if[not o[`schedule] in key .qs.schedule; '"unknown schedule: ",string o`schedule];
+    if[not o[`dropout] within 0 0.99; '"dropout must be in [0,1)"];
+    if[(not null o`patience) and 1>o`patience; '"patience must be at least 1"];
+ }
+
+/ train model m on data (`X`Y and optionally `Xval`Yval) with options merged over .qs.defaults
+/ returns `model`history`bestEpoch, history being one row per epoch run
+.qs.train:{[m;data;opts]
+    o:.qs.defaults,opts;
+    m:.qs.check m; X:"f"$data`X; Y:"f"$data`Y;
+    .qs.checkTrain[m;X;Y;o];
     if[not null o`seed; system "S ",string o`seed];
     val:all `Xval`Yval in key data;
-    s:`model`state`history!(m;.qs.opt.init[o`optimiser] `weight`bias#m;());
+    s:`model`state`history`best`bestLoss`bestEpoch`wait`stop!(m;.qs.opt.init[o`optimiser] `weight`bias#m;();m;0w;0N;0;0b);
     s:{[o;X;Y;data;val;s;e]
-        t0:.z.p;
-        s:.qs.epoch[o;X;Y;s];
+        if[s`stop; :s];
+        t0:.z.p; lr:.qs.schedule[o`schedule][o;e];
+        s:.qs.epoch[@[o;`lr;:;lr];X;Y;s];
         tr:.qs.evaluate[s`model;X;Y;o`loss];
         va:$[val; .qs.evaluate[s`model;data`Xval;data`Yval;o`loss]; `loss`acc!0n 0n];
-        row:`epoch`trainLoss`trainAcc`valLoss`valAcc`seconds!(e;tr`loss;tr`acc;va`loss;va`acc;1e-9*.z.p-t0);
-        if[(o[`verbose]>0) and (0=e mod o`verbose) or e=o`epochs; -1 .qs.fmt row];
+        row:`epoch`lr`trainLoss`trainAcc`valLoss`valAcc`seconds!(e;lr;tr`loss;tr`acc;va`loss;va`acc;1e-9*.z.p-t0);
         s[`history],:enlist row;
+        l:$[val;va`loss;tr`loss];
+        $[l<s`bestLoss; s[`best`bestLoss`bestEpoch`wait]:(s`model;l;e;0); s[`wait]+:1];
+        s[`stop]:(not null o`patience) and s[`wait]>=o`patience;
+        if[(o[`verbose]>0) and (0=e mod o`verbose) or (e=o`epochs) or s`stop; -1 .qs.fmt row];
+        if[(o[`verbose]>0) and s`stop; -1 "stopped: no improvement for ",(string o`patience)," epochs, best was epoch ",string s`bestEpoch];
         s
     }[o;X;Y;data;val]/[s;1+til o`epochs];
-    `model`history!(s`model;s`history)
+    `model`history`bestEpoch!($[o`keepBest;s`best;s`model];s`history;s`bestEpoch)
  }
 
 / one log line for a history row

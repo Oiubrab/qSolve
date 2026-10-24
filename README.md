@@ -7,19 +7,25 @@ No Python and no dependencies beyond q itself (plus `curl` and `gunzip` to downl
 - Losses: mean squared error, binary and categorical cross-entropy
 - Optimisers: SGD, momentum, Adam; optional L2 weight decay
 - Mini-batches, shuffling, validation each epoch, history table, confusion matrix, save/load
+- Dropout, learning-rate schedules (step, cosine), early stopping that can keep the best epoch's model
+- Multi-threaded training and prediction (`-s N`)
+- Decision-boundary plots of 2-D models as SVG
 - Vectorised backpropagation, checked against finite differences in the test suite
 - Built-in datasets, from logic gates up to MNIST and Fashion-MNIST
 
-MNIST with one hidden layer of 128 relu nodes reaches 97.5% test accuracy in 5 epochs (about a minute).
+MNIST with one hidden layer of 128 relu nodes reaches 97.5% test accuracy in 5 epochs (under 20 seconds with 4 threads).
 
 ## Quick start
 
 ```bash
-q train.q -data moons -hidden 16 -epochs 100 -optimiser adam -lr 0.01
+q train.q -data moons -hidden 16 -epochs 100 -optimiser adam -lr 0.01 -plot moons.svg
 
 scripts/fetch_data.sh                 # downloads MNIST, Fashion-MNIST and Iris into data/
-q train.q -data mnist -hidden 128 -act relu -optimiser adam -lr 0.001 -epochs 5 -batch 64 -save mnist.qsm
+q train.q -s 4 -data mnist -hidden 128 -act relu -optimiser adam -lr 0.001 -epochs 5 -batch 64 -save mnist.qsm
 ```
+
+Start q with secondary threads (`q train.q -s 4 ...`, with the script first) and large batches and
+predictions are spread across them: MNIST trains about 1.5x faster with `-s 4`.
 
 `train.q` infers the output layer size from the data. It picks softmax with cross-entropy for several
 outputs, sigmoid with binary cross-entropy for one output, and linear with MSE for `sine`. Its header
@@ -30,6 +36,7 @@ lists every option.
 ```q
 \l defineEquation.q
 \l data.q
+\l plot.q                                               / only needed for .qs.plot2D
 
 d:.qs.data.split[.qs.data.spirals[2000;0.02];0.8]      / `X`Y`Xval`Yval
 m:.qs.init[2;32 32 2;`tanh`tanh`softmax;42]             / 2 inputs, two hidden layers, 2 outputs
@@ -39,6 +46,7 @@ r`history                                               / one row per epoch
 .qs.evaluate[r`model;d`Xval;d`Yval;`xent]               / `loss`acc
 .qs.confusion[r`model;d`Xval;d`Yval]                    / rows true class, columns predicted
 .qs.save[`:spirals.qsm;r`model]
+.qs.plot2D[r`model;d;`:spirals.svg;"spirals"]           / decision boundary, 2-input models only
 ```
 
 ### Core (`defineEquation.q`)
@@ -47,10 +55,10 @@ r`history                                               / one row per epoch
 |---|---|
 | `.qs.init[nIn;sizes;acts;seed]` | New model. `sizes` gives one entry per layer, the last being the output. `acts` is one per layer, or a single activation for every layer. Xavier initialisation (He for relu), zero biases. A `seed` of `0N` leaves q's random state alone. |
 | `.qs.predict[m;X]` | Outputs for a matrix with one row per example, or for a single example vector. |
-| `.qs.train[m;data;opts]` | Trains on `data` (`` `X`Y ``, optionally `` `Xval`Yval ``). Returns `` `model`history ``. |
+| `.qs.train[m;data;opts]` | Trains on `data` (`` `X`Y ``, optionally `` `Xval`Yval ``). Returns `` `model`history`bestEpoch ``. |
 | `.qs.evaluate[m;X;Y;loss]` | `` `loss`acc `` dictionary. |
 | `.qs.confusion[m;X;Y]` | Confusion matrix. |
-| `.qs.grad[m;X;Y;loss]` | Gradient of the loss, shaped like the model. |
+| `.qs.grad[m;X;Y;loss]` | Gradient of the loss, shaped like the model (`.qs.gradDrop` adds a dropout rate). |
 | `.qs.save[file;m]` / `.qs.load file` | Saves and loads a model (q's native format). |
 
 `opts` is merged over `.qs.defaults`:
@@ -65,6 +73,12 @@ r`history                                               / one row per epoch
 | `momentum` | 0.9 | for `momentum` |
 | `beta1`, `beta2` | 0.9, 0.999 | for `adam` |
 | `l2` | 0 | weight decay |
+| `dropout` | 0 | dropout rate on hidden layers during training |
+| `schedule` | `` `none `` | `` `none`step`cosine `` learning-rate schedule |
+| `decay`, `stepEvery` | 0.5, 10 | `step`: multiply `lr` by `decay` every `stepEvery` epochs |
+| `minLr` | 0 | `cosine`: final learning rate |
+| `patience` | `0N` | stop after this many epochs without a lower validation loss (training loss if no validation data); `0N` never stops |
+| `keepBest` | `0b` | return the model from the epoch with the lowest validation loss rather than the last |
 | `shuffle` | `1b` | |
 | `seed` | 42 | `0N` to leave q's random state alone |
 | `verbose` | 1 | log every n epochs, 0 for silent |
@@ -122,6 +136,7 @@ Benchmark results (seed 42):
 ```
 defineEquation.q        core library (.qs)
 data.q                  datasets (.qs.data)
+plot.q                  decision-boundary SVGs (.qs.plot2D)
 train.q                 command-line training
 tests/                  test runner, assertion helpers, tests
 bench/benchmarks.q      benchmark suite

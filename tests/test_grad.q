@@ -51,3 +51,45 @@
     m:.qs.init[3;4 2;`tanh`softmax;1];
     .t.throws[{.qs.grad[x;enlist 1 2 3f;enlist 0 1f;`mse]};m];
  }];
+
+/ run f[] with .qs.threads pretending there are n secondary threads
+.t.withThreads:{[n;f] t:.qs.threads; .qs.threads:{[n;x] n}[n]; r:@[f;::;{(`err;x)}]; .qs.threads:t; if[`err~first r; 'r 1]; r}
+
+/ sharding over threads gives the same gradient as one pass (peach runs serially when threads are off)
+.t.add[`grad_sharded;{
+    m:.qs.init[3;4 2;`tanh`softmax;1]; system "S 5";
+    X:{x?1f} each 100#3; Y:.qs.data.oneHot[2;100?2];
+    r:.t.withThreads[4;{[m;X;Y;u] (count .qs.shards 100;.qs.grad[m;X;Y;`xent];.qs.predict[m;X])}[m;X;Y]];
+    .t.eq[r 0;3];
+    .t.near[r 1;.qs.grad1[m;X;Y;`xent;2#1f];1e-15];
+    .t.near[r 2;last last .qs.forward[m;X];1e-15];
+    .t.eq[.t.withThreads[0;{count .qs.shards 100}];1];
+    .t.eq[.t.withThreads[16;{count .qs.shards 40}];1];
+ }];
+
+/ with fixed dropout masks the gradient still matches finite differences of the masked network
+.t.add[`grad_dropout;{
+    system "S 3";
+    m:.qs.init[3;5 4 2;`tanh`relu`softmax;0N]; X:{x?1f} each 6#3; Y:.qs.data.oneHot[2;6?2];
+    M:.qs.dropMasks[m;6;0.4];
+    .t.eq[count M;3];
+    .t.eq[last M;1f];
+    .t.ok[all raze[M 0] in 0f,1%0.6;"mask values should be 0 or 1/(1-p)"];
+    L:{[X;Y;M;m] .qs.loss.v[`xent][last .qs.forwardMasked[m;X;M] 2;Y]}[X;Y;M];
+    h:1e-6;
+    fd:{[L;m;h;k;i] (L[@[m;k;.[;i;+;h]]]-L[@[m;k;.[;i;-;h]]])%2*h}[L;m;h];
+    g:.qs.grad1[m;X;Y;`xent;M];
+    ixW:raze {[l;w] raze l,/:'til[count w],/:\:til count first w}'[til count m`weight;m`weight];
+    ixB:raze {[l;b] l,/:til count b}'[til count m`bias;m`bias];
+    .t.near[{x . y}[g`weight] each ixW;fd[`weight] each ixW;1e-6];
+    .t.near[{x . y}[g`bias] each ixB;fd[`bias] each ixB;1e-6];
+ }];
+
+/ dropout masks are drawn before sharding, so a seeded gradient doesn't depend on the thread count
+.t.add[`grad_dropout_sharded;{
+    m:.qs.init[3;8 2;`relu`softmax;1]; system "S 5";
+    X:{x?1f} each 100#3; Y:.qs.data.oneHot[2;100?2];
+    g:{[m;X;Y;n] .t.withThreads[n;{[m;X;Y;u] system "S 9"; .qs.gradDrop[m;X;Y;`xent;0.5]}[m;X;Y]]}[m;X;Y];
+    .t.near[g 4;g 0;1e-15];
+    .t.ok[not (g 0)~.qs.grad[m;X;Y;`xent];"dropout had no effect"];
+ }];

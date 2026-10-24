@@ -12,10 +12,10 @@ It is written so that any engineer or LLM session can pick it up cold, see what 
 - If you change a design decision, edit the [Design decisions](#design-decisions) section and say why in the log.
 - Do not commit or push unless the repository owner asks you to.
 
-**Current status (2026-10-24):** Phases 0-4 are done; all tests and all 12 benchmarks pass. Phase 5
-(optional extras) has not been started. A new session should begin with `q tests/run.q`, read the
-Progress log, then pick from Phase 5 or from whatever real problem the owner brings. None of this work has
-been committed yet: check `git status`.
+**Current status (2026-10-24):** Phases 0-5 are done; 49 tests and all 12 benchmarks pass, with and
+without threads. Phases 0-5 are committed on main; check `git status` and `git log` for anything since. The owner asked
+for all of Phase 6 to be done, in the listed order. A new session should begin with `q tests/run.q`, read
+the Progress log, and continue with the first unticked Phase 6 item.
 
 ---
 
@@ -105,8 +105,19 @@ These are settled unless the log says otherwise.
 
 ### q gotchas met so far
 
+- The script must be q's first argument: `q tests/run.q -s 4`, not `q -s 4 tests/run.q` (that loads nothing
+  and waits on stdin, which looks like a hang).
+- A fully applied lambda `{[a;b] ...}[x;y]` runs immediately; to pass it as a callback give it a spare
+  argument so it stays a projection.
 - `system "q ..."` runs q's own `\q` (quit), not a shell command; likewise any string whose first word is a q
   system command (`cd`, `c`, `e`, `l` ...). Use `system "env q ..."`.
+- Single-letter command-line flags belong to q (`-n 2000` fails with `n invalid`); script options need
+  longer names (`-rows`).
+- Symbol literals can't contain `-`: `` `fill-opacity `` is `` `fill `` minus `opacity`. Use `` `$"fill-opacity" ``.
+- `in` and `~` compare types strictly: `0f in 0,1.5` is false because `0,1.5` is a mixed list; write `0f,1.5`.
+- `sum` of booleans is an int (`6401i`), not a long; cast with `"j"$` before `.t.eq` against a long.
+- Multi-line lambdas don't work when q code is piped in on stdin; put experiments in a script file.
+- This licence allows at most 4 secondary threads (`-s 4`).
 
 - `exp` is a reserved word: don't use it as a variable name (it gave `'assign`). Same for `neg`, `type`, `max` …
 - q evaluates right to left: `(count w) - 2 + i` means `count[w] - (2+i)`.
@@ -119,6 +130,7 @@ These are settled unless the log says otherwise.
 ```
 defineEquation.q        core library (.qs namespace)
 data.q                  dataset generators and loaders (.qs.data)
+plot.q                  decision-boundary SVGs (.qs.plot2D)
 train.q                 command-line training script
 tests/assert.q          assertion helpers (.t namespace)
 tests/run.q             test runner: loads library, runs every tests/test_*.q, exits non-zero on failure
@@ -130,19 +142,25 @@ PLAN.md                 this file
 README.md               user documentation
 ```
 
-### Public API (target)
+### Public API
 
 ```q
 m:.qs.init[nIn; layerSizes; acts; seed]     / e.g. .qs.init[784; 128 10; `relu`softmax; 42]
 a:.qs.predict[m; X]                          / X: n×nIn matrix (or a single vector) -> outputs
 g:.qs.grad[m; X; Y; lossName]                / `weight`bias!(gW;gB)
-r:.qs.train[m; data; opts]                   / data: `X`Y`Xval`Yval dict; returns `model`history
+g:.qs.gradDrop[m; X; Y; lossName; p]         / the same with dropout rate p on hidden layers
+r:.qs.train[m; data; opts]                   / data: `X`Y`Xval`Yval dict; returns `model`history`bestEpoch
 .qs.evaluate[m; X; Y; lossName]              / `loss`acc dict (acc only for one-hot Y)
+.qs.confusion[m; X; Y]                       / rows true class, columns predicted
 .qs.save[`:file; m]   m:.qs.load `:file
+.qs.plot2D[m; data; `:file.svg; title]       / decision boundary of a 2-input model (plot.q)
 ```
 
-`opts` keys (defaults in brackets): `epochs` [10], `batch` [32], `lr` [0.1], `loss` [`mse], `optimiser`
-[`sgd] (`sgd`momentum`adam), `momentum` [0.9], `l2` [0], `shuffle` [1b], `seed` [42], `verbose` [1b].
+`opts` keys (defaults in brackets; the source of truth is `.qs.defaults`): `epochs` [10], `batch` [32],
+`lr` [0.1], `loss` [`mse] (`mse`bce`xent`norm), `optimiser` [`sgd] (`sgd`momentum`adam), `momentum` [0.9],
+`beta1` [0.9], `beta2` [0.999], `l2` [0], `dropout` [0], `schedule` [`none] (`none`step`cosine), `decay`
+[0.5], `stepEvery` [10], `minLr` [0], `patience` [0N = never stop], `keepBest` [0b], `shuffle` [1b], `seed`
+[42], `verbose` [1 = log every epoch; 0 silent; n every n epochs].
 
 ---
 
@@ -228,11 +246,36 @@ state of the art.
 
 ### Phase 5 — Later / optional
 
-- [ ] 5.1 Early stopping on validation loss; keep best model.
-- [ ] 5.2 Learning-rate schedule (step or cosine).
-- [ ] 5.3 Use `peach` over batch shards for large batches (measure first: `mmu` may already be multi-threaded).
-- [ ] 5.4 Dropout.
-- [ ] 5.5 Plotting the decision boundary of 2-D datasets (e.g. write a PGM/PPM image from q).
+- [x] 5.1 Early stopping on validation loss; keep best model.
+- [x] 5.2 Learning-rate schedule (step or cosine).
+- [x] 5.3 Use `peach` over batch shards for large batches (measure first: `mmu` may already be multi-threaded).
+- [x] 5.4 Dropout.
+- [x] 5.5 Plotting the decision boundary of 2-D datasets (done as SVG rather than PGM/PPM: plain text, opens
+  in any browser).
+
+### Phase 6 — Next directions (owner chose to do all of them, in order)
+
+There is still no specific target problem, so these are ranked by how much more *generally useful* each
+makes qSolve. Recommended order: 6.1 first (it lets any real question in), then 6.2 (it plays to kdb+'s
+strength), then the rest as wanted.
+
+- [ ] **6.1 Train from any kdb+ table or CSV.** `.qs.data.fromTable[t;features;target]`: numeric columns
+  standardised, symbol columns one-hot encoded, nulls filled (and reported), target one-hot for symbols or
+  left numeric for regression; returns the usual `` `X`Y `` plus the encoding, so new rows can be encoded the
+  same way at prediction time (`.qs.data.encode[enc;t]`). `.qs.data.csv[file;types;target]` on top. Add
+  regression metrics (MAE, RMSE, R²) to `.qs.evaluate` so regression gets something better than accuracy.
+  *Accept:* Iris and a regression CSV (e.g. a generated one) train through it; encode/train/predict
+  round-trip test.
+- [ ] **6.2 Time-series windows.** `.qs.data.windows[series;lags;horizon]` turns a series (or table columns)
+  into lagged-feature rows, with a time-ordered (not shuffled) train/validation split. Benchmark on a
+  generated noisy seasonal series against a naive "last value" baseline.
+- [ ] **6.3 Hyperparameter search.** Grid or random search over options and layer sizes, scored on
+  validation loss, returning a results table (q is good at this); optionally `peach` across configs.
+- [ ] **6.4 Serve a model over IPC.** A small script that loads a saved model and answers `predict`
+  requests on a port (`.z.pg`), with input checks. kdb+'s natural deployment path.
+- [ ] **6.5 k-fold cross-validation** for small datasets, reporting mean and spread of validation scores.
+- [ ] **6.6 Model summary**: layer table (inputs, outputs, activation, parameter count) for logs and the CLI.
+
 
 ---
 
@@ -242,7 +285,8 @@ state of the art.
 q tests/run.q                       # all tests, exits non-zero on failure
 q bench/benchmarks.q                # train every benchmark dataset and check targets
 scripts/fetch_data.sh               # download MNIST, Fashion-MNIST, Iris into data/
-q train.q -data xor -layers 4 1 -act tanh sigmoid -loss bce -epochs 2000 -batch 4 -lr 0.5
+q train.q -data xor -hidden 4 -epochs 300 -batch 4 -lr 0.5
+q train.q -s 4 -data mnist -hidden 128 -act relu -optimiser adam -lr 0.001 -epochs 5 -batch 64 -plot x.svg
 ```
 
 Environment used so far: q 5.0 (2026.05.01), Linux, 16 cores.
@@ -311,3 +355,35 @@ Environment used so far: q 5.0 (2026.05.01), Linux, 16 cores.
 - 2026-10-24: 4.3 done. README rewritten: quick start, q API, options, data functions, how to bring your own
   data, tests/benchmarks, results table, layout. The README's q example was run end to end.
   Phases 0-4 complete. Final check: `q tests/run.q` 39 pass / 0 fail / 0 skip; benchmarks 12/12 pass.
+- 2026-10-24: 5.3 done. Profiled first: the ~12 s/epoch MNIST figure from the first benchmark run did not
+  reproduce (5.4 s/epoch serial: ~3.8 s training steps, ~1.6 s evaluating train+val sets), so it was machine
+  load. `mmu` does not use secondary threads by itself (this licence allows at most 4: `-s 4`). Measured
+  `peach` over row shards: predict on 60k rows 3.3x faster, batch-64 grad 1.9x, batch-512 grad 3x. Added
+  `.qs.shards` (one shard per thread, each >= `.qs.minShard` = 32 rows) used by `.qs.predict` and `.qs.grad`;
+  shard gradients are weighted by their share of rows; `norm` is never sharded (its gradient needs the whole
+  batch). Old single-pass gradient is `.qs.grad1`. Test `grad_sharded` fakes 4 threads via `.qs.threads` and
+  checks sharded == serial to 1e-15. MNIST benchmark: 27 s -> 18 s with `-s 4`, same 97.54%.
+  Threaded runs can differ from serial ones in the last bits (summation order), still deterministic per
+  thread count.
+- 2026-10-24: Owner asked to commit Phases 0-4 to main (`20608e8`) and carry on with Phase 5.
+- 2026-10-24: 5.4 done. `.qs.forwardMasked[m;X;M]` (returns Z, unmasked U, masked A), `.qs.dropMasks`
+  (inverted dropout; output layer never masked), `.qs.gradDrop[m;X;Y;loss;p]`; `.qs.grad` is `gradDrop` with
+  p=0, and `.qs.grad1` now takes the masks. Masks are drawn on the main thread before sharding, so a seeded
+  dropout gradient is the same for any thread count (test `grad_dropout_sharded`). Test `grad_dropout`
+  (finite differences with fixed masks) caught a real bug on its first run: an edit to the backward pass
+  had silently not applied, so masks were ignored.
+- 2026-10-24: 5.1 and 5.2 done. Options `schedule` (`none`step`cosine via `.qs.schedule`), `decay`,
+  `stepEvery`, `minLr`, `patience`, `keepBest`, `dropout`; option checks moved to `.qs.checkTrain`.
+  History gains an `lr` column; `.qs.train` returns `bestEpoch`. The monitored loss is validation loss when
+  there is validation data, else training loss. Tests: schedule values, early stopping (validation labels
+  are flipped so validation loss must rise), keepBest returns the best epoch's model, dropout still learns
+  moons, bad options rejected. `train.q` takes all of these; `-n` renamed `-rows` (q owns `-n`); the final
+  line now evaluates the *returned* model (it showed the last epoch's numbers even with `-keepBest`).
+- 2026-10-24: 5.5 done. `plot.q`: `.qs.plot2D[m;d;file;title]` writes an SVG: 80x80 grid coloured by predicted
+  class, paler where less certain; training points filled, validation hollow. Works with softmax or a single
+  sigmoid output. Checked visually on spirals, moons and circles (rendered with rsvg-convert). `train.q
+  -plot file.svg`. Tests check the SVG's structure.
+- 2026-10-24: Phase 5 complete. 49 tests pass serial and with `-s 4`. Full benchmark with `-s 4`: 12/12
+  pass in 46 s total, same numbers as before (MNIST 97.54% and Fashion 87.39% in ~19.6 s each).
+  Added Phase 6 (proposed directions, not started; owner to choose).
+- 2026-10-24: Owner asked to commit Phase 5 to main and carry on with all of Phase 6.
