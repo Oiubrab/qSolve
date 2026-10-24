@@ -66,7 +66,7 @@
     .t.near[.qs.accuracy[(0.1 0.9;0.8 0.2;0.6 0.4);(0 1f;0 1f;1 0f)];2%3;1e-12];
     m:`weight`bias`act!(enlist 2 2#1 0 0 1f;enlist 0 0f;enlist `linear);
     .t.eq[.qs.confusion[m;(1 0f;0 1f;1 0f);(1 0f;0 1f;0 1f)];(1 0;1 1)];
-    .t.eq[.qs.evaluate[m;(1 0f;0 1f);(1 0f;0 1f);`mse];`loss`acc!0 1f];
+    .t.eq[`loss`acc#.qs.evaluate[m;(1 0f;0 1f);(1 0f;0 1f);`mse];`loss`acc!0 1f];
  }];
 
 .t.add[`train_schedules;{
@@ -108,3 +108,4 @@
     .t.throws[f;enlist[`schedule]!enlist `nope];
     .t.throws[f;enlist[`patience]!enlist 0];
  }];
+

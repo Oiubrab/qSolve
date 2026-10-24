@@ -47,3 +47,11 @@
     .t.eq[.qs.load f;m];
     hdel f;
  }];
+
+.t.add[`model_summary;{
+    s:.qs.summary .qs.init[4;8 3;`tanh`softmax;1];
+    .t.eq[cols s;`layer`inputs`outputs`act`params];
+    .t.eq[s`inputs;4 8];
+    .t.eq[s`outputs;8 3];
+    .t.eq[s`params;40 27];
+ }];

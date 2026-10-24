@@ -97,13 +97,128 @@
 / the first n training and nval validation rows of a dataset
 .qs.data.take:{[d;n;nval] d:@[d;`X`Y;n sublist]; $[`Xval in key d; @[d;`Xval`Yval;nval sublist]; d]}
 
-/ Iris CSV (UCI iris.data): 4 standardised features, 3 one-hot classes, shuffled 80/20 split
+/ tables: encode the columns of any kdb+ table as model inputs and targets
+/ an encoding is a keyed table, one row per column: kind is `num (standardised, nulls become the mean)
+/ or `cat (one-hot over levels seen in training; nulls and unseen levels encode as all zeros)
+
+/ symbols for string columns, otherwise the column as it is
+.qs.data.asSym:{[x] $[0h=type x; `$x; 10h=type x; `$enlist each x; x]}
+
+/ encoding of one column
+.qs.data.fitCol:{[x]
+    x:.qs.data.asSym x;
+    $[11h=type x; `kind`mu`sd`levels!(`cat;0n;1f;asc distinct x where not null x);
+        [f:"f"$x; sd:dev f; `kind`mu`sd`levels!(`num;avg f;$[(null sd) or sd=0;1f;sd];`symbol$())]]
+ }
+
+/ encode one column with its encoding, one row per value
+.qs.data.encodeCol:{[e;x]
+    x:.qs.data.asSym x;
+    $[`cat=e`kind; "f"$x=\:e`levels; enlist each 0f^(("f"$x)-e`mu)%e`sd]
+ }
+
+/ encoding of the features and target columns of table t; empty features means every other column
+.qs.data.fit:{[t;features;target]
+    features:$[count features; (),features; cols[t] except target];
+    if[not all (features,target) in cols t; '"no such column: ",-3!(features,target) except cols t];
+    enc:([] col:features,target; role:((count features)#`feature),`target) ,' .qs.data.fitCol each t features,target;
+    `col xkey enc
+ }
+
+/ inputs and targets of table t under encoding enc
+.qs.data.encodeX:{[enc;t] f:exec col from enc where role=`feature; (,'/) {[enc;t;c] .qs.data.encodeCol[enc c;t c]}[enc;t] each f}
+.qs.data.encodeY:{[enc;t] c:first exec col from enc where role=`target; .qs.data.encodeCol[enc c;t c]}
+
+/ model outputs back to target values: class symbols, or numbers in the target's units
+.qs.data.decodeY:{[enc;A]
+    e:enc first exec col from enc where role=`target;
+    $[`cat=e`kind; e[`levels] .qs.classes A; e[`mu]+e[`sd]*first each A]
+ }
+
+/ names of the encoded input columns, e.g. city_paris for a categorical column
+.qs.data.inputNames:{[enc]
+    e:select from 0!enc where role=`feature;
+    raze {[c;e] $[`cat=e`kind; `$(string c),/:"_",/:string e`levels; enlist c]}'[e`col;e]
+ }
+
+/ shuffle table t, split it frac/1-frac, fit the encoding on the training rows only, and encode both parts
+/ returns `X`Y`Xval`Yval`enc (no Xval and Yval when frac is 1); generated rows are reproducible after system "S n"
+.qs.data.fromTable:{[t;features;target;frac]
+    t:t neg[n]?n:count t; k:floor frac*n;
+    enc:.qs.data.fit[k#t;features;target];
+    d:`X`Y!(.qs.data.encodeX[enc;k#t];.qs.data.encodeY[enc;k#t]);
+    if[k<n; d,:`Xval`Yval!(.qs.data.encodeX[enc;k _t];.qs.data.encodeY[enc;k _t])];
+    d,enlist[`enc]!enlist enc
+ }
+
+/ read a CSV with a header row; column names are made q-safe, and a column becomes float if every
+/ non-empty value parses as a number, otherwise symbol (empty fields are nulls)
+.qs.data.readCsv:{[file]
+    h:"," vs first read0 hsym file;
+    t:.Q.id (count[h]#"*";enlist ",") 0: hsym file;
+    {[x] v:x where 0<count each x; $[(count v) and not any null "F"$v; "F"$x; `$x]} each flip t
+ }
+
+/ train/validation data from a CSV file: target column name, features (empty for all others), training fraction
+.qs.data.csv:{[file;features;target;frac] .qs.data.fromTable[flip .qs.data.readCsv file;features;target;frac]}
+
+/ Iris CSV (UCI iris.data, no header): 4 standardised features, 3 one-hot classes, shuffled 80/20 split
 .qs.data.iris:{[file]
     t:flip `sl`sw`pl`pw`species!("FFFFS";",") 0: hsym file;
-    t:select from t where not null species;
-    names:asc distinct t`species;
-    d:`X`Y!(flip t`sl`sw`pl`pw;.qs.data.oneHot[3;names?t`species]);
-    .qs.data.standardise .qs.data.split[d;0.8]
+    .qs.data.fromTable[select from t where not null species;`sl`sw`pl`pw;`species;0.8]
+ }
+
+/ a synthetic house-price table for regression, n rows: numeric, categorical and missing values
+/ price depends nonlinearly on area, rooms, age and city, plus noise
+.qs.data.houses:{[n]
+    area:40+n?160f; rooms:1+n?6; age:n?80f; city:n?`north`south`east`west;
+    age[(n div 20)?n]:0n;
+    base:(`north`south`east`west!300 220 260 180) city;
+    price:base+(2.5*area)+(15*rooms)-(0.02*a*a:0f^age)+(0.004*area*area)+10*.qs.data.normal n;
+    ([] area;rooms;age;city;price)
+ }
+
+/ time series: lagged windows of a numeric series, split by time rather than shuffled
+
+/ times t whose window (lags values up to t) and target (horizon steps after t) fit in n points, and
+/ how many of them train: the first frac by time
+.qs.data.windowTimes:{[n;lags;horizon;frac]
+    if[n<lags+horizon+1; '"series too short for ",(string lags)," lags and horizon ",string horizon];
+    t:(lags-1)+til n-lags+horizon-1;
+    (t;floor frac*count t)
+ }
+
+/ training rows from series s: inputs are the lags-1 earlier values of each window and the target is the
+/ value horizon steps later, all relative to the window's last value, so a trend or level shift doesn't
+/ carry validation outside the range seen in training; inputs are standardised per column and the target by
+/ its own mean and sd, all from training rows only. Returns `X`Y`Xval`Yval`mu`sd`level`levelVal, levels being
+/ each row's last value, so .qs.data.unwindow can put predictions back in the series' units
+.qs.data.windows:{[s;lags;horizon;frac]
+    s:"f"$s; tk:.qs.data.windowTimes[count s;lags;horizon;frac]; t:tk 0; k:tk 1;
+    L:s t; X:(s t+\:neg reverse 1_til lags)-L; y:s[t+horizon]-L;
+    d:.qs.data.standardise `X`Y`Xval`Yval!(k#X;();k _X;());
+    mu:avg k#y; sd:dev k#y; sd:$[sd=0;1f;sd];
+    d[`Y]:enlist each (k#y-mu)%sd; d[`Yval]:enlist each (k _y-mu)%sd;
+    d,`mu`sd`level`levelVal!(mu;sd;k#L;k _L)
+ }
+
+/ windowed predictions A back in the series' units, given the rows' levels (d`level or d`levelVal)
+.qs.data.unwindow:{[d;A;levels] levels+d[`mu]+d[`sd]*first each A}
+
+/ mean absolute error, in the series' units, of naive forecasts for the validation targets of .qs.data.windows:
+/ the last value seen, and the value one period before the target (seasonal naive, null if not in the window)
+.qs.data.naive:{[s;lags;horizon;frac;period]
+    s:"f"$s; tk:.qs.data.windowTimes[count s;lags;horizon;frac]; t:tk[1]_tk 0;
+    y:s t+horizon;
+    `last`seasonal!(avg abs y-s t;$[(period>=horizon) and period<=lags-1+horizon; avg abs y-s t+horizon-period; 0n])
+ }
+
+/ a generated seasonal series of n points: slow trend, a daily-style cycle of length period with a
+/ harmonic, and autocorrelated noise of sd about noise
+.qs.data.seasonal:{[n;period;noise]
+    t:"f"$til n; w:2*.qs.data.pi*t%period;
+    e:{[a;x;y] (a*x)+y}[0.6]\[noise*0.8*.qs.data.normal n];
+    (0.001*t)+(sin w)+(0.4*sin 2*w)+e
  }
 
 / directory holding downloaded data (see scripts/fetch_data.sh)
@@ -111,12 +226,14 @@
 
 / datasets by name, split into training and validation: n rows and noise are used by the generated ones
 / the logic gates validate on their own four rows
-.qs.data.names:`and`or`xor`nand`fourBit`sine`circles`moons`spirals`iris`mnist`fashion
+.qs.data.names:`and`or`xor`nand`fourBit`sine`circles`moons`spirals`houses`seasonal`iris`mnist`fashion
 .qs.data.load:{[name;n;noise]
     $[name in key .qs.data.gates; {x,`Xval`Yval!x`X`Y} .qs.data.gate name;
         name in `fourBit`sine; .qs.data.split[.qs.data[name] n;0.8];
         name in `circles`moons`spirals; .qs.data.split[.qs.data[name][n;noise];0.8];
         name=`iris; .qs.data.iris `$":",.qs.data.dir,"/iris/iris.data";
+        name=`houses; .qs.data.fromTable[.qs.data.houses n;();`price;0.8];
+        name=`seasonal; .qs.data.windows[.qs.data.seasonal[n;24;noise];48;1;0.8];
         name in `mnist`fashion; .qs.data.mnist `$":",.qs.data.dir,"/",string name;
         '"unknown dataset: ",(string name),", expected one of ",", " sv string .qs.data.names]
  }

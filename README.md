@@ -12,6 +12,11 @@ No Python and no dependencies beyond q itself (plus `curl` and `gunzip` to downl
 - Decision-boundary plots of 2-D models as SVG
 - Vectorised backpropagation, checked against finite differences in the test suite
 - Built-in datasets, from logic gates up to MNIST and Fashion-MNIST
+- Train on any kdb+ table or CSV: numeric columns standardised, categorical ones one-hot encoded,
+  missing values filled; regression or classification chosen from the target column
+- Time-series forecasting from lagged windows, with a time-ordered split and naive baselines
+- Hyperparameter search (grid or random) returning a ranked results table, and k-fold cross-validation
+- Serve a trained model to other kdb+ processes over IPC
 
 MNIST with one hidden layer of 128 relu nodes reaches 97.5% test accuracy in 5 epochs (under 20 seconds with 4 threads).
 
@@ -20,6 +25,11 @@ MNIST with one hidden layer of 128 relu nodes reaches 97.5% test accuracy in 5 e
 ```bash
 q train.q -data moons -hidden 16 -epochs 100 -optimiser adam -lr 0.01 -plot moons.svg
 
+q train.q -data csv -file sales.csv -target price -features area rooms city -optimiser adam -lr 0.01 -epochs 100 -save price.qsm
+q train.q -data moons -optimiser adam -epochs 30 -search lr=0.01,0.001 hidden=4,16,16x16 act=tanh,relu
+
+q train.q -data csv -file load.csv -series demand -lags 48 -horizon 1 -hidden none -optimiser adam -lr 0.003 -epochs 100
+
 scripts/fetch_data.sh                 # downloads MNIST, Fashion-MNIST and Iris into data/
 q train.q -s 4 -data mnist -hidden 128 -act relu -optimiser adam -lr 0.001 -epochs 5 -batch 64 -save mnist.qsm
 ```
@@ -27,8 +37,8 @@ q train.q -s 4 -data mnist -hidden 128 -act relu -optimiser adam -lr 0.001 -epoc
 Start q with secondary threads (`q train.q -s 4 ...`, with the script first) and large batches and
 predictions are spread across them: MNIST trains about 1.5x faster with `-s 4`.
 
-`train.q` infers the output layer size from the data. It picks softmax with cross-entropy for several
-outputs, sigmoid with binary cross-entropy for one output, and linear with MSE for `sine`. Its header
+`train.q` infers the output layer from the data. It picks softmax with cross-entropy for several classes,
+sigmoid with binary cross-entropy for one 0/1 output, and linear with MSE for numeric targets. Its header
 lists every option.
 
 ## Using it from q
@@ -56,9 +66,12 @@ r`history                                               / one row per epoch
 | `.qs.init[nIn;sizes;acts;seed]` | New model. `sizes` gives one entry per layer, the last being the output. `acts` is one per layer, or a single activation for every layer. Xavier initialisation (He for relu), zero biases. A `seed` of `0N` leaves q's random state alone. |
 | `.qs.predict[m;X]` | Outputs for a matrix with one row per example, or for a single example vector. |
 | `.qs.train[m;data;opts]` | Trains on `data` (`` `X`Y ``, optionally `` `Xval`Yval ``). Returns `` `model`history`bestEpoch ``. |
-| `.qs.evaluate[m;X;Y;loss]` | `` `loss`acc `` dictionary. |
+| `.qs.evaluate[m;X;Y;loss]` | `` `loss`acc`mae`rmse`r2 `` dictionary (`acc` is null for numeric targets). |
 | `.qs.confusion[m;X;Y]` | Confusion matrix. |
 | `.qs.grad[m;X;Y;loss]` | Gradient of the loss, shaped like the model (`.qs.gradDrop` adds a dropout rate). |
+| `.qs.search[d;space;base;n]` | Trains one model per configuration and returns a table ranked by validation loss. `space` maps options (and `hidden`, `act`) to candidate values, `base` fixes the rest, `n` is `0N` for the whole grid or a number to sample. |
+| `.qs.crossValidate[d;k;base]` | k-fold cross-validation of one configuration: `` `folds`summary `` (per-fold scores; mean and sd). |
+| `.qs.summary m` | One row per layer: inputs, outputs, activation, parameters. |
 | `.qs.save[file;m]` / `.qs.load file` | Saves and loads a model (q's native format). |
 
 `opts` is merged over `.qs.defaults`:
@@ -96,6 +109,8 @@ and `acts` has one symbol per layer.
 | `.qs.data.fourBit n` | 4 random bits, classified as 1100, 0011 or neither (the original qSolve task) |
 | `.qs.data.sine n` | Regression of sin x |
 | `.qs.data.circles[n;noise]`, `.moons`, `.spirals` | 2-D two-class problems |
+| `.qs.data.houses n` | A house-price table for regression, with categorical and missing values |
+| `.qs.data.seasonal[n;period;noise]` | A series with trend, a cycle and autocorrelated noise |
 | `.qs.data.iris file` | Iris, standardised, split 80/20 |
 | `.qs.data.mnist dir` | MNIST or Fashion-MNIST (IDX files), test set as validation |
 | `.qs.data.load[name;n;noise]` | Any of the above by name, already split |
@@ -103,8 +118,60 @@ and `acts` has one symbol per layer.
 Helpers: `oneHot`, `split`, `standardise`, `stats`/`scale`, `take`, `idx` (reads any unsigned-byte IDX file).
 Generated datasets use q's random state, so call `system "S 42"` first for repeatable data.
 
-To use your own data, build a dictionary `` `X`Y `` where `X` has one row per example and `Y` is one-hot (or a
-single column), then call `.qs.data.split` and `.qs.data.standardise` and pass the result to `.qs.train`.
+### Your own data
+
+From a kdb+ table or a CSV file:
+
+```q
+d:.qs.data.fromTable[t;`area`rooms`city;`price;0.8]    / or () for every other column
+d:.qs.data.csv[`:sales.csv;();`price;0.8]              / header row; numbers and text columns detected
+d`enc                                                   / the column encoding, fitted on the training rows
+.qs.data.inputNames d`enc                               / `area`rooms`city_east`city_north ...
+p:.qs.predict[m;.qs.data.encodeX[d`enc;newRows]]
+.qs.data.decodeY[d`enc;p]                               / back to prices, or to class symbols
+```
+
+Numeric columns are standardised and their nulls become the mean. Symbol or text columns are one-hot
+encoded over the levels seen in training; nulls and unseen levels encode as all zeros. A symbol target
+means classification, a numeric one regression (standardised, and decoded back by `decodeY`).
+
+### Time series
+
+```q
+s:exec demand from t                                    / any numeric series, in time order
+d:.qs.data.windows[s;48;1;0.8]                          / 48 lags, 1 step ahead, first 80% of time trains
+r:.qs.train[.qs.init[47;16 1;`tanh`linear;42];d;`loss`optimiser`lr`epochs!(`mse;`adam;0.001;100)]
+f:.qs.data.unwindow[d;.qs.predict[r`model;d`Xval];d`levelVal]   / forecasts in the series' units
+.qs.data.naive[s;48;1;0.8;24]                           / MAE of last-value and seasonal-naive forecasts
+```
+
+Each row holds the window's earlier values and the target, all relative to the window's last value, so a
+trend or a shift in level doesn't take validation outside what the model saw in training. R² from
+`.qs.evaluate` on these rows is therefore R² of the *change*, a harder bar than R² of the level.
+
+Or build a dictionary `` `X`Y `` yourself, where `X` has one row per example and `Y` is one-hot (or a single
+column), then call `.qs.data.split` and `.qs.data.standardise` and pass the result to `.qs.train`.
+
+## Serving a model
+
+`train.q -save` stores the model, and for table or CSV data the column encoding too. `serve.q` answers
+requests for it from other q processes:
+
+```bash
+q train.q -data csv -file sales.csv -target price -optimiser adam -lr 0.01 -epochs 100 -save price.qsm
+q serve.q -model price.qsm -p 5050 -s 4
+```
+
+```q
+h:hopen `::5050
+h (`predictTable;([] area:120 80f; rooms:3 2; age:10 0n; city:`north`west))   / adds a prediction column
+h (`predict;X)                                                                / raw model outputs
+h (`info;::)                                                                  / layers, input columns, target
+```
+
+Only `` (`function;argument) `` calls to `predict`, `predictTable` and `info` are accepted; strings of q
+code and anything else are refused with an error. For classes, `predictTable` also returns a `confidence`
+column (the winning class's probability).
 
 ## Tests and benchmarks
 
@@ -127,6 +194,8 @@ Benchmark results (seed 42):
 | circles | 2→8→2 tanh, softmax | 99.0% | ≥ 98% |
 | moons | 2→16→2 tanh, softmax | 100% | ≥ 97% |
 | spirals | 2→32→32→2 tanh, softmax | 99.75% | ≥ 95% |
+| houses | 7→32→1 tanh, linear (from a table) | R² 0.983 | ≥ 0.95 |
+| seasonal | 47→16→1 tanh, linear (48 lags) | R² of change 0.883 | ≥ 0.85 |
 | iris | 4→8→3 tanh, softmax | 96.7% | ≥ 93% |
 | mnist | 784→128→10 relu, softmax, 5 epochs | 97.5% | ≥ 96% |
 | fashion | 784→128→10 relu, softmax, 5 epochs | 87.4% | ≥ 84% |
@@ -138,6 +207,7 @@ defineEquation.q        core library (.qs)
 data.q                  datasets (.qs.data)
 plot.q                  decision-boundary SVGs (.qs.plot2D)
 train.q                 command-line training
+serve.q                 IPC model server
 tests/                  test runner, assertion helpers, tests
 bench/benchmarks.q      benchmark suite
 scripts/fetch_data.sh   dataset downloader

@@ -12,10 +12,10 @@ It is written so that any engineer or LLM session can pick it up cold, see what 
 - If you change a design decision, edit the [Design decisions](#design-decisions) section and say why in the log.
 - Do not commit or push unless the repository owner asks you to.
 
-**Current status (2026-10-24):** Phases 0-5 are done; 49 tests and all 12 benchmarks pass, with and
-without threads. Phases 0-5 are committed on main; check `git status` and `git log` for anything since. The owner asked
-for all of Phase 6 to be done, in the listed order. A new session should begin with `q tests/run.q`, read
-the Progress log, and continue with the first unticked Phase 6 item.
+**Current status (2026-10-24):** Phases 0-6 are done: 69 tests pass with and without threads, and all 14
+benchmarks pass (46 s with `-s 4`). Phases 0-6 are committed on main. There is no further planned work: the
+next step is the owner's choice (a real problem to point qSolve at, or new features). A new session should
+begin with `q tests/run.q`, read the Progress log, and ask.
 
 ---
 
@@ -116,6 +116,8 @@ These are settled unless the log says otherwise.
 - Symbol literals can't contain `-`: `` `fill-opacity `` is `` `fill `` minus `opacity`. Use `` `$"fill-opacity" ``.
 - `in` and `~` compare types strictly: `0f in 0,1.5` is false because `0,1.5` is a mixed list; write `0f,1.5`.
 - `sum` of booleans is an int (`6401i`), not a long; cast with `"j"$` before `.t.eq` against a long.
+- `'x 1` signals `x` (then fails), not `x 1`: assign the message first, `e:x 1; 'e`.
+- In this shell `cp` and `rm` are aliased to interactive/trash versions: use `command cp -f`, `command rm`.
 - Multi-line lambdas don't work when q code is piped in on stdin; put experiments in a script file.
 - This licence allows at most 4 secondary threads (`-s 4`).
 
@@ -132,6 +134,7 @@ defineEquation.q        core library (.qs namespace)
 data.q                  dataset generators and loaders (.qs.data)
 plot.q                  decision-boundary SVGs (.qs.plot2D)
 train.q                 command-line training script
+serve.q                 IPC model server (predict, predictTable, info)
 tests/assert.q          assertion helpers (.t namespace)
 tests/run.q             test runner: loads library, runs every tests/test_*.q, exits non-zero on failure
 tests/test_*.q          test files
@@ -180,6 +183,8 @@ state of the art.
 | T7 | Two concentric circles | generated, 2-D | curved boundary | `2→8→2 tanh,softmax` | ≥ 98% |
 | T8 | Two moons | generated, 2-D | curved boundary | `2→16→2 tanh,softmax` | ≥ 97% |
 | T9 | Two spirals | generated, 2-D | hard non-linear boundary | `2→32→32→2 tanh,tanh,softmax` | ≥ 95% |
+| T9b | houses | generated table: numeric, categorical and missing columns | regression through `fromTable` | `7→32→1 tanh,linear`, mse | R² ≥ 0.95 |
+| T9c | seasonal | generated series: trend + cycle (period 24) + AR(1) noise, 48 lags, 1 step ahead | forecasting, time-ordered split | `47→16→1 tanh,linear`, mse | R² of the change ≥ 0.85; MAE beats seasonal naive |
 | T10 | Iris | UCI CSV, 150 rows, 4 features, 3 classes | first real dataset | `4→8→3 tanh,softmax` | ≥ 93% val |
 | T11 | MNIST | IDX files | full scale | `784→128→10 relu,softmax`, xent | ≥ 96% test |
 | T12 | Fashion-MNIST | IDX files (same format) | harder drop-in | same as T11 | ≥ 84% test |
@@ -259,22 +264,22 @@ There is still no specific target problem, so these are ranked by how much more 
 makes qSolve. Recommended order: 6.1 first (it lets any real question in), then 6.2 (it plays to kdb+'s
 strength), then the rest as wanted.
 
-- [ ] **6.1 Train from any kdb+ table or CSV.** `.qs.data.fromTable[t;features;target]`: numeric columns
+- [x] **6.1 Train from any kdb+ table or CSV.** `.qs.data.fromTable[t;features;target]`: numeric columns
   standardised, symbol columns one-hot encoded, nulls filled (and reported), target one-hot for symbols or
   left numeric for regression; returns the usual `` `X`Y `` plus the encoding, so new rows can be encoded the
   same way at prediction time (`.qs.data.encode[enc;t]`). `.qs.data.csv[file;types;target]` on top. Add
   regression metrics (MAE, RMSE, R²) to `.qs.evaluate` so regression gets something better than accuracy.
   *Accept:* Iris and a regression CSV (e.g. a generated one) train through it; encode/train/predict
   round-trip test.
-- [ ] **6.2 Time-series windows.** `.qs.data.windows[series;lags;horizon]` turns a series (or table columns)
+- [x] **6.2 Time-series windows.** `.qs.data.windows[series;lags;horizon]` turns a series (or table columns)
   into lagged-feature rows, with a time-ordered (not shuffled) train/validation split. Benchmark on a
   generated noisy seasonal series against a naive "last value" baseline.
-- [ ] **6.3 Hyperparameter search.** Grid or random search over options and layer sizes, scored on
+- [x] **6.3 Hyperparameter search.** Grid or random search over options and layer sizes, scored on
   validation loss, returning a results table (q is good at this); optionally `peach` across configs.
-- [ ] **6.4 Serve a model over IPC.** A small script that loads a saved model and answers `predict`
+- [x] **6.4 Serve a model over IPC.** A small script that loads a saved model and answers `predict`
   requests on a port (`.z.pg`), with input checks. kdb+'s natural deployment path.
-- [ ] **6.5 k-fold cross-validation** for small datasets, reporting mean and spread of validation scores.
-- [ ] **6.6 Model summary**: layer table (inputs, outputs, activation, parameter count) for logs and the CLI.
+- [x] **6.5 k-fold cross-validation** for small datasets, reporting mean and spread of validation scores.
+- [x] **6.6 Model summary**: layer table (inputs, outputs, activation, parameter count) for logs and the CLI.
 
 
 ---
@@ -387,3 +392,58 @@ Environment used so far: q 5.0 (2026.05.01), Linux, 16 cores.
   pass in 46 s total, same numbers as before (MNIST 97.54% and Fashion 87.39% in ~19.6 s each).
   Added Phase 6 (proposed directions, not started; owner to choose).
 - 2026-10-24: Owner asked to commit Phase 5 to main and carry on with all of Phase 6.
+- 2026-10-24: 6.1 done. `data.q` tables section: `.qs.data.fit[t;features;target]` returns the encoding as
+  a keyed table (`col`role`kind`mu`sd`levels`; `num` columns standardised with nulls -> mean, `cat` one-hot
+  over training levels with nulls/unseen -> zeros; strings treated as symbols); `encodeX`, `encodeY`,
+  `decodeY` (class symbols, or numbers in target units), `inputNames`; `fromTable[t;features;target;frac]`
+  shuffles, splits, fits the encoding on the training rows only, and returns `X`Y`Xval`Yval`enc;
+  `readCsv` (header, `.Q.id` column names, float if every non-empty value parses else symbol) and
+  `csv[file;features;target;frac]`. `iris` now goes through `fromTable`. New generated regression table
+  `.qs.data.houses n`. Core: `.qs.isClass`, `.qs.regression` (mae, rmse, r2); `.qs.evaluate` now returns
+  `loss`acc`mae`rmse`r2` with acc null for regression targets; log lines omit null accuracy.
+  `train.q -data csv -file f -target c [-features ...] [-frac]`; output activation now follows the targets
+  (linear for regression) instead of special-casing `sine`; regression summary shows R2 and MAE in target
+  units; `-save` stores the encoding in the model under `enc` (extra keys pass `.qs.check`). Benchmarks now
+  score the *returned* model via `.qs.evaluate` (metric `acc`, `loss` or `r2`), plus new `houses`
+  benchmark (R2 0.983 vs target 0.95). Tests: `tests/test_table.q` (fit, encode, unseen/missing levels,
+  decode, fit-on-train-only, CSV inference, regression metrics, houses regression) and `cli_csv`. 57 pass.
+  Gotcha: indexing a keyed table by a column name (`enc`role`) does a key lookup; use `(0!enc)`role` or
+  `exec`.
+- 2026-10-24: 6.2 done. `.qs.data.windows[s;lags;horizon;frac]`: rows are the lags-1 earlier values of
+  each window and the value horizon steps on, all *relative to the window's last value* (first version used
+  raw levels and lost to seasonal naive, MAE 0.158 vs 0.110, because the trend put validation outside the
+  training range). Inputs standardised per column, target by its own mean/sd, all from training rows; split
+  by time. Returns `level`/`levelVal` so `.qs.data.unwindow[d;A;levels]` gives predictions in series units.
+  `.qs.data.naive[s;lags;horizon;frac;period]` gives last-value and seasonal-naive MAE in series units.
+  Generator `.qs.data.seasonal[n;period;noise]`; dataset name `seasonal`. Result on 3000 points: model MAE
+  0.068 vs seasonal naive 0.114 vs last value 0.209 (noise floor ~0.064). `train.q -data csv -file f
+  -series col -lags k -horizon h` forecasts a CSV column; summary prints the last-value baseline.
+  Benchmark `seasonal` (R² of the change, 0.883 vs target 0.85). Tests in `tests/test_series.q`
+  (alignment, horizon, train-only scaling, naive, beats naive). 61 pass.
+- 2026-10-24: 6.3 done. `.qs.search[d;space;base;n]` in `defineEquation.q`: `space` maps option names (plus
+  `hidden` layer-size lists and hidden `act`) to candidates; `base` fixes the rest (out/loss inferred from the
+  targets as in the CLI); `n` 0N = full grid, else that many distinct configurations sampled without
+  replacement. Returns a table sorted by `valLoss` with `valAcc` (classification) or `valR2` (regression),
+  `bestEpoch`, `seconds`. Configurations run serially: each training run already uses threads, and `\S`
+  (seeding) from inside `peach` threads isn't something to rely on. `train.q -search k=v1,v2 ... [-trials n]`
+  (layers joined by `x`, e.g. `hidden=8,32x32`) prints the table and trains the best configuration.
+  Tests `tests/test_search.q` (grid, random without duplicates, best row reproducible, regression) and
+  `cli_search`. Gotchas: a general (mixed-type) dictionary returns `::` for a missing key, so `42^c`seed`
+  fails: use `(.qs.defaults,c)`seed`; and `n?m` samples *with* replacement, `neg[n]?m` without.
+- 2026-10-24: 6.4 and 6.6 done. `serve.q -model f -p port`: `.z.pg` accepts only (`function;argument) for
+  `predict` (shape-checked), `predictTable` (needs a model saved with `enc` by `train.q`; returns the table
+  plus `prediction`, and `confidence` for classes; missing columns refused) and `info` (layers, input names,
+  target, port, pid). Strings of q code are refused; `.z.ps` refuses async. `tests/test_serve.q` starts a
+  real server process on a pid-derived port, polls until it opens, checks predictions match local ones and
+  that bad calls are refused, then kills it by pid, also on failure (checked by breaking an assertion: no
+  process left). `.qs.summary m` gives the layer table; `train.q` prints the parameter count.
+  Bug hunt notes: the test first "failed" with `type` because `.Q.trp[{[h;m;data] ...}[h;m;data];...]`
+  ran the fully applied lambda immediately (the projection gotcha again), and the error was hidden
+  because `'res 1` signals `res`.
+- 2026-10-24: 6.5 done. Factored `.qs.spec` (fill model keys, output activation and loss from the targets)
+  and `.qs.fitScore` (train one configuration, score on validation) out of `.qs.search`; both used by
+  `.qs.crossValidate[d;k;base]`, which pools any Xval/Yval into the rows, shuffles into k folds, and returns
+  `folds` (per-fold scores) and `summary` (mean, sd). Iris, 5 folds: 97-98% +/- 2%. `train.q -cv K`.
+  Tests `cross_validate` (fold partition incl. uneven folds, bad k) and `model_summary`. 69 tests pass.
+- 2026-10-24: Phase 6 complete. Full benchmark with `-s 4`: 14/14 pass (adds houses R2 0.983 and seasonal
+  R2-of-change 0.883 to the earlier 12, which are unchanged).

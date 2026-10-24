@@ -113,10 +113,16 @@
 / fraction of rows whose predicted class matches the target's class
 .qs.accuracy:{[A;Y] avg .qs.classes[A]=.qs.classes Y}
 
-/ loss and accuracy of a model on (X;Y)
+/ true when targets are class labels: one-hot rows, or a single 0/1 column
+.qs.isClass:{[Y] all raze[Y] in 0 1f}
+
+/ regression errors over every output: mean absolute, root mean square, and R squared
+.qs.regression:{[A;Y] e:raze A-Y; d:y-avg y:raze Y; `mae`rmse`r2!(avg abs e;sqrt avg e*e;1-(sum e*e)%sum d*d)}
+
+/ loss, accuracy (null for regression targets), and regression errors of a model on (X;Y)
 .qs.evaluate:{[m;X;Y;loss]
-    A:.qs.predict[m;"f"$X];
-    `loss`acc!(.qs.loss.v[loss][A;"f"$Y];.qs.accuracy[A;Y])
+    A:.qs.predict[m;"f"$X]; Y:"f"$Y;
+    (`loss`acc!(.qs.loss.v[loss][A;Y];$[.qs.isClass Y;.qs.accuracy[A;Y];0n])),.qs.regression[A;Y]
  }
 
 / confusion matrix: row is the true class, column the predicted class
@@ -213,10 +219,68 @@
 / one log line for a history row
 .qs.fmt:{[r]
     f:{.Q.fmt[x+1+count string floor y;x;y]};
-    "epoch ",(string r`epoch),"  train loss ",f[5;r`trainLoss]," acc ",f[4;r`trainAcc],
-        $[null r`valLoss; ""; "  val loss ",f[5;r`valLoss]," acc ",f[4;r`valAcc]],"  ",f[2;r`seconds],"s"
+    a:{[f;x] $[null x; ""; " acc ",f[4;x]]}[f];
+    "epoch ",(string r`epoch),"  train loss ",f[5;r`trainLoss],a[r`trainAcc],
+        $[null r`valLoss; ""; "  val loss ",f[5;r`valLoss],a r`valAcc],"  ",f[2;r`seconds],"s"
+ }
+
+/ one row per layer: inputs, outputs, activation and number of parameters
+.qs.summary:{[m]
+    ([] layer:til count m`weight; inputs:count each first each m`weight; outputs:count each m`weight; act:m`act;
+        params:{(count[x]*count first x)+count y}'[m`weight;m`bias])
  }
 
 / save and load models with q's native serialisation
 .qs.save:{[file;m] (hsym file) set .qs.check m}
 .qs.load:{[file] .qs.check get hsym file}
+
+/ a configuration for data d: base (model keys hidden, act, out and training options) filled in with
+/ defaults, the output activation and loss following the targets as train.q does
+.qs.spec:{[d;base]
+    base:(`hidden`act`verbose!(enlist 16;`tanh;0)),base;
+    nOut:count first d`Y;
+    base:(enlist[`out]!enlist $[not .qs.isClass d`Y;`linear;nOut>1;`softmax;`sigmoid]),base;
+    (enlist[`loss]!enlist $[base[`out]=`softmax;`xent;base[`out]=`sigmoid;`bce;`mse]),base
+ }
+
+/ train a new model to configuration c on d and score it on d's validation data
+/ returns `valLoss`valAcc`valR2`bestEpoch`seconds, valAcc for classes and valR2 for numeric targets
+.qs.fitScore:{[d;c]
+    m:.qs.init[count first d`X;c[`hidden],count first d`Y;((count c`hidden)#c`act),c`out;(.qs.defaults,c)`seed];
+    t0:.z.p; r:.qs.train[m;d;`hidden`act`out _ c];
+    e:.qs.evaluate[r`model;d`Xval;d`Yval;c`loss];
+    `valLoss`valAcc`valR2`bestEpoch`seconds!(e`loss;e`acc;$[null e`acc;e`r2;0n];r`bestEpoch;1e-9*.z.p-t0)
+ }
+
+/ hyperparameter search: train one model per configuration and rank them by validation loss
+/ space maps option names to candidate values; hidden (a list of layer-size lists) and act (hidden activation)
+/ shape the model, everything else is a training option; base holds fixed values for both, including the
+/ output activation out (default: softmax for several outputs, sigmoid for one) and loss
+/ n is 0N for the full grid, or a number of configurations sampled from it at random
+/ returns a table: one row per configuration, its values, then valLoss, valAcc (classification) or valR2
+/ (regression), bestEpoch, seconds; configurations run one after another, each using threads as usual
+.qs.search:{[d;space;base;n]
+    if[not all `Xval`Yval in key d; '"search needs validation data (Xval and Yval)"];
+    k:key space; v:value space;
+    ix:{raze x,/:\:y}/[enlist `long$();til each count each v];
+    if[not null n; ix:ix neg[n&count ix]?count ix];
+    if[not null s:(.qs.defaults,base)`seed; system "S ",string s];
+    base:.qs.spec[d;base];
+    `valLoss xasc {[d;k;v;base;i] (k!v@'i),.qs.fitScore[d;base,k!v@'i]}[d;k;v;base] each ix
+ }
+
+/ k-fold cross-validation of configuration base on d (`X`Y; any Xval/Yval are added in first)
+/ rows are shuffled and cut into k folds; each fold validates a model trained on the others
+/ returns `folds`summary: one row per fold, and the mean and sd of each score over the folds
+/ note: data from .qs.data.fromTable was standardised on its training split, so this is slightly optimistic
+.qs.crossValidate:{[d;k;base]
+    X:d[`X],$[`Xval in key d;d`Xval;()]; Y:d[`Y],$[`Yval in key d;d`Yval;()];
+    if[k<2; '"need at least 2 folds"]; if[k>count X; '"more folds than rows"];
+    if[not null s:(.qs.defaults,base)`seed; system "S ",string s];
+    f:{x where 0<count each x} (ceiling count[X]%k) cut neg[n]?n:count X;
+    base:.qs.spec[`X`Y!(X;Y);base];
+    t:{[X;Y;f;base;j] i:raze f _ j; v:f j; (enlist[`fold]!enlist j),.qs.fitScore[`X`Y`Xval`Yval!(X i;Y i;X v;Y v);base]}[X;Y;f;base] each til count f;
+    s:`valLoss`valAcc`valR2;
+    `folds`summary!(t;([] metric:s; mean:avg each t s; sd:dev each t s))
+ }
+
