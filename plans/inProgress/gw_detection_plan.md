@@ -159,7 +159,7 @@ long-duration signals (see scope).
   with tapered edges; downsample 4096 -> 2048 Hz in the frequency domain, which also removes aliasing.
   *Accept:* whitened coloured noise has variance 1 ± 0.05 and a flat PSD; a downsampled tone keeps its
   frequency and amplitude.
-- [ ] **G2.4 Matched filtering.** The SNR time series of data against a template (frequency-domain
+- [x] **G2.4 Matched filtering.** The SNR time series of data against a template (frequency-domain
   correlation, normalised by the template's norm under the PSD). *Accept:* a template injected into white
   noise at SNR 12 is recovered at about 12 at the right time; pure noise gives SNRs around 1–4. This is both
   the baseline the network is judged against and a check of the waveforms (G3.4).
@@ -308,6 +308,9 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: G2.4 complete. Added PSD-normalized circular frequency-domain matched filtering. A known
+  template injected at target SNR 12 was recovered near 12 at the expected circular offset; noise-only SNR
+  had unit variance and maximum below 5. Full suite: 115 passed.
 - 2026-10-24: Owner chose pure-q waveforms, the default download budget, an LSTM/GRU, and BNS in scope.
   Updated G-D1/G-D8; BNS needs a separate longer-window design before signal-processing and training stages.
 - 2026-10-24: Plan written. Checked: GWOSC's event API (671 catalogue entries, 417 confident with an SNR),

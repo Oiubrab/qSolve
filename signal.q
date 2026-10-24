@@ -203,3 +203,29 @@
     imag:scale*(targetBins#spectrum 1);
     .qs.sig.irfft[(real;imag)]
  }
+
+/ Circular frequency-domain matched filter. PSD is a `freq`psd dictionary in strain²/Hz.
+.qs.sig.matchedFilter:{[data;template;rate;psd]
+     data:"f"$data;
+     template:"f"$template;
+     if[not count[data]=count template; '"data and template lengths must match"];
+     n:count data;
+     if[not n=.qs.sig.pow2ceil n; '"matched filter requires a power-of-two input length"];
+     if[not all `freq`psd in key psd; '"PSD needs freq and psd vectors"];
+     if[any psd[`psd]<=0 or any null psd[`psd]; '"PSD must be positive and non-null"];
+     asd:`freq`asd!(psd[`freq];sqrt psd[`psd]);
+     dataWhite:.qs.sig.whiten[data;rate;asd];
+     templateWhite:.qs.sig.whiten[template;rate;asd];
+     norm:sqrt sum templateWhite*templateWhite;
+     if[0=norm; '"template has zero norm under the PSD"];
+     dataSpectrum:.qs.sig.rfft dataWhite;
+     templateSpectrum:.qs.sig.rfft templateWhite;
+     dataReal:dataSpectrum 0;
+     dataImag:dataSpectrum 1;
+     templateReal:templateSpectrum 0;
+     templateImag:templateSpectrum 1;
+    corrReal:(dataReal*templateReal)+(dataImag*templateImag);
+    corrImag:(dataImag*templateReal)-(dataReal*templateImag);
+     correlation:.qs.sig.irfft[(corrReal;corrImag)];
+     `snr`lag`norm!(correlation%norm;(til n)%rate;norm)
+ }

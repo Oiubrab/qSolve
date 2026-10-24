@@ -131,3 +131,41 @@
    peak:first where peakValue=real;
     .t.eq[peak;200];
  }];
+
+.t.add[`signal_matched_filter_injection;{
+    system "S 43";
+    rate:128f;
+    n:128;
+    template:.qs.data.normal n;
+    noise:.qs.data.normal n;
+    freq:rate*(til[1+(n div 2)])%n;
+    psd:`freq`psd!(freq;(count freq)#(2%rate));
+    templateWhite:.qs.sig.whiten[template;rate;`freq`asd!(freq;(count freq)#sqrt 2%rate)];
+    target:12f;
+   templateNorm:sqrt sum templateWhite*templateWhite;
+   amplitude:target%templateNorm;
+    offset:37;
+    data:noise+amplitude*(offset rotate template);
+    result:.qs.sig.matchedFilter[data;template;rate;psd];
+    snr:result[`snr];
+   peakValue:max snr;
+   peak:first where peakValue=snr;
+   peakSNR:snr peak;
+   peakError:abs peakSNR-target;
+   .t.ok[peakError<1.5;"injected SNR ",string peakSNR];
+    .t.ok[(peak=offset) or peak=n-offset;"peak offset ",string peak];
+ }];
+
+.t.add[`signal_matched_filter_noise;{
+    system "S 47";
+    rate:128f;
+    n:128;
+    template:.qs.data.normal n;
+    noise:.qs.data.normal n;
+    freq:rate*(til[1+(n div 2)])%n;
+    psd:`freq`psd!(freq;(count freq)#(2%rate));
+    result:.qs.sig.matchedFilter[noise;template;rate;psd];
+    snr:result[`snr];
+   .t.near[avg (snr*snr);1f;0.3];
+    .t.ok[max abs snr<5;"noise-only maximum SNR ",string max abs snr];
+ }];
