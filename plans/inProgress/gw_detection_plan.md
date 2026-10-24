@@ -139,7 +139,7 @@ long-duration signals (see scope).
 - [x] **G1.2 Strain download.** `scripts/fetch_gw.sh` (or `fetch_data.sh gw`): for a given event list, fetch
   the 32 s or 4096 s 4 kHz `txt.gz` files for H1 and L1, resuming and skipping what already exists. A default
   list of 6 noise events, spread across O1, O2 and O3, plus the test events.
-- [ ] **G1.3 Parse and cache.** `.qs.gw.strain file` -> `` `gps`rate`h `` (start time, sample rate, float
+- [x] **G1.3 Parse and cache.** `.qs.gw.strain file` -> `` `gps`rate`h `` (start time, sample rate, float
   vector), handling `nan` (data-quality gaps), gunzipping through `system "env gzip -dc ..."` or a
   decompressed copy, and caching as q binary (`set`), so the second load is instant. *Accept:* a small
   hand-written file round-trips; GW150914's 32 s file gives 131072 samples at 4096 Hz starting at GPS
@@ -291,6 +291,10 @@ long-duration signals (see scope).
   Dry-runs resolved all six 4096 s pairs; a real GW150914 H1/L1 32 s fetch passed gzip validation and the
   repeat run skipped both cached files. The multi-GB default library and full test-event set were not bulk
   downloaded in this step.
+- 2026-10-25: G1.3 complete. Added `.qs.gw.strain` to stream-decompress GWOSC text, parse GPS/rate/strain,
+  preserve `nan` as null samples, remove temporary text, and cache the dictionary beside the source. The
+  synthetic test reloads from cache after deleting its gzip input; the real GW150914 file yielded GPS
+  1126259447, 4096 Hz and 131072 samples. Full suite: 95 passed.
 - 2026-10-24: Owner chose pure-q waveforms, the default download budget, an LSTM/GRU, and BNS in scope.
   Updated G-D1/G-D8; BNS needs a separate longer-window design before signal-processing and training stages.
 - 2026-10-24: Plan written. Checked: GWOSC's event API (671 catalogue entries, 417 confident with an SNR),

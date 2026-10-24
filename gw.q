@@ -65,3 +65,31 @@
      selected:.qs.gw.confidentBBH[events;minMass;maxMass;minPAstro];
     selected where {[details;detectors;name] .qs.gw.hasDetectors[details name;detectors]}[details;detectors] each selected`name
  }
+
+.qs.gw.shellQuote:{[path] "'",ssr[path;"'";"'\\''"],"'"}
+.qs.gw.words:{[line] words:" " vs line; words where 0<count each words}
+
+/ Load a 4 kHz GWOSC txt.gz file as `gps`rate`h and cache the parsed dictionary beside it.
+.qs.gw.strain:{[file]
+    path:1 _ string file;
+    cachePath:raze (path;".qcache");
+    cache:hsym `$raze (":";cachePath);
+     if[not ()~key hsym cache; :get hsym cache];
+     if[()~key hsym `$path; '"strain file not found: ",path];
+    rawPath:raze (path;".";string .z.i;".raw");
+    raw:hsym `$raze (":";rawPath);
+    shellCommand:raze ("gzip -dc -- ";.qs.gw.shellQuote[path];" > ";.qs.gw.shellQuote[1 _ string raw]);
+    system raze ("env sh -c ";.qs.gw.shellQuote[shellCommand]);
+     lines:read0 hsym raw;
+    system raze ("env rm -f -- ";.qs.gw.shellQuote[1 _ string raw]);
+     if[3>=count lines; '"strain file has fewer than three header lines"];
+     rateWords:.qs.gw.words lines 1;
+     gpsWords:.qs.gw.words lines 2;
+     if[not ("4096" in rateWords) or not ("GPS" in gpsWords); '"unrecognized GWOSC strain header"];
+     rate:"J"$enlist rateWords[rateWords?"4096"];
+     gps:"J"$enlist gpsWords[1+gpsWords?"GPS"];
+     samples:"F"$3_lines;
+     result:`gps`rate`h!(first gps;first rate;samples);
+     cache set result;
+     result
+ }
