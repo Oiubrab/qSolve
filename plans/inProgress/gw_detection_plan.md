@@ -136,7 +136,7 @@ long-duration signals (see scope).
   with `.j.k` into a table (name, catalogue, GPS, source masses, distance, network SNR, p_astro), de-duplicate
   across catalogues (keep the latest version), and add selection helpers (confident BBH in mass range with H1
   and L1 data). *Accept:* tests on a saved small JSON sample; real fetch skips without network.
-- [ ] **G1.2 Strain download.** `scripts/fetch_gw.sh` (or `fetch_data.sh gw`): for a given event list, fetch
+- [x] **G1.2 Strain download.** `scripts/fetch_gw.sh` (or `fetch_data.sh gw`): for a given event list, fetch
   the 32 s or 4096 s 4 kHz `txt.gz` files for H1 and L1, resuming and skipping what already exists. A default
   list of 6 noise events, spread across O1, O2 and O3, plus the test events.
 - [ ] **G1.3 Parse and cache.** `.qs.gw.strain file` -> `` `gps`rate`h `` (start time, sample rate, float
@@ -285,6 +285,12 @@ long-duration signals (see scope).
   confidence/mass and detector-availability selectors, and offline fixture plus optional cached-live tests.
   The live endpoint returned 671 versioned entries and 433 latest-per-name rows; null catalogue fields are
   present and preserved, so selection must explicitly filter them.
+- 2026-10-25: G1.2 complete. Added resumable `scripts/fetch_gw.sh`, six verified O1/O2/O3a/O3b noise defaults,
+  explicit event-file/name lists, and automatic confident-BBH 32 s selection. GWOSC newer detail versions
+  can omit strain URLs, so the downloader tries older versions until it finds an H1/L1 4 kHz `txt` pair.
+  Dry-runs resolved all six 4096 s pairs; a real GW150914 H1/L1 32 s fetch passed gzip validation and the
+  repeat run skipped both cached files. The multi-GB default library and full test-event set were not bulk
+  downloaded in this step.
 - 2026-10-24: Owner chose pure-q waveforms, the default download budget, an LSTM/GRU, and BNS in scope.
   Updated G-D1/G-D8; BNS needs a separate longer-window design before signal-processing and training stages.
 - 2026-10-24: Plan written. Checked: GWOSC's event API (671 catalogue entries, 417 confident with an SNR),
