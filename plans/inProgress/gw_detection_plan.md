@@ -21,7 +21,8 @@ one-letter string lists) will come up.
   without asking.
 - Keep tests offline: anything needing downloaded data skips itself when the data is missing (`.t.skip`).
 
-**Current status (2026-10-25):** G1, G2, G3.1 and G3.2 are complete; G3.3 (detector response) is next. The owner chose
+**Current status (2026-10-25):** G1, G2, G3.1, G3.2 and G3.3 are complete; G3.4 (the GW150914 end-to-end
+gate) is next. The owner chose
 pure-q waveforms and the plan's default download budget, and asked to include binary neutron stars (a separate
 1–3 M☉ track, 256 s windows at 2048 Hz, its own model) and an LSTM/GRU. Reference sources for waveform
 coefficients: LALSuite's `lalsimulation/lib` on git.ligo.org (raw files fetch without a login).
@@ -177,7 +178,7 @@ long-duration signals (see scope).
   across 20–40 Hz after aligning); continuous at the transition frequencies; merger frequency scales as
   1/total mass; looks right in the time domain (chirp, peak, ringdown). If LALSuite is available, an optional
   test compares against it.
-- [ ] **G3.3 Detector response.** H1 and L1 vertex positions and arm directions; Greenwich sidereal time from
+- [x] **G3.3 Detector response.** H1 and L1 vertex positions and arm directions; Greenwich sidereal time from
   GPS time; F+ and F× for sky position (ra, dec) and polarisation ψ; inter-detector time delay; the projected
   strain h = F+ h+ + F× h× shifted by the delay. *Accept:* antenna patterns are bounded (F+² + F×² ≤ 1) and
   match known values for a few published configurations; delays never exceed the H1–L1 light travel time
@@ -308,6 +309,20 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: G3.3 complete. In `gw.q`, all transcribed from LALSuite (`lal/lib/tools/LALDetectors.h`,
+  `CreateDetector.c`, `DetResponse.c`; `lal/lib/date/TimeDelay.c`, `XLALSiderealTime.c`, `XLALLeapSeconds.h`):
+  `.qs.gw.detectors` (H1/L1 vertex and arm unit vectors, Earth-fixed), `tensor` ((x x' - y y')/2), `leaps` (GPS-UTC)
+  and `gmst` (IAU 1982 polynomial on UTC), `antenna` (F+, Fx as XLALComputeDetAMResponse), `delay` (arrival after
+  the Earth's centre), `lightTime`, `project` (F+ h+ + Fx hx times exp(-2 pi i f dt)), and an `atan2` (q's `atan`
+  takes one argument). Tests: tensors against the matrices printed in CreateDetector.c's documentation (1e-6;
+  LAL's arm vectors are unit and orthogonal only to about 2e-7); GMST at 2000-01-01 12:00 UTC is 280.4606
+  degrees and repeats after a sidereal day; leap counts 13/17/18 at 2000/2015/2021; over 500 random skies
+  F+^2+Fx^2 <= 1, unchanged by psi, a quarter turn of psi swaps |F+| and |Fx|; a source straight overhead gets
+  more than 0.99 of the full response; H1-L1 light time 10.013 ms, 2000 random skies never exceed it and reach
+  98% of it; the projection's phase factor is exactly exp(-2 pi i f dt), and an edge-on chirp's peak moves
+  between detectors by the delay difference (to 0.5 ms). Gotchas: `over` is a keyword; with both polarisations
+  the loudest cycle moves by a fraction of a period between detectors, so peak-time checks need one
+  polarisation. Full suite: 129 passed.
 - 2026-10-25: G3.2 complete. `.qs.gw.phenomB` (same arguments and result as `taylorF2`, plus `fcut`, `fmerger`,
   `fring`, `sigma`) transcribed from LALSuite's `LALSimIMRPhenom.c` (`ComputeIMRPhenomBParams`,
   `IMRPhenomBGenerateFD`): the phenomenological table in `.qs.gw.pbTable` (coefficients of eta, eta chi,

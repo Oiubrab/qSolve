@@ -162,6 +162,69 @@
     .t.ok[({avg x*x} h where t<1.5)<0.01*{avg x*x} h where (t>=peak-0.3)&t<peak;"energy before the chirp"];
  }];
 
+/ the response tensors against the matrices printed in LALSuite's CreateDetector.c documentation
+.t.add[`gw_detector_tensors;{
+    .t.near[.qs.gw.tensor`H1;(-0.3926141 -0.0776130 -0.2473886;-0.0776130 0.3195244 0.2279981;-0.2473886 0.2279981 0.0730903);1e-6];
+    .t.near[.qs.gw.tensor`L1;(0.4112809 0.1402097 0.2472943;0.1402097 -0.1090056 -0.1816157;0.2472943 -0.1816157 -0.3022755);1e-6];
+    / arms are orthogonal unit vectors
+    / (LAL's arm vectors, printed to 11 digits, are orthogonal unit vectors to about 2e-7)
+    {d:.qs.gw.detectors x; .t.near[(d[`x]$d`x;d[`y]$d`y;d[`x]$d`y);1 1 0f;1e-6]} each `H1`L1;
+ }];
+
+.t.add[`gw_sidereal_time;{
+    / 2000-01-01 12:00 UTC (GPS 630763213, 13 leap seconds then): GMST 18h 41m 50.548s = 280.46061837 degrees
+    .t.near[.qs.gw.gmst 630763213;280.46061837*.qs.sig.pi%180;1e-5];
+    .t.eq["j"$.qs.gw.leaps each 600000000 1126259462 1300000000;13 17 18];
+    / one sidereal day later the angle comes back (to the rounding of the day's length)
+    .t.near[.qs.gw.gmst 1126259462+86164.0905;.qs.gw.gmst 1126259462;1e-4];
+ }];
+
+.t.add[`gw_antenna_patterns;{
+    system "S 4"; n:500;
+    ra:n?2*.qs.sig.pi; dec:asin -1+n?2f; psi:n?.qs.sig.pi; gps:1126259462f;
+    a:{[d;r;e;p;g] .qs.gw.antenna[d;r;e;p;g]}[`H1;;;;gps]'[ra;dec;psi];
+    p2:{(x[`plus] xexp 2)+x[`cross] xexp 2} each a;
+    .t.ok[all p2<=1+1e-9;"F+^2 + Fx^2 above 1"];
+    / that sum doesn't depend on the polarisation angle, and a quarter turn swaps F+ and Fx (up to sign)
+    b:{[r;e;p] .qs.gw.antenna[`H1;r;e;p;1126259462f]}'[ra;dec;psi+0.7];
+    .t.near[p2;{(x[`plus] xexp 2)+x[`cross] xexp 2} each b;1e-9];
+    c:{[r;e;p] .qs.gw.antenna[`H1;r;e;p;1126259462f]}'[ra;dec;psi+.qs.sig.pi%4];
+    .t.near[abs c@\:`plus;abs a@\:`cross;1e-9];
+    / a source straight above the detector (along its vertex vector) sees nearly the full response
+    v:.qs.gw.detectors[`H1]`vertex; r:sqrt v$v;
+    dec0:asin v[2]%r; ra0:.qs.gw.gmst[gps]+.qs.gw.atan2[v 1;v 0];
+    top:.qs.gw.antenna[`H1;ra0;dec0;0.3;gps];
+    .t.ok[0.99<(top[`plus] xexp 2)+top[`cross] xexp 2;"overhead response ",-3!top];
+ }];
+
+.t.add[`gw_arrival_delays;{
+    .t.ok[(.qs.gw.lightTime[`H1;`L1]) within 0.01 0.01002;"H1-L1 light travel time"];
+    system "S 5"; n:2000; gps:1126259462f;
+    ra:n?2*.qs.sig.pi; dec:asin -1+n?2f;
+    dt:{[r;e] .qs.gw.delay[`H1;r;e;1126259462f]-.qs.gw.delay[`L1;r;e;1126259462f]}'[ra;dec];
+    lt:.qs.gw.lightTime[`H1;`L1];
+    .t.ok[all (abs dt)<=lt+1e-12;"delay beyond the light travel time"];
+    .t.ok[(max abs dt)>0.98*lt;"delays should reach close to the light travel time"];
+    / the projection's phase factor is exp(-2 pi i f dt)
+    w0:.qs.gw.phenomB[30 60 90f;36;29;0 0f;400;0.5;(0f;0f)];
+    p0:.qs.gw.project[w0;`L1;1.1;0.2;0.4;gps];
+    re:(p0[`fplus]*w0[`plus;0])+p0[`fcross]*w0[`cross;0]; im:(p0[`fplus]*w0[`plus;1])+p0[`fcross]*w0[`cross;1];
+    ang:neg 2*.qs.sig.pi*30 60 90f*p0`delay;
+    .t.near[p0[`strain;0];(re*cos ang)-im*sin ang;1e-30];
+    / an edge-on source has no cross part, so both detectors see the same chirp up to scale and its peak moves
+    / by exactly the delay difference (with a cross part the loudest cycle can move by part of a period)
+    rate:4096; seconds:4; nn:rate*seconds; df:1%seconds; f:df*til 1+nn div 2;
+    w:.qs.gw.phenomB[f where f>=20;36;29;0 0f;400;.qs.sig.pi%2;(3f;0f)];
+    peak:{[w;f;df;rate;det;r;e]
+        p:.qs.gw.project[w;det;r;e;0.4;1126259462f]; bins:"j"$p[`freq]%df;
+        h:rate*.qs.sig.irfft (@[(count f)#0f;bins;:;p[`strain;0]];@[(count f)#0f;bins;:;p[`strain;1]]);
+        (first idesc abs h)%rate}[w;f;df;rate];
+    r0:ra first idesc abs dt; e0:dec first idesc abs dt;
+    shift:peak[`H1;r0;e0]-peak[`L1;r0;e0];
+    expect:.qs.gw.delay[`H1;r0;e0;gps]-.qs.gw.delay[`L1;r0;e0;gps];
+    .t.ok[0.0005>abs shift-expect;"peak shift ",(string shift)," vs delay difference ",string expect];
+ }];
+
 .t.add[`gw_catalogue_cached;{
      file:.t.path "data/gw/allevents.json";
      if[()~key file; .t.skip "fetch the GWOSC catalogue with .qs.gw.events[]"];

@@ -209,6 +209,66 @@
         (neg amplitude*cosine*sin phase;neg amplitude*cosine*cos phase);p`fCut;fm;fr;sigma)
  }
 
+/ Detectors, from LALSuite's LALDetectors.h: vertex position (Earth-centred, Earth-fixed, metres) and unit
+/ vectors along the x and y arms in the same frame
+.qs.gw.detectors:`H1`L1!(
+    `vertex`x`y!(-2.16141492636e6 -3.83469517889e6 4.60035022664e6;-0.22389266154 0.79983062746 0.55690487831;
+        -0.91397818574 0.02609403989 -0.40492342125);
+    `vertex`x`y!(-7.42760447238e4 -5.49628371971e6 3.22425701744e6;-0.95457412153 -0.14158077340 -0.26218911324;
+        0.29774156894 -0.48791033647 -0.82054461286))
+
+/ the detector response tensor D = (x x' - y y')/2, as LAL's CreateDetector.c builds it
+.qs.gw.tensor:{[det] d:.qs.gw.detectors det; 0.5*(d[`x]*/:d`x)-d[`y]*/:d`y}
+
+/ GPS - UTC in seconds at a GPS time: LAL's XLALLeapSeconds.h table (GPS second of each leap; TAI-UTC - 19)
+.qs.gw.leapGps:46828800 78364801 109900802 173059203 252028804 315187205 346723206 393984007 425520008 457056009 504489610 551750411 599184012 820108813 914803214 1025136015 1119744016 1167264017
+.qs.gw.leaps:{[gps] sum gps>=.qs.gw.leapGps}
+
+/ Greenwich mean sidereal time in radians, as LAL's XLALGreenwichMeanSiderealTime: UTC from GPS, Julian centuries
+/ from J2000.0, then the IAU 1982 polynomial in seconds of sidereal time
+.qs.gw.gmst:{[gps]
+    jd:2444244.5+(gps-.qs.gw.leaps floor gps)%86400;
+    t:(jd-2451545.0)%36525;
+    seconds:sum ((0.093104-6.2e-6*t)*t*t;67310.54841;(8640184.812866+3155760000.0)*t);
+    (seconds*.qs.sig.pi%43200) mod 2*.qs.sig.pi
+ }
+
+/ antenna patterns F+ and Fx of a detector for a source at (ra, dec) with polarisation psi at a GPS time,
+/ following LAL's XLALComputeDetAMResponse (Anderson et al. 2001, Eqs. B4-B7)
+.qs.gw.antenna:{[det;ra;dec;psi;gps]
+    gha:.qs.gw.gmst[gps]-ra;
+    X:(neg (cos psi)*sin gha)-(sin psi)*(cos gha)*sin dec;
+    X:(X;(neg (cos psi)*cos gha)+(sin psi)*(sin gha)*sin dec;(sin psi)*cos dec);
+    Y:((sin psi)*(sin gha))-(cos psi)*(cos gha)*sin dec;
+    Y:(Y;((sin psi)*cos gha)+(cos psi)*(sin gha)*sin dec;(cos psi)*cos dec);
+    D:.qs.gw.tensor det;
+    `plus`cross!((X$D$X)-Y$D$Y;(X$D$Y)+Y$D$X)
+ }
+
+/ seconds by which a signal from (ra, dec) reaches the detector after the Earth's centre, as LAL's
+/ XLALTimeDelayFromEarthCenter: minus the vertex's projection on the direction to the source, over c
+.qs.gw.delay:{[det;ra;dec;gps]
+    gha:.qs.gw.gmst[gps]-ra;
+    toSource:((cos dec)*cos gha;neg (cos dec)*sin gha;sin dec);
+    neg (toSource$.qs.gw.detectors[det]`vertex)%299792458f
+ }
+
+/ the angle of the point (x, y) from the x axis, in (-pi, pi] (q's atan takes one argument)
+.qs.gw.atan2:{[y;x] $[x>0; atan y%x; x<0; (atan y%x)+$[y>=0;.qs.sig.pi;neg .qs.sig.pi]; y>0; .qs.sig.pi%2; y<0; neg .qs.sig.pi%2; 0f]}
+
+/ the light travel time between two detectors, seconds
+.qs.gw.lightTime:{[a;b] d:.qs.gw.detectors[a][`vertex]-.qs.gw.detectors[b]`vertex; (sqrt d$d)%299792458f}
+
+/ a waveform (from taylorF2 or phenomB) as one detector sees it: F+ h+ + Fx hx, delayed by the arrival time at
+/ the detector relative to the Earth's centre (a factor exp(-2 pi i f dt)); returns `freq`strain`fplus`fcross`delay
+.qs.gw.project:{[w;det;ra;dec;psi;gps]
+    a:.qs.gw.antenna[det;ra;dec;psi;gps]; dt:.qs.gw.delay[det;ra;dec;gps];
+    re:(a[`plus]*w[`plus;0])+a[`cross]*w[`cross;0];
+    im:(a[`plus]*w[`plus;1])+a[`cross]*w[`cross;1];
+    ang:neg 2*.qs.sig.pi*w[`freq]*dt;
+    `freq`strain`fplus`fcross`delay!(w`freq;((re*cos ang)-im*sin ang;(re*sin ang)+im*cos ang);a`plus;a`cross;dt)
+ }
+
 / Newtonian stationary-phase time-to-coalescence for an inspiral chirp mass in solar masses.
 .qs.gw.newtonianTime:{[frequency;chirpMass]
     if[frequency<=0 or chirpMass<=0; '"frequency and chirp mass must be positive"];
