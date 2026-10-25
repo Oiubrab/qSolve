@@ -23,8 +23,8 @@ one-letter string lists) will come up.
 
 **Current status (2026-10-25):** stages G1–G4 are complete: the GW150914 gate passes (G3.4), and the
 noise library (6 events, about 11 hours of coincident H1/L1 noise), injections, glitches and training on
-generated data are built and tested; G5.1 (the MLP baseline) is done and weak, as expected. G5.2 (Conv1D
-layers in the qSolve core) is next. The owner chose pure-q waveforms and the
+generated data are built and tested; G5.1 (the MLP baseline) is done and weak, as expected; G5.2 (Conv1D in
+the core) is done. Next: a CNN on the GW task (G5.4 run, ahead of the optional G5.3 LSTM/GRU). The owner chose pure-q waveforms and the
 plan's default download budget, and asked to include binary neutron stars (a separate 1–3 M☉ track, 256 s
 windows at 2048 Hz, its own model) and an LSTM/GRU. Reference sources for waveform coefficients: LALSuite's
 `lalsimulation/lib` and `lal/lib` on git.ligo.org (raw files fetch without a login).
@@ -213,7 +213,7 @@ long-duration signals (see scope).
 
 - [x] **G5.1 MLP baseline.** 2 × 2048 whitened inputs (or 2 × 1024), dense hidden layers in the thesis's spirit,
   sigmoid output with `bce`. Record speed, memory and validation curves.
-- [ ] **G5.2 Conv1D in the qSolve core.** New layer types: 1-D convolution with channels (H1 and L1 as two
+- [x] **G5.2 Conv1D in the qSolve core.** New layer types: 1-D convolution with channels (H1 and L1 as two
   input channels), max pooling and flatten, mixed with dense layers in one model; forward and backward passes
   vectorised; gradient checks against finite differences as for dense layers; save, load and summary
   updated. *Accept:* the gradient check passes for conv, pool and flatten stacks; a small CNN solves a toy
@@ -311,6 +311,23 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: G5.2 complete. In `defineEquation.q`: an optional conv front end. A model may carry `conv`
+  (`channels`length`layers`, layers a table of filters, kernel, pool, act), `ckernel` (filters x kernel*channels
+  per layer) and `cbias`; `.qs.initConv[channels;length;layers;sizes;acts;seed]` builds one (He-uniform kernels,
+  zero biases) with the existing dense layers on top. Inside, activations are long (one row per example and time
+  step, one column per channel): valid convolution is a gather of shifted rows (`raze each A base+\:til k`) and
+  one `mmu`, then the activation, then non-overlapping max pooling that records the winner for the backward pass;
+  the last layer is flattened time-major into the dense layers. `.qs.grad1` runs the conv forward, the dense
+  backward (now also giving the gradient at the dense input), then `.qs.conv.backward` (scatter-adds for the
+  gather and the pooling). `.qs.params`, `.qs.inputSize`, `.qs.checkConv`; `.qs.step`, `.qs.check`,
+  `.qs.summary`, the training input checks, sharding, save/load work for conv models. Tests `tests/test_conv.q`:
+  every parameter against finite differences for tanh/sigmoid stacks with pooling, one conv layer into softmax,
+  and relu (all < 1e-6); shapes, summary and invalid models; sharded == serial; Adam and l2 move conv parameters;
+  and the plan's toy task (a 4-sample pulse anywhere in 64 noisy samples): a 21-parameter CNN reaches over 90%,
+  clearly beating a 265-parameter MLP. **Bug caught on the way:** rewriting `.qs.step` to update every parameter
+  key, the fold's result wasn't assigned back, so no parameter moved; found by the conv training test before the
+  full suite ran. Gotchas: `?[c;a;b]` needs simple lists (use `arg+(i-arg)*mask` on matrices); `vs` is a keyword
+  (it made a parameter fail with `nyi`); a scan `f\[x;list]` doesn't include x. Full suite: 145 passed.
 - 2026-10-25: G5.1 complete. `bench/gw_mlp.q` (options for layers, activation, SNR range, merger range, glitch
   share, epochs, learning rate, rows per epoch): trains on a fresh `.qs.gw.batch` per epoch from the four training
   events, scores a fixed 2,000-window batch from GW170814, and reports efficiency by SNR at the threshold giving

@@ -44,7 +44,20 @@
     if[`softmax in -1_m`act; '"softmax is only allowed on the output layer"];
     if[not (count each m`weight)~count each m`bias; '"bias length must match the number of nodes"];
     if[not (-1_count each m`weight)~1_count each first each m`weight; '"layer sizes don't chain"];
+    if[`conv in key m; .qs.checkConv m];
     m
+ }
+
+/ conv layers: the spec, kernel and bias shapes, and the flattened size feeding the dense layers
+.qs.checkConv:{[m]
+    if[not all `ckernel`cbias in key m; '"conv models need ckernel and cbias"];
+    spec:m`conv; l:spec`layers;
+    if[not all l[`act] in key .qs.act.d; '"conv activations must be one of ",", " sv string key .qs.act.d];
+    if[not (count l)=count m`ckernel; '"one kernel per conv layer"];
+    cins:spec[`channels],-1_l`filters;
+    if[not (l[`filters],'l[`kernel]*cins)~(count each m`ckernel),'count each first each m`ckernel; '"conv kernel shapes don't match the layers"];
+    if[not (l`filters)~count each m`cbias; '"conv bias lengths don't match the filters"];
+    if[not ((last .qs.conv.lengths spec)*last l`filters)=count first first m`weight; '"conv output size doesn't match the first dense layer"];
  }
 
 / new model with nIn inputs and one layer per entry of sizes
@@ -60,8 +73,90 @@
     .qs.check `weight`bias`act!(W;sizes#\:0f;acts)
  }
 
+/ 1-D convolution front end (G5.2). A model may have, before its dense layers, conv layers given by a spec in
+/ m`conv (`channels`length`layers, layers a table of filters, kernel, pool, act) with parameters m`ckernel (one
+/ filters x (kernel*channels) matrix per layer) and m`cbias (one vector per layer). Each input row holds its
+/ channels one after another (e.g. H1 samples then L1 samples). Inside, activations are "long": one row per
+/ (example, time step), one column per channel, so a convolution is a gather of shifted rows and one mmu.
+/ Layers use valid convolution (no padding), then the activation, then max pooling by non-overlapping blocks
+/ (any remainder dropped); the last layer's output is flattened (time-major) into the dense layers.
+
+/ the time length at the input and after each conv layer
+.qs.conv.lengths:{[spec] spec[`length],{[t;l] (t-l[`kernel]-1) div l`pool}\[spec`length;spec`layers]}
+
+/ number of inputs a model takes per row
+.qs.inputSize:{[m] $[`conv in key m; m[`conv;`channels]*m[`conv;`length]; count first first m`weight]}
+
+/ batch rows to the long layout: n x (channels*length) -> (n*length) x channels
+.qs.conv.toLong:{[X;c;len] raze {[c;len;x] flip (c;len)#x}[c;len] each X}
+
+/ one conv layer forward on long input A of n examples of length t: returns the output and what backward needs
+.qs.conv.layer:{[A;n;t;K;b;l]
+    k:l`kernel; tout:t-k-1; pool:l`pool; tp:tout div pool;
+    base:raze (t*til n)+\:til tout;
+    P:raze each A base+\:til k;
+    Z:(P mmu flip K)+\:b;
+    U:.qs.act.f[l`act] Z;
+    pbase:raze (tout*til n)+\:pool*til tp;
+    V:{[U;pbase;i] U pbase+i}[U;pbase] each til pool;
+    O:(|/) V;
+    / which position in each pooling block won (the first, on a tie), for routing gradients back
+    / (?[...] needs simple lists, so set the winner by arithmetic, which works element-wise on matrices)
+    arg:{[V;O;arg;i] arg+(i-arg)*V[i]=O}[V;O]/[(count O;count first O)#pool-1;reverse til pool];
+    `out`t`cache!(O;tp;`P`Z`U`arg`base`pbase`tin`tout!(P;Z;U;arg;base;pbase;t;tout))
+ }
+
+/ the conv stack on batch X: the flattened features and the caches of each layer
+.qs.conv.forward:{[m;X]
+    spec:m`conv; n:count X;
+    A:.qs.conv.toLong["f"$X;spec`channels;spec`length];
+    r:{[n;s;K;b;l] o:.qs.conv.layer[s 0;n;s 1;K;b;l]; (o`out;o`t;s[2],enlist o`cache)}[n]/[(A;spec`length;());m`ckernel;m`cbias;spec`layers];
+    `features`caches!(raze each (r 1) cut r 0;r 2)
+ }
+
+/ one conv layer backward: gradient at its output (long) -> kernel, bias and input gradients
+.qs.conv.back:{[dO;K;l;c;cin]
+    pool:l`pool; k:l`kernel;
+    dU:{[dO;c;dU;i] @[dU;c[`pbase]+i;+;dO*"f"$c[`arg]=i]}[dO;c]/[(count c`U;count first c`U)#0f;til pool];
+    dZ:dU*.qs.act.d[l`act][c`Z;c`U];
+    dK:flip[dZ] mmu c`P;
+    db:sum dZ;
+    dP:dZ mmu K;
+    rows:(c`tin)*count[c`base] div c`tout;
+    dA:{[dP;c;cin;dA;j] @[dA;c[`base]+j;+;dP[;(j*cin)+til cin]]}[dP;c;cin]/[(rows;cin)#0f;til k];
+    (dK;db;dA)
+ }
+
+/ gradients of the conv parameters from the gradient at the flattened features
+.qs.conv.backward:{[m;caches;dFeatures]
+    spec:m`conv; f:last spec[`layers]`filters;
+    d:raze {[f;x] ((count x) div f;f)#x}[f] each dFeatures;
+    cins:spec[`channels],-1_spec[`layers]`filters;
+    r:{[m;spec;cins;s;i] g:.qs.conv.back[s 2;m[`ckernel] i;spec[`layers] i;s[3] i;cins i];
+        (s[0],enlist g 0;s[1],enlist g 1;g 2;s 3)}[m;spec;cins]/[(();();d;caches);reverse til count spec`layers];
+    `ckernel`cbias!(reverse r 0;reverse r 1)
+ }
+
+/ the dense layers' input for a batch: the conv features, or X itself
+.qs.features:{[m;X] $[`conv in key m; .qs.conv.forward[m;X]`features; X]}
+
+/ a model with conv layers: channels x length inputs, conv layers (a table or list of dictionaries of filters,
+/ kernel, pool and act), then dense layers as .qs.init (sizes and acts). Kernels are He-uniform, biases zero
+.qs.initConv:{[channels;length;layers;sizes;acts;seed]
+    layers:([] filters:"j"$layers@\:`filters; kernel:"j"$layers@\:`kernel; pool:"j"$layers@\:`pool; act:`$string layers@\:`act);
+    spec:`channels`length`layers!(channels;length;layers);
+    ts:.qs.conv.lengths spec;
+    if[any ts<1; '"conv layers shrink the input to nothing: lengths ",-3!ts];
+    if[not null seed; system "S ",string seed];
+    cins:channels,-1_layers`filters;
+    K:{[f;k;c] fan:k*c; lim:sqrt 6%fan; (f;fan)#lim*-1+2*(f*fan)?1f}'[layers`filters;layers`kernel;cins];
+    d:.qs.init[(last ts)*last layers`filters;sizes;acts;0N];
+    d,`conv`ckernel`cbias!(spec;K;"f"$layers[`filters]#\:0f)
+ }
+
 / forward pass over a batch matrix X, returns (Z;A): pre-activations per layer and activations with A[0]=X
-.qs.forward:{[m;X] f:.qs.forwardMasked[m;X;(count m`weight)#1f]; (f 0;f 2)}
+/ (for a model with conv layers, A[0] is the conv features)
+.qs.forward:{[m;X] f:.qs.forwardMasked[m;.qs.features[m;X];(count m`weight)#1f]; (f 0;f 2)}
 
 / forward pass with each layer's activations multiplied by a mask (a matrix, or 1f for none)
 / returns (Z;U;A): pre-activations, unmasked activations, and masked activations with A[0]=X
@@ -101,13 +196,18 @@
 
 / gradient of loss over a single shard, with one mask per layer as for .qs.forwardMasked
 .qs.grad1:{[m;X;Y;loss;M]
+    conv:`conv in key m;
+    cf:$[conv; .qs.conv.forward[m;X]; ()!()];
+    X:$[conv; cf`features; X];
     za:.qs.forwardMasked[m;X;M]; Z:za 0; U:za 1; A:za 2; out:last A; f:last m`act;
     dOut:$[any (f;loss)~/:.qs.paired; (out-Y)%count Y;
         f=`softmax; '"softmax output needs xent loss";
         .qs.loss.g[loss][out;Y]*.qs.act.d[f][last Z;out]];
     / deltas from the output layer back: d_l = (d_(l+1) mmu W[l+1]) * f_l'(Z[l]) * mask_l
     D:{[ds;w;z;u;k;f] (enlist k*.qs.act.d[f][z;u]*first[ds] mmu w),ds}/[enlist dOut;reverse 1_m`weight;reverse -1_Z;reverse -1_U;reverse -1_M;reverse -1_m`act];
-    `weight`bias!({flip[x] mmu y}'[D;-1_A];sum each D)
+    g:`weight`bias!({flip[x] mmu y}'[D;-1_A];sum each D);
+    / with conv layers, carry the gradient at the dense layers' input back through them
+    $[conv; g,.qs.conv.backward[m;cf`caches;first[D] mmu first m`weight]; g]
  }
 
 / predicted class per row: argmax, or a 0.5 threshold for single-output models
@@ -164,13 +264,16 @@
 .qs.defaults:`epochs`batch`lr`loss`optimiser`momentum`beta1`beta2`l2`dropout`schedule`decay`stepEvery`minLr`patience`keepBest`shuffle`seed`verbose`onEpoch!(
     10;32;0.1;`mse;`sgd;0.9;0.9;0.999;0f;0f;`none;0.5;10;0f;0N;0b;1b;42;1;{[r]})
 
+/ the numeric parameter keys of a model
+.qs.params:{[m] `weight`bias`ckernel`cbias inter key m}
+
 / one gradient step on batch rows b; s holds `model`state (and anything else, passed through)
 .qs.step:{[o;X;Y;s;b]
     m:s`model;
     g:.qs.gradDrop[m;X b;Y b;o`loss;o`dropout];
-    if[o[`l2]>0; g[`weight]+:o[`l2]*m`weight];
+    if[o[`l2]>0; g[`weight]+:o[`l2]*m`weight; if[`ckernel in key m; g[`ckernel]+:o[`l2]*m`ckernel]];
     r:.qs.opt.step[o`optimiser][o;s`state;g];
-    m[`weight]-:r[0]`weight; m[`bias]-:r[0]`bias;
+    m:{[m;r;k] m[k]-:r[0] k; m}[;r]/[m;.qs.params m];
     s[`model]:m; s[`state]:r 1;
     s
  }
@@ -184,7 +287,7 @@
 / signal unless the training data and options make sense for model m
 .qs.checkTrain:{[m;X;Y;o]
     if[not count[X]=count Y; '"X and Y have different numbers of rows"];
-    if[not count[first X]=count first first m`weight; '"X has ",(string count first X)," columns, the model expects ",string count first first m`weight];
+    if[not count[first X]=.qs.inputSize m; '"X has ",(string count first X)," columns, the model expects ",string .qs.inputSize m];
     if[not count[first Y]=count last m`bias; '"Y has ",(string count first Y)," columns, the model outputs ",string count last m`bias];
     if[not o[`optimiser] in key .qs.opt.step; '"unknown optimiser: ",string o`optimiser];
     if[not o[`loss] in key .qs.loss.v; '"unknown loss: ",string o`loss];
@@ -206,7 +309,7 @@
     X:"f"$b`X; Y:"f"$b`Y;
     .qs.checkTrain[m;X;Y;o];
     val:all `Xval`Yval in key data;
-    s:`model`state`history`best`bestLoss`bestEpoch`wait`stop!(m;.qs.opt.init[o`optimiser] `weight`bias#m;();m;0w;0N;0;0b);
+    s:`model`state`history`best`bestLoss`bestEpoch`wait`stop!(m;.qs.opt.init[o`optimiser] .qs.params[m]#m;();m;0w;0N;0;0b);
     s:{[o;X;Y;data;val;s;e]
         if[s`stop; :s];
         t0:.z.p; lr:.qs.schedule[o`schedule][o;e];
@@ -236,9 +339,22 @@
  }
 
 / one row per layer: inputs, outputs, activation and number of parameters
-.qs.summary:{[m]
+.qs.summaryDense:{[m]
     ([] layer:til count m`weight; inputs:count each first each m`weight; outputs:count each m`weight; act:m`act;
         params:{(count[x]*count first x)+count y}'[m`weight;m`bias])
+ }
+
+/ one row per layer: inputs, outputs, activation and number of parameters; conv layers first (inputs and
+/ outputs as channels x length), with a type column when there are any
+.qs.summary:{[m]
+    d:.qs.summaryDense m;
+    if[not `conv in key m; :d];
+    spec:m`conv; l:spec`layers; ts:.qs.conv.lengths spec; cins:spec[`channels],-1_l`filters;
+    c:([] layer:til count l; kind:(count l)#`conv; inputs:{[c;t] (string c),"x",string t}'[cins;-1_ts];
+        outputs:{[c;t] (string c),"x",string t}'[l`filters;1_ts]; act:l`act;
+        params:{(count[x]*count first x)+count y}'[m`ckernel;m`cbias]);
+    d:update kind:`dense, layer:layer+count l, inputs:string inputs, outputs:string outputs from d;
+    c,`layer`kind`inputs`outputs`act`params xcols d
  }
 
 / save and load models with q's native serialisation
