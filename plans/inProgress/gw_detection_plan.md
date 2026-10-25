@@ -21,7 +21,7 @@ one-letter string lists) will come up.
   without asking.
 - Keep tests offline: anything needing downloaded data skips itself when the data is missing (`.t.skip`).
 
-**Current status (2026-10-25):** G1, G2 and G3.1 are complete; G3.2 (IMRPhenomB) is next. The owner chose
+**Current status (2026-10-25):** G1, G2, G3.1 and G3.2 are complete; G3.3 (detector response) is next. The owner chose
 pure-q waveforms and the plan's default download budget, and asked to include binary neutron stars (a separate
 1–3 M☉ track, 256 s windows at 2048 Hz, its own model) and an LSTM/GRU. Reference sources for waveform
 coefficients: LALSuite's `lalsimulation/lib` on git.ligo.org (raw files fetch without a login).
@@ -171,7 +171,7 @@ long-duration signals (see scope).
   frequency. *Accept:* the time–frequency track from the stationary phase relation matches the Newtonian
   chirp formula at low frequency; amplitude scales as 1/distance; a GW150914-like chirp mass gives a
   sensible time in band from 20 Hz (a fraction of a second).
-- [ ] **G3.2 IMRPhenomB.** Inspiral–merger–ringdown in closed form (Ajith et al. 2011, PRL 106, 241101):
+- [x] **G3.2 IMRPhenomB.** Inspiral–merger–ringdown in closed form (Ajith et al. 2011, PRL 106, 241101):
   piecewise amplitude, phase coefficients and transition frequencies from the paper's table, transcribed
   carefully and cited in comments. *Accept:* agrees with TaylorF2 at low frequency (phase difference small
   across 20–40 Hz after aligning); continuous at the transition frequencies; merger frequency scales as
@@ -308,6 +308,20 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: G3.2 complete. `.qs.gw.phenomB` (same arguments and result as `taylorF2`, plus `fcut`, `fmerger`,
+  `fring`, `sigma`) transcribed from LALSuite's `LALSimIMRPhenom.c` (`ComputeIMRPhenomBParams`,
+  `IMRPhenomBGenerateFD`): the phenomenological table in `.qs.gw.pbTable` (coefficients of eta, eta chi,
+  eta chi^2, eta^2, eta^2 chi, eta^3), parameters in `.qs.gw.pbParams`, the three-piece amplitude with w1/w2
+  continuity, and LAL's `exp(-i psi)` with our `2 pi f tc` added (LAL's FD phase has no linear term). Spins
+  combine as chi = (m1 chi1 + m2 chi2)/M, as LAL's `XLALSimIMRPhenomBComputeChi`. Tests: parameters,
+  amplitude and phase against a Python transcription of LAL's C at 20-300 Hz (relative 1e-12); no jump at
+  fMerger or fRing; frequencies scale as 1/M; spin raises fMerger; in 20-40 Hz the phase follows TaylorF2 to
+  within 0.03-0.17 rad after removing a free time and phase offset (measured for 36+29, 15+10 spinning,
+  50+40) and the amplitude is 3-12% lower (PhenomB has PN amplitude terms, our TaylorF2 is leading order);
+  time domain rises in frequency and peaks before tc. **Note for G4.2:** tc is a linear-phase reference; the
+  time-domain peak lands 20-80 ms before it for 10-60 Msun components, so place mergers by measuring the peak
+  (or by a per-waveform offset), not by tc. No LALSuite here, so the optional live comparison wasn't run
+  (`pip install lalsuite` would allow it). Full suite: 125 passed.
 - 2026-10-25: G3.1 complete (resumed in a new session). Three fixes to the checkpointed `.qs.gw.taylorF2`:
   - **Convention:** it built `exp(+i psi)`, the complex conjugate of LAL's `exp(-i(psi - pi/4))`. With our FFT's
     `exp(-2 pi i f t)` (the same as LAL's) that is a time-reversed chirp: falling in frequency, centred at -tc. The

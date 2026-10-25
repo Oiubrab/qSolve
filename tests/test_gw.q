@@ -108,6 +108,60 @@
     .t.ok[early<0.01*late;"energy before the chirp: ",string early%late];
  }];
 
+/ PhenomB against a Python transcription of LALSuite's ComputeIMRPhenomBParams and IMRPhenomBGenerateFD
+/ (36 + 29 Msun, chi1 0.3, chi2 -0.2, 400 Mpc), across the inspiral, merger and ringdown pieces
+.t.add[`gw_phenomb_lal;{
+    f:20 50 100 150 200 300f;
+    w:.qs.gw.phenomB[f;36;29;0.3 -0.2;400;0f;(0f;0f)];
+    .t.near[(w`fmerger`fring`sigma`fcut)%115.15875686756915 259.25665947125896 58.9673055776804 349.4790648716245;4#1f;1e-12];
+    lalAmp:9.037441195641006e-23 2.966322528674908e-23 1.2468879296632372e-23 8.546289209772345e-24 6.99034843116213e-24 2.0384849411233392e-24;
+    lalPhase:-917.5590141532003 -968.045747118472 -991.4395602398799 -1009.3234021210112 -1025.6277805621257 -1055.8785698716417;
+    .t.near[w[`amp]%lalAmp;6#1f;1e-12];
+    .t.near[w`phase;lalPhase;1e-9];
+ }];
+
+.t.add[`gw_phenomb_continuous_scaling;{
+    w:.qs.gw.phenomB[enlist 50f;36;29;0.2 0.2;400;0f;(0f;0f)];
+    at:{[f] .qs.gw.phenomB[f;36;29;0.2 0.2;400;0f;(0f;0f)]`amp};
+    / no jump at the merger and ringdown frequencies
+    {[at;f] a:at f*(1-1e-9;1+1e-9); .t.near[a 1;a 0;1e-6*a 0]}[at] each w`fmerger`fring;
+    / at fixed eta and spin, the frequencies scale as 1/total mass
+    d:.qs.gw.phenomB[enlist 20f;72;58;0.2 0.2;400;0f;(0f;0f)];
+    .t.near[(d`fmerger`fring`fcut)*2;w`fmerger`fring`fcut;1e-9];
+    / an aligned spin raises the merger frequency
+    .t.ok[(.qs.gw.phenomB[enlist 20f;36;29;0.6 0.6;400;0f;(0f;0f)]`fmerger)>.qs.gw.phenomB[enlist 20f;36;29;-0.6 -0.6;400;0f;(0f;0f)]`fmerger;"spin should raise fmerger"];
+ }];
+
+/ in the early inspiral PhenomB follows TaylorF2: after removing a free time and phase offset, phases agree to
+/ a few tenths of a radian over 20-40 Hz; amplitudes are a few percent lower (PhenomB's PN amplitude terms)
+.t.add[`gw_phenomb_matches_taylorf2;{
+    check:{[m1;m2;c]
+        f:20+0.25*til 81;
+        a:.qs.gw.phenomB[f;m1;m2;c;400;0f;(0f;0f)]; b:.qs.gw.taylorF2[f;m1;m2;c;400;0f;(0f;0f)];
+        d:a[`phase]-b`phase; X:flip (count[f]#1f;f);
+        r:d-X mmu (inv (flip X) mmu X) mmu (flip X) mmu d;
+        .t.ok[0.3>max abs r;"phase residual ",string max abs r];
+        .t.ok[all (a[`amp]%b`amp) within 0.85 1;"amplitude ratio ",-3!(a[`amp]%b`amp) 0 80];
+    };
+    check .' ((36;29;0 0f);(15;10;0.3 0.3);(50;40;0 0f));
+ }];
+
+/ in the time domain: rising frequency, peak shortly before tc (tc is a linear phase reference; the peak falls
+/ 20-80 ms earlier for these masses), and nothing well before the chirp
+.t.add[`gw_phenomb_time_domain;{
+    rate:4096; seconds:4; tc:3f;
+    n:rate*seconds; df:1%seconds; f:df*til 1+n div 2;
+    w:.qs.gw.phenomB[f where f>=20;36;29;0.3 -0.2;400;0f;(tc;0f)];
+    bins:"j"$w[`freq]%df;
+    h:rate*.qs.sig.irfft (@[(count f)#0f;bins;:;w[`plus;0]];@[(count f)#0f;bins;:;w[`plus;1]]);
+    t:(til n)%rate;
+    peak:t first idesc abs h;
+    .t.ok[peak within (tc-0.1;tc);"peak at ",string peak];
+    crossings:{[h;t;a;b] i:where (t>=a)&t<b; sum 0>(1_h i)*-1_h i}[h;t];
+    .t.ok[(crossings[peak-0.4;peak-0.2])<crossings[peak-0.2;peak];"frequency should rise towards the merger"];
+    .t.ok[({avg x*x} h where t<1.5)<0.01*{avg x*x} h where (t>=peak-0.3)&t<peak;"energy before the chirp"];
+ }];
+
 .t.add[`gw_catalogue_cached;{
      file:.t.path "data/gw/allevents.json";
      if[()~key file; .t.skip "fetch the GWOSC catalogue with .qs.gw.events[]"];

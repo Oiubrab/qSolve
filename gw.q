@@ -141,6 +141,74 @@
         (neg amplitude*cosine*sin phase;neg amplitude*cosine*cos phase);fisco)
  }
 
+/ IMRPhenomB (Ajith et al. 2011, PRL 106, 241101): inspiral, merger and ringdown in closed form for aligned
+/ spins, transcribed from LALSuite's LALSimIMRPhenom.c (ComputeIMRPhenomBParams, IMRPhenomBGenerateFD).
+/ Each phenomenological parameter is a base term plus a fitted polynomial in eta and the mass-weighted spin chi,
+/ with coefficients of (eta; eta chi; eta chi^2; eta^2; eta^2 chi; eta^3) in this table
+.qs.gw.pbTable:`psi2`psi3`psi4`psi6`psi7`psi8`fMerger`fRing`sigma`fCut!(
+    -920.91 492.13 135.03 6741.9 -1053.4 -13397;
+    17022 -9565.9 -2182.1 -121370 20752 238590;
+    -125440 75066 13382 873540 -165730 -1693600;
+    -889770 631020 50676 5980800 -1414800 -11280000;
+    869600 -670980 -30082 -5837900 1514500 10891000;
+    -366000 306700 631.76 2426500 -721800 -4552400;
+    0.64365 0.82696 -0.27063 -0.058218 -3.9346 -7.0916;
+    0.1469 -0.12281 -0.026091 -0.0249 0.17013 2.3252;
+    -0.40979 -0.035226 0.10082 1.8286 -0.020169 -2.8698;
+    -0.13313 -0.081719 0.14512 -0.2714 0.12788 4.922)
+
+/ PhenomB parameters for total mass in solar masses, eta and chi: phase coefficients and the merger, ringdown
+/ (with width sigma) and cut-off frequencies in Hz
+.qs.gw.pbParams:{[total;eta;chi]
+    terms:(eta;eta*chi;eta*chi*chi;eta*eta;eta*eta*chi;eta*eta*eta);
+    fit:key[.qs.gw.pbTable]!("f"$value .qs.gw.pbTable) mmu terms;
+    s:1-chi; ring:1-0.63*s xexp 0.3;
+    base:`psi2`psi3`psi4`psi6`psi7`psi8`fMerger`fRing`sigma`fCut!(
+        3715%756;(-16*.qs.sig.pi)+113*chi%3;(15293365%508032)-405*chi*chi%8;0f;0f;0f;
+        sum (1f;-4.4547*s xexp 0.217;3.521*s xexp 0.26);ring%2;ring*(s xexp 0.45)%4;
+        sum (0.32361;0.048935*chi;0.013463*chi*chi));
+    p:base+fit;
+    piM:.qs.sig.pi*total*4.9254909476412675e-6;
+    @[p;`fMerger`fRing`sigma`fCut;%;piM]
+ }
+
+/ IMRPhenomB waveform with the same arguments and result as .qs.gw.taylorF2 (spins are the two aligned spins,
+/ combined into chi = (m1 chi1 + m2 chi2)/M), from the lowest frequency given up to PhenomB's cut-off.
+/ LAL's form plus the 2 pi f tc term that places the merger: h(f) = A(f) exp(-i psi), with
+/   psi = 2 pi f tc - phic + 3/(128 eta v^5)(1 + psi2 v^2 + psi3 v^3 + psi4 v^4 + psi6 v^6 + psi7 v^7 + psi8 v^8)
+.qs.gw.phenomB:{[frequencies;m1;m2;spins;distance;inclination;coalescence]
+    if[(m1<=0) or (m2<=0) or distance<=0; '"masses and distance must be positive"];
+    if[not all (spins 0 1) within -1 1; '"aligned spins must be between -1 and 1"];
+    total:m1+m2; eta:(m1*m2)%total*total;
+    chi:((m1*spins 0)+m2*spins 1)%total;
+    p:.qs.gw.pbParams[total;eta;chi];
+    piM:.qs.sig.pi*total*4.9254909476412675e-6;
+    frequencies:frequencies where (frequencies>0)&frequencies<p`fCut;
+    f:frequencies;
+    v:(piM*f) xexp 1%3; v2:v*v; v3:v2*v;
+    / amplitude: PN-corrected inspiral, then a power law with spin corrections, then a Lorentzian ringdown,
+    / continuous at fMerger and fRing by the choice of w1 and w2
+    fm:p`fMerger; fr:p`fRing; sigma:p`sigma;
+    alpha2:(-323%224)+451*eta%168; alpha3:chi*(27%8)-11*eta%6;
+    eps1:(1.4547*chi)-1.8897; eps2:1.6557-1.8153*chi;
+    vm:(piM*fm) xexp 1%3; vr:(piM*fr) xexp 1%3;
+    w1:(1+(alpha2*vm*vm)+alpha3*piM*fm)%1+(eps1*vm)+eps2*vm*vm;
+    w2:w1*(.qs.sig.pi*sigma%2)*((fr%fm) xexp -2%3)*1+(eps1*vr)+eps2*vr*vr;
+    lorentz:sigma%2*.qs.sig.pi*((f-fr)*(f-fr))+sigma*sigma%4;
+    shape:?[f<=fm;((f%fm) xexp -7%6)*1+(alpha2*v2)+alpha3*v3;
+        ?[f>fr;w2*lorentz;w1*((f%fm) xexp -2%3)*1+(eps1*v)+eps2*v2]];
+    lightSpeed:299792458f; megaParsec:3.085677581491367e22;
+    amp0:(((4.9254909476412675e-6*total) xexp 5%6)*(fm xexp -7%6)*sqrt[5*eta%24]*lightSpeed%distance*megaParsec)%.qs.sig.pi xexp 2%3;
+    amplitude:amp0*shape;
+    v4:v2*v2; v5:v4*v; v6:v3*v3; v7:v6*v; v8:v7*v;
+    series:1+sum (p[`psi2]*v2;p[`psi3]*v3;p[`psi4]*v4;p[`psi6]*v6;p[`psi7]*v7;p[`psi8]*v8);
+    phase:(2*.qs.sig.pi*f*coalescence 0)+(neg coalescence 1)+(3%128)*series%eta*v5;
+    cosine:cos inclination; plusScale:0.5*1+cosine*cosine;
+    `freq`amp`phase`plus`cross`fcut`fmerger`fring`sigma!(f;amplitude;phase;
+        (amplitude*plusScale*cos phase;neg amplitude*plusScale*sin phase);
+        (neg amplitude*cosine*sin phase;neg amplitude*cosine*cos phase);p`fCut;fm;fr;sigma)
+ }
+
 / Newtonian stationary-phase time-to-coalescence for an inspiral chirp mass in solar masses.
 .qs.gw.newtonianTime:{[frequency;chirpMass]
     if[frequency<=0 or chirpMass<=0; '"frequency and chirp mass must be positive"];
