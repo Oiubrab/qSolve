@@ -253,8 +253,8 @@
     neg (toSource$.qs.gw.detectors[det]`vertex)%299792458f
  }
 
-/ the angle of the point (x, y) from the x axis, in (-pi, pi] (q's atan takes one argument)
-.qs.gw.atan2:{[y;x] $[x>0; atan y%x; x<0; (atan y%x)+$[y>=0;.qs.sig.pi;neg .qs.sig.pi]; y>0; .qs.sig.pi%2; y<0; neg .qs.sig.pi%2; 0f]}
+/ (q's atan takes one argument; .qs.sig.atan2 is the two-argument form)
+.qs.gw.atan2:{[y;x] .qs.sig.atan2[y;x]}
 
 / the light travel time between two detectors, seconds
 .qs.gw.lightTime:{[a;b] d:.qs.gw.detectors[a][`vertex]-.qs.gw.detectors[b]`vertex; (sqrt d$d)%299792458f}
@@ -267,6 +267,35 @@
     im:(a[`plus]*w[`plus;1])+a[`cross]*w[`cross;1];
     ang:neg 2*.qs.sig.pi*w[`freq]*dt;
     `freq`strain`fplus`fcross`delay!(w`freq;((re*cos ang)-im*sin ang;(re*sin ang)+im*cos ang);a`plus;a`cross;dt)
+ }
+
+/ a face-on PhenomB template as a time series on an n-sample grid at a sample rate, from flow Hz, with its
+/ coalescence reference at t=0 (the chirp wraps to the end of the buffer); returns `h`peak, peak being the
+/ time of its largest sample relative to that reference (negative: the merger comes just before tc)
+.qs.gw.template:{[n;rate;m1;m2;spins;flow]
+    df:rate%n; f:df*til 1+n div 2;
+    w:.qs.gw.phenomB[f where f>=flow;m1;m2;spins;400;0f;(0f;0f)];
+    bins:"j"$w[`freq]%df;
+    h:rate*.qs.sig.irfft (@[(count f)#0f;bins;:;w[`plus;0]];@[(count f)#0f;bins;:;w[`plus;1]]);
+    p:(first idesc abs h)%rate;
+    `h`peak!(h;$[p>n%2*rate;p-n%rate;p])
+ }
+
+/ matched-filter search of one detector's strain (from .qs.gw.strain) for a PhenomB template: PSD by Welch
+/ (4 s Hann segments, 50% overlap), a 10% Tukey taper, phase-maximised SNR, and only lags at least margin
+/ seconds from either end (the whitening filter is about a PSD segment long, so the edges are unreliable).
+/ Returns the best SNR, the GPS time of the merger (the template's peak), its phase, and the largest SNR more
+/ than half a second from it
+.qs.gw.search:{[strain;m1;m2;spins;margin]
+    x:strain`h; rate:strain`rate; n:count x;
+    psd:.qs.sig.welch[x;rate;4*rate;2*rate];
+    t:.qs.gw.template[n;rate;m1;m2;spins;20];
+    mf:.qs.sig.matchedFilterMax[x*.qs.sig.tukey[n;0.1];t`h;rate;psd];
+    ok:where (mf[`lag]>=margin)&mf[`lag]<(n%rate)-margin;
+    best:ok first idesc mf[`snr] ok;
+    time:strain[`gps]+mf[`lag][best]+t`peak;
+    away:ok where 0.5<abs (strain[`gps]+mf[`lag] ok)+t[`peak]-time;
+    `snr`gps`phase`background!(mf[`snr] best;time;mf[`phase] best;max mf[`snr] away)
  }
 
 / Newtonian stationary-phase time-to-coalescence for an inspiral chirp mass in solar masses.

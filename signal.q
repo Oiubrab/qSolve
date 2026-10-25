@@ -229,3 +229,17 @@
      correlation:.qs.sig.irfft[(corrReal;corrImag)];
      `snr`lag`norm!(correlation%norm;(til n)%rate;norm)
  }
+/ the angle of the point (x, y) from the x axis, in (-pi, pi] (q's atan takes one argument)
+.qs.sig.atan2:{[y;x] $[x>0; atan y%x; x<0; (atan y%x)+$[y>=0;.qs.sig.pi;neg .qs.sig.pi]; y>0; .qs.sig.pi%2; y<0; neg .qs.sig.pi%2; 0f]}
+
+/ matched filter maximised over the signal's unknown phase: the template and its 90-degree-shifted copy (its
+/ spectrum times -i) are both correlated with the data, and the SNR is the magnitude of the pair. Same inputs
+/ and result as .qs.sig.matchedFilter; also returns the phase of the best match at each lag
+.qs.sig.matchedFilterMax:{[data;template;rate;psd]
+    zero:.qs.sig.matchedFilter[data;template;rate;psd];
+    spectrum:.qs.sig.rfft "f"$template;
+    shifted:.qs.sig.irfft (spectrum 1;neg spectrum 0);
+    quarter:.qs.sig.matchedFilter[data;shifted;rate;psd];
+    `snr`lag`norm`phase!(sqrt (zero[`snr] xexp 2)+quarter[`snr] xexp 2;zero`lag;zero`norm;
+        .qs.sig.atan2'[quarter`snr;zero`snr])
+ }

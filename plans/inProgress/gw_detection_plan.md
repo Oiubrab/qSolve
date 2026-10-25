@@ -21,8 +21,9 @@ one-letter string lists) will come up.
   without asking.
 - Keep tests offline: anything needing downloaded data skips itself when the data is missing (`.t.skip`).
 
-**Current status (2026-10-25):** G1, G2, G3.1, G3.2 and G3.3 are complete; G3.4 (the GW150914 end-to-end
-gate) is next. The owner chose
+**Current status (2026-10-25):** stages G1, G2 and G3 are complete, including the G3.4 gate: our pure-q
+PhenomB template finds GW150914 in the real H1 and L1 data at the published SNRs, with L1 leading H1 by 7 ms.
+G4.1 (noise library, needs the ~2 GB of 4096 s files) is next. The owner chose
 pure-q waveforms and the plan's default download budget, and asked to include binary neutron stars (a separate
 1–3 M☉ track, 256 s windows at 2048 Hz, its own model) and an LSTM/GRU. Reference sources for waveform
 coefficients: LALSuite's `lalsimulation/lib` on git.ligo.org (raw files fetch without a login).
@@ -183,7 +184,7 @@ long-duration signals (see scope).
   strain h = F+ h+ + F× h× shifted by the delay. *Accept:* antenna patterns are bounded (F+² + F×² ≤ 1) and
   match known values for a few published configurations; delays never exceed the H1–L1 light travel time
   (about 10 ms).
-- [ ] **G3.4 End-to-end check on GW150914.** Whiten the real 32 s H1 and L1 data, matched-filter with a
+- [x] **G3.4 End-to-end check on GW150914.** Whiten the real 32 s H1 and L1 data, matched-filter with a
   PhenomB template at the catalogue masses (about 36 + 31 M☉), and find the peak at the event's GPS time with
   an SNR roughly in line with the published values (about 20 in H1 and 14 in L1). *Accept:* both detectors
   peak within 10 ms of the event time with SNR above 10. If this fails, the waveforms or whitening are wrong;
@@ -309,6 +310,24 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: G3.4 complete: **the gate passes.** New: `.qs.sig.matchedFilterMax` (the template and its
+  90-degree-shifted copy, SNR as their magnitude, plus the best phase; `.qs.sig.atan2` moved to `signal.q`),
+  `.qs.gw.template` (face-on PhenomB time series with its reference at t=0 and the offset of its peak) and
+  `.qs.gw.search` (Welch PSD from the same 32 s, 10% Tukey taper, edge margin). On GW150914's 32 s files with
+  detector-frame masses 38.1 + 33.0 (GWTC-2.1 source masses 34.6 + 30.0 times 1+z, z about 0.10 at 470 Mpc):
+  **H1 SNR 19.1, L1 SNR 13.1** (published single-detector values about 20 and 13-14); merger times +25 ms (H1)
+  and +18 ms (L1) from the catalogue's 1126259462.4 (rounded to 0.1 s), so **L1 leads H1 by 7 ms**, as
+  published. Source-frame masses give a lower H1 SNR (17.2), as they should. Background elsewhere in the
+  file: at most 4.6 (H1) and 7.7 (L1). The acceptance was adjusted from the plan's "within 10 ms of the event
+  time", which the catalogue's rounding makes impossible: test `gw_finds_gw150914` checks SNRs (H1 17-22, L1
+  11-16), both times within 50 ms, L1 leading by 4-10 ms, and SNR above 1.5 times the background.
+  **Found on the way:** the first and last ~4-6 s of a 32 s file give huge false SNRs (up to 500). The whitening
+  filter is about one PSD segment (4 s) long, so data that close to an edge is corrupted; searches must keep
+  a margin of at least the PSD segment plus the template length (6 s here). G4/G7 should use longer stretches
+  and discard the edges. Test `gw_matched_filter_any_phase`: a template rotated by 1 rad in white noise is
+  recovered at SNR about 10 with phase about 1, where the one-phase filter sees about 10 cos 1 at the true lag
+  (over all lags it gets more back by shifting slightly, since a chirp's phase and time trade off). Full
+  suite: 131 passed.
 - 2026-10-25: G3.3 complete. In `gw.q`, all transcribed from LALSuite (`lal/lib/tools/LALDetectors.h`,
   `CreateDetector.c`, `DetResponse.c`; `lal/lib/date/TimeDelay.c`, `XLALSiderealTime.c`, `XLALLeapSeconds.h`):
   `.qs.gw.detectors` (H1/L1 vertex and arm unit vectors, Earth-fixed), `tensor` ((x x' - y y')/2), `leaps` (GPS-UTC)

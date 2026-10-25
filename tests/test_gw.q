@@ -225,6 +225,44 @@
     .t.ok[0.0005>abs shift-expect;"peak shift ",(string shift)," vs delay difference ",string expect];
  }];
 
+/ G3.4: our own PhenomB template finds GW150914 in the real 32 s H1 and L1 data. Detector-frame masses are
+/ the GWTC-2.1 source masses (34.6, 30.0) times 1 + z, z about 0.10 at 470 Mpc. Published single-detector
+/ SNRs are about 20 (H1) and 13-14 (L1); the signal reached L1 about 7 ms before H1. The catalogue time is
+/ rounded to 0.1 s, so the absolute time is checked to 50 ms and the H1-L1 difference tightly
+.t.add[`gw_finds_gw150914;{
+    dir:"data/gw/strain/GW150914/";
+    files:{[dir;det] .t.path dir,det,"-32-1126259447.txt.gz"}[dir] each ("H1";"L1");
+    if[any ()~/:key each files; .t.skip "fetch GW150914's 32 s files with scripts/fetch_gw.sh"];
+    r:{.qs.gw.search[.qs.gw.strain x;38.1;33.0;0 0f;6]} each files;
+    .t.ok[r[0;`snr] within 17 22;"H1 SNR ",string r[0;`snr]];
+    .t.ok[r[1;`snr] within 11 16;"L1 SNR ",string r[1;`snr]];
+    .t.ok[all 0.05>abs (r@\:`gps)-1126259462.4;"merger times ",-3!r@\:`gps];
+    lead:r[0;`gps]-r[1;`gps];
+    .t.ok[lead within 0.004 0.010;"L1 should lead H1 by about 7 ms, got ",string 1000*lead];
+    / the event stands well above the rest of the file
+    .t.ok[all (r@\:`snr)>1.5*r@\:`background;"event not clear of the background ",-3!r@\:`background];
+ }];
+
+/ the phase-maximised filter recovers a template at any phase (the one-phase filter only at its own phase)
+.t.add[`gw_matched_filter_any_phase;{
+    rate:1024; n:8192; psd:`freq`psd!(rate*(til 1+n div 2)%n;(1+n div 2)#2%rate);
+    t:.qs.gw.template[n;rate;20;15;0 0f;20];
+    sp:.qs.sig.rfft t`h;
+    / rotate the template by 1 radian and scale it to SNR 10 in white noise
+    rot:.qs.sig.irfft ((cos 1)*(sp 0)+(sin 1)*sp 1;((cos 1)*sp 1)-(sin 1)*sp 0);
+    norm:.qs.sig.matchedFilter[rot;t`h;rate;psd]`norm;
+    system "S 9"; noise:.qs.data.normal n;
+    d:noise+rot*10%norm;
+    / at the true lag (0: the injection isn't shifted) the one-phase filter sees about 10 cos(1); over all lags it
+    / can recover more by shifting a little, since for a chirp a small phase change looks like a small time shift
+    one:first .qs.sig.matchedFilter[d;t`h;rate;psd]`snr;
+    best:.qs.sig.matchedFilterMax[d;t`h;rate;psd];
+    .t.ok[(first best`snr) within 8.5 11.5;"phase-maximised SNR at the true lag ",string first best`snr];
+    .t.ok[one within (10*cos 1)+-1.5 1.5;"one-phase SNR at the true lag ",string one];
+    .t.ok[(first idesc best`snr) in 0 1,n-1;"peak not at the true lag"];
+    .t.near[abs first best`phase;1f;0.3];
+ }];
+
 .t.add[`gw_catalogue_cached;{
      file:.t.path "data/gw/allevents.json";
      if[()~key file; .t.skip "fetch the GWOSC catalogue with .qs.gw.events[]"];
