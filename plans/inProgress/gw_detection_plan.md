@@ -21,10 +21,10 @@ one-letter string lists) will come up.
   without asking.
 - Keep tests offline: anything needing downloaded data skips itself when the data is missing (`.t.skip`).
 
-**Current status (2026-10-24):** G1.1 is complete; G1.2 is next. The owner chose pure-q
-waveforms and the plan's default download budget, and asked to include binary neutron stars and an LSTM/GRU.
-The BNS window and sampling configuration must be specified before G2/G4; do not silently force BNS into the
-1-second BBH setup.
+**Current status (2026-10-25):** G1, G2 and G3.1 are complete; G3.2 (IMRPhenomB) is next. The owner chose
+pure-q waveforms and the plan's default download budget, and asked to include binary neutron stars (a separate
+1–3 M☉ track, 256 s windows at 2048 Hz, its own model) and an LSTM/GRU. Reference sources for waveform
+coefficients: LALSuite's `lalsimulation/lib` on git.ligo.org (raw files fetch without a login).
 
 ---
 
@@ -166,7 +166,7 @@ long-duration signals (see scope).
 
 ### G3 — Waveforms and detectors (`gw.q`)
 
-- [ ] **G3.1 TaylorF2.** Frequency-domain post-Newtonian inspiral: amplitude ∝ f^(-7/6), phase to 3.5PN for
+- [x] **G3.1 TaylorF2.** Frequency-domain post-Newtonian inspiral: amplitude ∝ f^(-7/6), phase to 3.5PN for
   aligned spins, given masses, spins, distance, inclination, coalescence time and phase, ending at the ISCO
   frequency. *Accept:* the time–frequency track from the stationary phase relation matches the Newtonian
   chirp formula at low frequency; amplitude scales as 1/distance; a GW150914-like chirp mass gives a
@@ -308,6 +308,30 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: G3.1 complete (resumed in a new session). Three fixes to the checkpointed `.qs.gw.taylorF2`:
+  - **Convention:** it built `exp(+i psi)`, the complex conjugate of LAL's `exp(-i(psi - pi/4))`. With our FFT's
+    `exp(-2 pi i f t)` (the same as LAL's) that is a time-reversed chirp: falling in frequency, centred at -tc. The
+    old tests only checked the size of the phase slope, so they couldn't see it. Now plus is
+    `A (1+cos^2 i)/2 exp(-i(psi - pi/4))` and cross is `-i A cos i exp(-i(psi - pi/4))`, as in LAL.
+  - **q precedence:** `(2 pi f tc)-phic+(PN term)` is `2 pi f tc - (phic + PN term)` in q, which flipped the whole
+    PN series (the old version had the same problem with `pi/4`). The 3PN constant had the same trap. Signed terms
+    are now summed as lists.
+  - **Spin terms:** all of LAL's aligned-spin phase terms (XLALSimInspiralPNPhasing_F2, citing arXiv:1303.7412):
+    1.5PN, 2.5PN, 3PN and 3.5PN spin-orbit; 2PN and 3PN spin-spin and self-spin (black hole quadrupole-monopole
+    1). Coefficients were transcribed from LAL's decimal literals as exact fractions, in `.qs.gw.f2coeffs`.
+  New tests: every coefficient against a Python transcription of LAL's C (36+29 Msun, chi 0.3/-0.2, relative
+  1e-12); amplitude against LAL's own leading-order expression (agrees to 1.6e-8, which is LAL's MRSUN being a
+  different rounding of MTSUN times c); swapping the bodies changes nothing; and **in the time domain** (inverse
+  FFT on a 4 s grid) the chirp peaks within 50 ms before tc, its zero crossings speed up towards tc, and there is
+  no energy before it starts. That last test fails for the old conjugate convention. Full suite: 121 passed.
+  Note for G3.2: PhenomB must use the same `exp(-i ...)` convention, and its TaylorF2-matching check (G3.2
+  acceptance) can now rely on this function.
+- 2026-10-25: Low-credit checkpoint during G3.1. Added `.qs.gw.taylorF2` with leading-order SPA amplitude,
+  inclination polarizations, ISCO cutoff, nonspinning phase through 3.5PN, and the leading 1.5PN aligned-spin
+  beta term, plus `.qs.gw.newtonianTime`. Low-frequency phase-slope, inverse-distance amplitude, signed-spin,
+  and cutoff tests pass; full suite: 117 passed. **G3.1 remains unticked:** higher-order spin terms are not
+  implemented or cross-checked, and the waveform is not yet ready for G3.2/G3.4. Resume by verifying the
+  PN coefficient convention against a primary source/LALSuite and complete the spin terms before ticking.
 - 2026-10-25: G2.4 complete. Added PSD-normalized circular frequency-domain matched filtering. A known
   template injected at target SNR 12 was recovered near 12 at the expected circular offset; noise-only SNR
   had unit variance and maximum below 5. Full suite: 115 passed.
