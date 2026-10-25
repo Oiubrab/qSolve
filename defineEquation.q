@@ -194,17 +194,23 @@
  }
 
 / train model m on data (`X`Y and optionally `Xval`Yval) with options merged over .qs.defaults
+/ instead of X and Y, data may hold gen, a function of the epoch number (from 1) returning `X`Y: each epoch then
+/ trains on freshly generated rows (e.g. new noise and injections), while Xval and Yval stay fixed
 / returns `model`history`bestEpoch, history being one row per epoch run
 .qs.train:{[m;data;opts]
     o:.qs.defaults,opts;
-    m:.qs.check m; X:"f"$data`X; Y:"f"$data`Y;
-    .qs.checkTrain[m;X;Y;o];
+    m:.qs.check m;
     if[not null o`seed; system "S ",string o`seed];
+    gen:`gen in key data;
+    b:$[gen; data[`gen] 1; data];
+    X:"f"$b`X; Y:"f"$b`Y;
+    .qs.checkTrain[m;X;Y;o];
     val:all `Xval`Yval in key data;
     s:`model`state`history`best`bestLoss`bestEpoch`wait`stop!(m;.qs.opt.init[o`optimiser] `weight`bias#m;();m;0w;0N;0;0b);
     s:{[o;X;Y;data;val;s;e]
         if[s`stop; :s];
         t0:.z.p; lr:.qs.schedule[o`schedule][o;e];
+        if[(`gen in key data) and e>1; b:data[`gen] e; X:"f"$b`X; Y:"f"$b`Y];
         s:.qs.epoch[@[o;`lr;:;lr];X;Y;s];
         tr:.qs.evaluate[s`model;X;Y;o`loss];
         va:$[val; .qs.evaluate[s`model;data`Xval;data`Yval;o`loss]; `loss`acc!0n 0n];

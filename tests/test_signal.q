@@ -177,3 +177,9 @@
    .t.near[avg (snr*snr);1f;0.3];
     .t.ok[max abs snr<5;"noise-only maximum SNR ",string max abs snr];
  }];
+/ the vectorised interpolation matches the point-by-point one, including outside the source range and at the
+/ source points themselves
+.t.add[`signal_interpolate_vectorised;{
+    system "S 3"; xs:asc 0f,100?50f; ys:(count xs)?1f; tf:-5f,(1000?60f),0 50f,xs;
+    .t.near[.qs.sig.interpolate[xs;ys;tf];.qs.sig.interpolate1[xs;ys] each tf;1e-12];
+ }];

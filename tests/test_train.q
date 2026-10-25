@@ -115,3 +115,19 @@
     .t.eq[count .t.seen;6];
     .t.eq[.t.seen;r`history];
  }];
+
+/ G4.4: training on data generated afresh each epoch, with a fixed validation set
+.t.add[`train_generator;{
+    .t.calls:();
+    / noisy XOR: every epoch draws new jittered copies of the four points
+    gen:{[e] .t.calls,:e; n:64; b:n?0 1; c:n?0 1; `X`Y!(flip ("f"$b;"f"$c)+0.1*.qs.data.normal each 2#n;enlist each "f"$b<>c)};
+    d:`gen`Xval`Yval!(gen;.t.bits;enlist each 0 1 1 0f);
+    o:`epochs`batch`lr`loss`optimiser`verbose!(40;16;0.05;`bce;`adam;0);
+    r:.qs.train[.qs.init[2;8 1;`tanh`sigmoid;1];d;o];
+    .t.eq[.t.calls;1+til 40];
+    .t.eq[count r`history;40];
+    .t.eq[last[r`history]`valAcc;1f];
+    / seeded runs are reproducible, generator included
+    .t.calls:(); r2:.qs.train[.qs.init[2;8 1;`tanh`sigmoid;1];d;o];
+    .t.eq[r2`model;r`model];
+ }];

@@ -145,9 +145,13 @@
 .qs.sig.interpolate:{[sourceFreq;sourceValue;targetFreq]
     if[not count[sourceFreq]=count sourceValue; '"interpolation inputs must have equal lengths"];
     if[not 1<count sourceFreq; '"interpolation needs at least two source points"];
-    .qs.sig.interpolate1[sourceFreq;sourceValue] each targetFreq
+    / vectorised with bin (sourceFreq ascending): the left neighbour of each target, clamped so targets outside
+    / the source range take the end values, as interpolate1 does point by point
+    i:0|(count[sourceFreq]-2)&sourceFreq bin targetFreq;
+    left:sourceFreq i; right:sourceFreq i+1;
+    fraction:0f|1f&(targetFreq-left)%right-left;
+    sourceValue[i]+fraction*sourceValue[i+1]-sourceValue i
  }
-
 .qs.sig.asdOnGrid:{[asd;freq]
     if[not all `freq`asd in key asd; '"ASD needs freq and asd vectors"];
     .qs.sig.interpolate[asd[`freq];asd[`asd];freq]

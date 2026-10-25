@@ -30,6 +30,10 @@
         last snr,last pAstro,last jsonurl by name from t
  }
 
+/ where gravitational-wave data lives: data/gw under .qs.data.dir (data.q's setting, relative to the working
+/ directory unless a script such as dashboard.q sets it)
+.qs.gw.dataDir:{[] $[`dir in key `.qs.data; .qs.data.dir; "data"],"/gw"}
+
 / Load the cached catalogue, downloading it once when absent.
 .qs.gw.events:{[]
     file:`:data/gw/allevents.json;
@@ -324,13 +328,144 @@
         psd:.qs.sig.welch[c;r;4*r;2*r];
         w:.qs.sig.whiten[c*.qs.sig.tukey[count c;0.1];r;`freq`asd!(psd`freq;sqrt psd`psd)];
         enlist `start`w`psd!(s;"e"$w m+til (count w)-2*m;psd)
-    }[x;rate;o;len] each starts;
+    }[x;rate;o;len] peach starts;
     t:raze one;
     if[not count t; :([] gps:`float$(); w:(); psd:())];
     gps:strain[`gps]+(t[`start]%rate)+o`margin;
     span:o[`chunk]-2*o`margin;
     far:{[avoid;g;guard;span] not any (avoid>=g-guard)&avoid<=g+span+guard}[avoid;;o`guard;span] each gps;
     select from ([] gps; w:t`w; psd:t`psd) where far
+ }
+
+/ an event's noise for both detectors (its 4096 s files under data/gw/strain/<event>/), avoiding every catalogued
+/ event in the stretch, keeping only times both detectors have; returns a table event, det, gps, w, psd
+.qs.gw.noiseEvent:{[event;o]
+    dir:.qs.gw.dataDir[],"/strain/",string event;
+    / (like rejects "*-4096-*.txt.gz" with nyi: two wildcards and more text after them, so match the parts)
+    f:key hsym `$dir; files:f where (f like "*-4096-*") and f like "*.txt.gz";
+    if[not 2=count files; '"need the H1 and L1 4096 s files for ",string event];
+    ev:.qs.gw.events[];
+    one:{[dir;ev;o;file]
+        s:.qs.gw.strain hsym `$dir,"/",string file;
+        span:"f"$s[`gps]+0,(count s`h)%s`rate;
+        avoid:exec gps from ev where gps within span;
+        t:.qs.gw.noiseChunks[s;avoid;o];
+        update det:`$2#string file from t}[dir;ev;o];
+    t:raze one each files;
+    both:exec gps from (select n:count i by gps from t) where n=2;
+    `event`det`gps xcols update event:event from select from t where gps in both
+ }
+
+/ build and save the noise library: one file per event in data/gw/noise/, returning a summary per event
+.qs.gw.buildNoise:{[events;o]
+    {[o;e]
+        t0:.z.p; t:.qs.gw.noiseEvent[e;o];
+        (hsym `$.qs.gw.dataDir[],"/noise/",string e) set t;
+        w:"f"$raze t`w;
+        / seconds of coincident noise (each chunk is one detector, so half the rows per detector)
+        `event`split`chunks`seconds`variance`kurtosis`maxAbs`buildSeconds!(e;.qs.gw.noiseSplit e;count t;
+            ((count t) div 2)*(.qs.gw.noiseDefaults,o)[`chunk]-2*(.qs.gw.noiseDefaults,o)`margin;avg w*w;
+            (avg w xexp 4)%(avg w*w) xexp 2;max abs w;1e-9*.z.p-t0)}[o] each events
+ }
+
+.qs.gw.loadNoise:{[event] get hsym `$.qs.gw.dataDir[],"/noise/",string event}
+
+/ injections (G4.2). Parameters are drawn per injection; the waveform is made in the frequency domain on a
+/ buffer long enough for the lightest systems, projected onto H1 and L1 (antenna patterns and delays), divided
+/ by each detector's ASD (that of the noise chunk it goes into) and inverse-FFT'd once: whitening is linear, so
+/ this equals whitening the strain, and the whitened signal's sum of squares is its optimal SNR squared.
+.qs.gw.injectDefaults:`window`buffer`flow`mass`spin`snr`merger!(1;8;20;10 80f;-0.8 0.8;5 30f;0.6 0.9)
+
+/ n random injection parameter sets: component masses uniform in mass (m1 >= m2), aligned spins uniform in spin,
+/ isotropic sky and orientation, uniform polarisation and phase, network SNR uniform in snr, and the merger's
+/ position in the window as a fraction, uniform in merger
+.qs.gw.drawParams:{[n;o]
+    o:.qs.gw.injectDefaults,o;
+    a:o[`mass;0]+n?o[`mass;1]-o[`mass;0]; b:o[`mass;0]+n?o[`mass;1]-o[`mass;0];
+    u:{[o;n;r] r[0]+n?r[1]-r[0]}[o;n];
+    ([] m1:a|b; m2:a&b; chi1:u o`spin; chi2:u o`spin; ra:n?2*.qs.sig.pi; dec:asin -1+n?2f; psi:n?.qs.sig.pi;
+        inclination:acos -1+n?2f; phase:n?2*.qs.sig.pi; snr:u o`snr; merger:u o`merger)
+ }
+
+/ the whitened signal of one parameter set in both detectors over the buffer, for a pair of noise PSDs at a GPS
+/ time: `H1`L1 time series (unit-variance-noise units), each detector's optimal SNR and the merger's sample
+.qs.gw.whitenedSignal:{[p;psds;gps;o]
+    o:.qs.gw.injectDefaults,o;
+    rate:.qs.gw.noiseDefaults`rate; n:rate*o`buffer; df:rate%n; f:df*til 1+n div 2;
+    w:.qs.gw.phenomB[f where f>=o`flow;p`m1;p`m2;p`chi1`chi2;400;p`inclination;(0f;p`phase)];
+    bins:"j"$w[`freq]%df;
+    one:{[w;f;bins;rate;p;gps;det;psd]
+        pr:.qs.gw.project[w;det;p`ra;p`dec;p`psi;gps];
+        asd:sqrt .qs.sig.interpolate[psd`freq;psd`psd;f bins];
+        / the DFT of the strain is rate times its continuous transform; whiten as .qs.sig.whiten does
+        scale:rate*sqrt[2%rate]%asd;
+        .qs.sig.irfft (@[(count f)#0f;bins;:;scale*pr[`strain;0]];@[(count f)#0f;bins;:;scale*pr[`strain;1]])
+    }[w;f;bins;rate;p;gps];
+    h:`H1`L1!one'[`H1`L1;psds];
+    snrs:{sqrt sum x*x} each h;
+    `h`snr`peak!(h;snrs;first idesc (h[`H1]*h`H1)+h[`L1]*h`L1)
+ }
+
+/ one training window from a noise library (rows for both detectors at the same times, as .qs.gw.loadNoise) and
+/ its pairs (.qs.gw.pairs), with a signal injected at parameters p, or none when p is empty. Returns `x (H1 then
+/ L1, as one vector) and, for signals, the network SNR over the whole signal and inside the window
+.qs.gw.sample:{[lib;pairs;p;o]
+    o:.qs.gw.injectDefaults,o;
+    rate:.qs.gw.noiseDefaults`rate; len:rate*o`window;
+    rows:pairs first 1?count pairs;
+    span:count lib[rows 0;`w];
+    start:first 1?1+span-len;
+    noise:{[lib;start;len;r] "f"$lib[r;`w] start+til len}[lib;start;len] each rows;
+    if[not count p; :`x`snr`snrWindow!(raze noise;0n;0n)];
+    s:.qs.gw.whitenedSignal[p;lib[rows;`psd];lib[rows 0;`gps];o];
+    scale:p[`snr]%sqrt sum s[`snr] xexp 2;
+    / start the window so the merger falls at the requested fraction of it (the buffer is circular)
+    n:count s[`h;`H1];
+    idx:(s[`peak]+(til len)-"j"$p[`merger]*len) mod n;
+    sig:{[s;idx;scale;d] scale*s[`h;d] idx}[s;idx;scale] each `H1`L1;
+    `x`snr`snrWindow!(raze noise+sig;p`snr;sqrt sum {x$x} each sig)
+ }
+
+/ the coincident chunk pairs of a library: for each GPS time present in both detectors, its (H1 row; L1 row)
+.qs.gw.pairs:{[lib]
+    g:exec i by gps from select gps,det from lib;
+    {[lib;r] r iasc lib[r;`det]}[lib] each g where 2=count each g
+ }
+
+/ glitches (G4.3): a sine-Gaussian exp(-(t-t0)^2/tau^2) sin(2 pi f0 (t-t0) + phase), tau = Q/(2 pi f0), in one
+/ detector only, scaled to an SNR in whitened units (its sum of squares). "blip" glitches are short, broadband
+/ (Q 1-3); "sineGaussian" ones ring longer (Q 4-20). Frequencies log-uniform in freq, SNR uniform in snr
+.qs.gw.glitchDefaults:`freq`snr`blipQ`sgQ!(30 500f;5 40f;1 3f;4 20f)
+.qs.gw.glitch:{[len;rate;o]
+    o:.qs.gw.glitchDefaults,o;
+    blip:first 1?01b;
+    q:{[r] r[0]+first 1?r[1]-r 0} o[$[blip;`blipQ;`sgQ]];
+    f0:exp {[r] r[0]+first 1?r[1]-r 0} log o`freq;
+    tau:q%2*.qs.sig.pi*f0;
+    t:(til len)%rate; t0:first 0.1+1?0.8*len%rate;
+    g:(exp neg ((t-t0)*(t-t0))%tau*tau)*sin (first 1?2*.qs.sig.pi)+2*.qs.sig.pi*f0*t-t0;
+    snr:{[r] r[0]+first 1?r[1]-r 0} o`snr;
+    `g`det`snr`f0`q`t0`kind!(g*snr%sqrt g$g;first 1?`H1`L1;snr;f0;q;t0;$[blip;`blip;`sineGaussian])
+ }
+
+/ a batch of n windows from a library for training: a share sig of them with an injected chirp (label 1), and of
+/ the rest a share glitchy with a glitch in one detector (label 0), the remainder clean noise (label 0).
+/ Returns `X`Y`meta, meta holding each row's kind and SNRs. Signals are made in parallel (peach)
+.qs.gw.batch:{[lib;pairs;n;o]
+    o:(`signal`glitchy!(0.5;0.25)),o;
+    ns:"j"$n*o`signal; ng:"j"$(n-ns)*o`glitchy; nn:n-ns+ng;
+    params:.qs.gw.drawParams[ns;o];
+    rate:.qs.gw.noiseDefaults`rate; len:rate*(.qs.gw.injectDefaults,o)`window;
+    sig:{[lib;pairs;o;p] .qs.gw.sample[lib;pairs;p;o]}[lib;pairs;o] peach params;
+    clean:{[lib;pairs;o;k] .qs.gw.sample[lib;pairs;()!();o]}[lib;pairs;o] each til nn+ng;
+    gl:{[len;rate;o;c] g:.qs.gw.glitch[len;rate;o]; x:c`x; off:$[`H1=g`det;0;len]; x[off+til len]+:g`g;
+        `x`snr`kind!(x;g`snr;g`kind)}[len;rate;o] each ng#clean;
+    rows:(sig@\:`x),(nn#clean@\:`x),gl@\:`x;
+    / (meta is a keyword, so the row descriptions are called info here)
+    info:([] kind:(ns#`signal),(nn#`noise),gl@\:`kind; snr:(sig@\:`snr),(nn#0n),gl@\:`snr;
+        snrWindow:(sig@\:`snrWindow),(nn+ng)#0n);
+    order:neg[n]?n;
+    `X`Y`meta`params!(rows order;enlist each "f"$order<ns;info order;params)
  }
 
 / Newtonian stationary-phase time-to-coalescence for an inspiral chirp mass in solar masses.

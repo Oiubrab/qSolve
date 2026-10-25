@@ -21,12 +21,12 @@ one-letter string lists) will come up.
   without asking.
 - Keep tests offline: anything needing downloaded data skips itself when the data is missing (`.t.skip`).
 
-**Current status (2026-10-25):** stages G1, G2 and G3 are complete, including the G3.4 gate: our pure-q
-PhenomB template finds GW150914 in the real H1 and L1 data at the published SNRs, with L1 leading H1 by 7 ms.
-G4.1 (noise library, needs the ~2 GB of 4096 s files) is next. The owner chose
-pure-q waveforms and the plan's default download budget, and asked to include binary neutron stars (a separate
-1–3 M☉ track, 256 s windows at 2048 Hz, its own model) and an LSTM/GRU. Reference sources for waveform
-coefficients: LALSuite's `lalsimulation/lib` on git.ligo.org (raw files fetch without a login).
+**Current status (2026-10-25):** stages G1–G4 are complete: the GW150914 gate passes (G3.4), and the
+noise library (6 events, about 11 hours of coincident H1/L1 noise), injections, glitches and training on
+generated data are built and tested. G5.1 (MLP baseline) is next. The owner chose pure-q waveforms and the
+plan's default download budget, and asked to include binary neutron stars (a separate 1–3 M☉ track, 256 s
+windows at 2048 Hz, its own model) and an LSTM/GRU. Reference sources for waveform coefficients: LALSuite's
+`lalsimulation/lib` and `lal/lib` on git.ligo.org (raw files fetch without a login).
 
 ---
 
@@ -192,18 +192,18 @@ long-duration signals (see scope).
 
 ### G4 — Training data
 
-- [ ] **G4.1 Noise library.** Whiten each noise event's 4096 s files in chunks (local PSD per chunk), cut out
+- [x] **G4.1 Noise library.** Whiten each noise event's 4096 s files in chunks (local PSD per chunk), cut out
   ±8 s around the event itself, drop chunks with data-quality gaps, and save the whitened 2048 Hz streams with
   their PSDs per detector. Split events into train, validation and test (G-D9).
-- [ ] **G4.2 Injections.** Draw parameters (masses 10–80 M☉, aligned spins, isotropic sky and orientation,
+- [x] **G4.2 Injections.** Draw parameters (masses 10–80 M☉, aligned spins, isotropic sky and orientation,
   random polarisation and phase), generate h+ and h×, project onto H1 and L1, whiten with the noise chunk's
   PSD, scale to a target network SNR (uniform in a configurable range, e.g. 5–30), place the merger at a
   random time in the window (e.g. 0.6–0.9 s), and add to a noise window from both detectors at the same time.
   *Accept:* the measured optimal SNR of each injection matches its target to 1%; the merger lands where
   asked; H1–L1 offsets stay within ±10 ms.
-- [ ] **G4.3 Glitches.** Synthetic sine-Gaussians and short "blips" in one detector at a time, as labelled
+- [x] **G4.3 Glitches.** Synthetic sine-Gaussians and short "blips" in one detector at a time, as labelled
   negatives (the thesis's Gaussian glitches, extended); real glitches arrive anyway through real noise.
-- [ ] **G4.4 Training on generated data.** qSolve core: `.qs.train` accepts a generator (a function of the
+- [x] **G4.4 Training on generated data.** qSolve core: `.qs.train` accepts a generator (a function of the
   epoch returning `` `X`Y ``) with a fixed validation set, so every epoch sees fresh noise windows and
   injections. *Accept:* a test shows a generator is called once per epoch, the validation set stays fixed,
   and seeded runs are reproducible.
@@ -310,6 +310,36 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: **Stage G4 complete.**
+  - **G4.1 noise library.** `scripts/fetch_gw.sh` downloaded the six events' 4096 s H1/L1 files (1.8 GB).
+    `.qs.gw.noiseEvent` / `buildNoise` / `loadNoise`: per detector, 64 s chunks at 2048 Hz (resampled), own Welch
+    PSD, whitened, middle 52 s kept, chunks with NaN or within 8 s of any catalogued event dropped, only times
+    both detectors have; saved to `data/gw/noise/<event>` (375 MB, reals). Build: 5 min 47 s with `-s 4` (chunks
+    in parallel with `peach`). Coverage of coincident noise: GW151226 (train) 2028 s, GW170104 (train) 4004 s,
+    GW190412 (train) 2704 s, GW200322 (train) 4004 s, GW170814 (validation) 4004 s, GW150914 (test) 4004 s;
+    GW151226's H1 file is 47% NaN. Whitened variance 0.97-0.98 everywhere; median chunk kurtosis 3.00-3.01
+    (Gaussian), but real glitches above 20 sigma in 0-2 chunks of the O1/O2 events and 8-9 of the O3 ones (up to
+    238 sigma in GW190412). They are kept as realistic hard negatives. Note: the test noise (GW150914, O1) is
+    cleaner than O3, so false-alarm rates measured on it will flatter performance on O3 data; worth adding an O3
+    test event to the split later. Splits (`.qs.gw.noiseSplit`): GW150914 is test, so its own 32 s test window's
+    surroundings never train.
+  - **G4.2 injections.** `.qs.gw.drawParams` (masses 10-80, aligned spins +-0.8, isotropic sky and orientation,
+    network SNR and merger position ranges), `whitenedSignal` (PhenomB on an 8 s buffer, projected, divided by
+    the chunk's ASD, one inverse FFT per detector: whitening is linear), `sample` (window with the merger at the
+    requested fraction, measured from the whitened peak, since tc isn't the peak), `pairs`. Checks: the whitened
+    signal's SNR equals the textbook `4 int |h|^2/S df` to 1%; the merger lands on the requested sample; H1/L1
+    peaks within the light travel time; **into real GW170814 noise, 200 injections at SNR 15 are recovered by the
+    exact template with error +0.01 +- 1.08**, as for ideal unit-variance noise. 12 ms per injection.
+  - **G4.3 glitches.** `.qs.gw.glitch`: sine-Gaussians (Q 4-20) and blips (Q 1-3), 30-500 Hz log-uniform, SNR
+    5-40, one detector only. `.qs.gw.batch`: signals (default half, made with `peach`), clean noise and glitchy
+    noise (default a quarter of the negatives), shuffled, with a `meta` table of kinds and SNRs.
+  - **G4.4 generated data.** `.qs.train` accepts `gen` (a function of the epoch returning `X`Y`), with fixed
+    `Xval`Yval`; a test trains noisy XOR from a generator, checks one call per epoch and seeded reproducibility.
+  - Also: `.qs.sig.interpolate` vectorised with `bin` (79 ms -> 1.2 ms for an 8 s grid; identical results, the
+    old point-by-point version kept as the test's reference). Gotchas: `like` rejects patterns with two `*` and
+    text after them (`nyi`); `meta`, `get`, `sv` are keywords; `0b 1b` is not a boolean list (use `01b`); a
+    trailing backtick in a shell command made zsh drop the whole command silently once (an edit never ran).
+  Full suite: 140 passed.
 - 2026-10-25: **Bug fix in `.qs.sig.tukey` (from G2.2), found while building G4.1.** Right-to-left precedence made
   `2*i%(alpha*(n-1))-1` mean `2*(i%(alpha*(n-1)-1))`, so the window started at 1, dipped to about 0 at the end of
   its rise and jumped back to 1: a notch rather than a taper. The G2.2 test only checked alpha 0 and 1 and symmetry,

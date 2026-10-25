@@ -294,6 +294,115 @@
     .t.near[(avg p[`psd] band)*512%2;1f;0.1];
  }];
 
+/ the built noise library (G4.1): both detectors at the same times, the expected chunk length, whitened to unit
+/ variance, roughly Gaussian (glitches allowed), and never within the guard of the event itself
+.t.add[`gw_noise_library;{
+    events:key .qs.gw.noiseSplit;
+    files:{.t.path "data/gw/noise/",string x} each events;
+    if[any ()~/:key each files; .t.skip "build it with .qs.gw.buildNoise[key .qs.gw.noiseSplit;()!()]"];
+    o:.qs.gw.noiseDefaults; span:o[`chunk]-2*o`margin;
+    {[o;span;e]
+        t:.qs.gw.loadNoise e;
+        .t.ok[0<count t;"no noise for ",string e];
+        .t.eq[asc distinct t`det;`H1`L1];
+        .t.eq[exec count i by det from t;`H1`L1!2#(count t) div 2];
+        .t.eq[asc exec gps from t where det=`H1;asc exec gps from t where det=`L1];
+        .t.eq[distinct count each t`w;enlist o[`rate]*span];
+        w:"f"$raze t`w;
+        .t.ok[(avg w*w) within 0.9 1.1;(string e)," variance ",string avg w*w];
+        / real noise has loud glitches (O3 especially: up to ~240 sigma in a few chunks), so only the typical chunk
+        / is required to be Gaussian
+        k:{w:"f"$x; (avg w xexp 4)%(avg w*w) xexp 2} each t`w;
+        .t.ok[(med k) within 2.9 3.2;(string e)," median chunk kurtosis ",string med k];
+    }[o;span] each events;
+    g:.qs.gw.loadNoise`GW150914;
+    .t.ok[not any ((g`gps)<=1126259462.4+o`guard)&((g`gps)+span)>=1126259462.4-o`guard;"GW150914 itself is in the library"];
+ }];
+
+/ a small synthetic noise library: white unit-variance noise at the library rate for both detectors
+.t.fakeLib:{[chunks;seconds]
+    rate:.qs.gw.noiseDefaults`rate; system "S 21";
+    psd:`freq`psd!(rate*(til 1+2*rate)%4*rate;(1+2*rate)#2%rate);
+    g:1126259000f+60*til chunks;
+    ([] event:(2*chunks)#`fake; det:raze chunks#enlist `H1`L1; gps:raze 2#'g;
+        w:{"e"$.qs.data.normal x}each (2*chunks)#rate*seconds; psd:(2*chunks)#enlist psd)
+ }
+
+.t.add[`gw_inject_params;{
+    system "S 3"; p:.qs.gw.drawParams[2000;()!()];
+    .t.ok[all p[`m1]>=p`m2;"m1 should be the heavier"];
+    .t.ok[all (p[`m1],p`m2) within 10 80;"masses out of range"];
+    .t.ok[all (p`snr) within 5 30;"SNR out of range"];
+    .t.ok[all (p`merger) within 0.6 0.9;"merger position out of range"];
+    / isotropic: cos(inclination) and sin(dec) uniform, so their means are near 0
+    .t.near[(avg cos p`inclination;avg sin p`dec);0 0f;0.05];
+ }];
+
+/ the whitened signal's sum of squares equals the optimal SNR from the textbook formula 4 int |h|^2/S df
+/ (white noise: S = 2/rate), so the whole FFT and whitening chain is normalised right
+.t.add[`gw_injection_snr_normalised;{
+    rate:.qs.gw.noiseDefaults`rate; o:.qs.gw.injectDefaults;
+    psd:`freq`psd!(rate*(til 1+2*rate)%4*rate;(1+2*rate)#2%rate);
+    p:`m1`m2`chi1`chi2`ra`dec`psi`inclination`phase!(30;25;0.2;-0.1;1.1;0.4;0.3;0.6;0.2);
+    s:.qs.gw.whitenedSignal[p;(psd;psd);1126259462f;()!()];
+    n:rate*o`buffer; df:rate%n; f:df*til 1+n div 2;
+    w:.qs.gw.phenomB[f where f>=20;30;25;0.2 -0.1;400;0.6;(0f;0.2)];
+    analytic:{[w;df;rate;d] pr:.qs.gw.project[w;d;1.1;0.4;0.3;1126259462f]; sqrt 4*df*sum ((pr[`strain;0] xexp 2)+pr[`strain;1] xexp 2)%2%rate}[w;df;rate] each `H1`L1;
+    .t.near[(value s`snr)%analytic;1 1f;0.01];
+ }];
+
+.t.add[`gw_injection_window;{
+    lib:.t.fakeLib[3;30]; pairs:.qs.gw.pairs lib;
+    .t.eq[count pairs;3];
+    .t.eq[lib[;`det] each pairs;3#enlist `H1`L1];
+    rate:.qs.gw.noiseDefaults`rate;
+    / noise only
+    nz:.qs.gw.sample[lib;pairs;()!();()!()];
+    .t.eq[count nz`x;2*rate];
+    .t.ok[null nz`snr;"noise-only samples have no SNR"];
+    / a signal in silent noise: the merger lands at the requested sample, the SNR inside the window is at most the
+    / whole signal's, and the two detectors' peaks are within the light travel time
+    quiet:update w:{0e*x} each w from lib;
+    p:`m1`m2`chi1`chi2`ra`dec`psi`inclination`phase`snr`merger!(36f;29f;0f;0f;1.1;0.4;0.3;0.6;0.2;20f;0.75);
+    r:.qs.gw.sample[quiet;pairs;p;()!()];
+    h:rate#r`x; l:rate _r`x;
+    .t.eq[first idesc (h*h)+l*l;"j"$0.75*rate];
+    .t.ok[r[`snrWindow]<=r[`snr]+1e-9;"window SNR above the total"];
+    .t.near[r`snr;20f;1e-9];
+    .t.ok[(r`snrWindow)>15;"most of a 36+29 merger's SNR should be inside the window: ",string r`snrWindow];
+    .t.ok[(abs (first idesc abs h)-first idesc abs l)<=1+rate*.qs.gw.lightTime[`H1;`L1];"detector peaks too far apart"];
+    / with noise, the injected window minus the noise-only one at the same place would be the signal; here just
+    / check the variance rises by about the signal's energy per sample
+    .t.ok[(avg r[`x] xexp 2)>0;"signal missing"];
+ }];
+
+.t.add[`gw_glitches;{
+    system "S 8"; rate:.qs.gw.noiseDefaults`rate;
+    gs:{[rate;k] .qs.gw.glitch[rate;rate;()!()]}[rate] each til 200;
+    .t.near[{sqrt x$x} each gs@\:`g;gs@\:`snr;1e-9];
+    .t.ok[all (gs@\:`f0) within 30 500;"glitch frequency out of range"];
+    .t.ok[all (gs@\:`det) in `H1`L1;"glitches belong to one detector"];
+    .t.ok[(count distinct gs@\:`kind)=2;"both kinds should appear"];
+    / the glitch peaks near t0 (within a cycle) and its power sits near f0
+    one:{[rate;g] pk:(first idesc abs g`g)%rate; .t.ok[(abs pk-g`t0)<=1.5%g`f0;"glitch peak away from t0"]}[rate] each gs;
+    g:first gs where 10<gs@\:`q;
+    sp:.qs.sig.rfft g`g; f:rate*(til count sp 0)%count g`g;
+    .t.near[f first idesc (sp[0] xexp 2)+sp[1] xexp 2;g`f0;3f];
+ }];
+
+.t.add[`gw_batch;{
+    lib:.t.fakeLib[3;30]; pairs:.qs.gw.pairs lib; system "S 4";
+    b:.qs.gw.batch[lib;pairs;40;`snr`buffer!(10 20f;4)];
+    .t.eq[count b`X;40];
+    .t.eq[distinct count each b`X;enlist 2*.qs.gw.noiseDefaults`rate];
+    .t.eq[sum b`Y;enlist 20f];
+    k:exec count i by kind from b`meta;
+    .t.eq[k`signal`noise;20 15];
+    .t.eq[sum k`blip`sineGaussian;5];
+    .t.eq[`signal=b[`meta]`kind;1f=first each b`Y];
+    .t.ok[all (exec snr from b[`meta] where kind=`signal) within 10 20;"signal SNRs out of range"];
+ }];
+
 .t.add[`gw_catalogue_cached;{
      file:.t.path "data/gw/allevents.json";
      if[()~key file; .t.skip "fetch the GWOSC catalogue with .qs.gw.events[]"];
