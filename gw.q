@@ -468,6 +468,30 @@
     `X`Y`meta`params!(rows order;enlist each "f"$order<ns;info order;params)
  }
 
+/ scanning real data with a trained detector (G7.1): whiten each detector's strain as the noise library does
+/ (resampled to the library rate, its own Welch PSD, a Tukey taper, only the middle kept), then score 1 s windows
+/ stepping by `step` seconds. Returns a table of window start time (GPS), the time a merger would have if it sat
+/ at the middle of the trained range (`merger` fraction of the window), and the score
+.qs.gw.whitenStrain:{[strain;margin]
+    r:.qs.gw.noiseDefaults`rate; x:strain`h;
+    x:$[strain[`rate]=r; x; .qs.sig.resample[x;strain`rate;r]];
+    psd:.qs.sig.welch[x;r;4*r;2*r];
+    w:.qs.sig.whiten[x*.qs.sig.tukey[count x;0.1];r;`freq`asd!(psd`freq;sqrt psd`psd)];
+    m:r*margin;
+    `gps`w!(strain[`gps]+margin;w m+til (count w)-2*m)
+ }
+.qs.gw.scan:{[m;h1;l1;step;o]
+    o:(`margin`merger!(6;0.75)),o;
+    r:.qs.gw.noiseDefaults`rate; len:r*(.qs.gw.injectDefaults,o)`window;
+    a:.qs.gw.whitenStrain[h1;o`margin]; b:.qs.gw.whitenStrain[l1;o`margin];
+    if[not a[`gps]=b`gps; '"H1 and L1 strain must start at the same GPS time"];
+    n:min count each (a`w;b`w);
+    starts:("j"$step*r)*til 1+(n-len) div "j"$step*r;
+    X:{[a;b;len;s] (a[`w] s+til len),b[`w] s+til len}[a;b;len] each starts;
+    sc:first each .qs.predict[m;X];
+    ([] start:a[`gps]+starts%r; merger:a[`gps]+(starts%r)+o[`merger]*len%r; score:sc)
+ }
+
 / Newtonian stationary-phase time-to-coalescence for an inspiral chirp mass in solar masses.
 .qs.gw.newtonianTime:{[frequency;chirpMass]
     if[frequency<=0 or chirpMass<=0; '"frequency and chirp mass must be positive"];

@@ -24,8 +24,10 @@ one-letter string lists) will come up.
 **Current status (2026-10-25):** stages G1–G4 are complete: the GW150914 gate passes (G3.4), and the
 noise library (6 events, about 11 hours of coincident H1/L1 noise), injections, glitches and training on
 generated data are built and tested; G5.1 (the MLP baseline) is done and weak, as expected; G5.2 (Conv1D in
-the core) is done; a first CNN run is strong (93% found at SNR 10-15, 99% above 15, at 1% false alarms). Next: G7.1
-(scan the real GW150914 data), then G5.4 (longer runs with early stopping), G6 and the optional G5.3 LSTM/GRU. The owner chose pure-q waveforms and the
+the core) is done; a first CNN run is strong (93% found at SNR 10-15, 99% above 15, at 1% false alarms). **It finds
+GW150914 in the real data** (score 0.9994, 25 ms from the catalogue time, nothing above 0.2 elsewhere). Next: G7.1
+for all test events, G5.4 (longer runs with early stopping), G6 (false-alarm rates from time slides, efficiency
+against the matched filter) and the optional G5.3 LSTM/GRU. The owner chose pure-q waveforms and the
 plan's default download budget, and asked to include binary neutron stars (a separate 1–3 M☉ track, 256 s
 windows at 2048 Hz, its own model) and an LSTM/GRU. Reference sources for waveform coefficients: LALSuite's
 `lalsimulation/lib` and `lal/lib` on git.ligo.org (raw files fetch without a login).
@@ -312,6 +314,14 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: G7.1 started: `.qs.gw.whitenStrain` (resample to 2048 Hz, own Welch PSD, Tukey taper, keep the middle)
+  and `.qs.gw.scan` (1 s windows in steps, scored by a model; reports each window's start and the merger time it
+  implies at 0.75 of the window). **On GW150914's real 32 s data the first CNN (never trained on any data from that
+  hour) scores 0.9994 for the window putting the merger 25 ms from the catalogue time**; all 6 windows above the 1%
+  validation threshold (0.71) lie within 0.16 s of the event; elsewhere in the 20 clean seconds the score is
+  0.01-0.07 with one bump to 0.20. Scan time under a second. Tests `gw_scan_mechanics` (synthetic burst, a stub
+  model) and `gw_cnn_finds_gw150914` (skips without the data or the trained model). G7.1 stays unticked until
+  every in-scope test event is scanned. Full suite: 148 passed.
 - 2026-10-25: **First GW CNN** (`bench/gw_cnn.q`; saved as `models/gw_cnn_1.qsm`, git-ignored). Two input channels
   (whitened H1 and L1, 1 s at 2048 Hz); conv 8x32, 16x16, 32x8 filters (relu, pool 4 each), dense 32 relu, sigmoid:
   35,449 parameters. Adam lr 1e-3, l2 1e-4, batch 128, 20 epochs of 6,000 fresh windows (SNR 8-30, merger 0.6-0.9 s,

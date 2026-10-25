@@ -403,6 +403,40 @@
     .t.ok[all (exec snr from b[`meta] where kind=`signal) within 10 20;"signal SNRs out of range"];
  }];
 
+/ the scanner on synthetic strain: window times line up, and a model whose score is the window's energy finds
+/ the loud stretch
+.t.add[`gw_scan_mechanics;{
+    system "S 12"; rate:4096; n:32*rate;
+    mk:{[rate;n] `gps`rate`h!(1000000000f;rate;1e-21*.qs.data.normal n)}[rate];
+    h:mk n; l:mk n;
+    / a loud 0.2 s burst at 15 s in both detectors
+    burst:(15*rate)+til "j"$0.2*rate;
+    h[`h;burst]+:2e-20*.qs.data.normal count burst; l[`h;burst]+:2e-20*.qs.data.normal count burst;
+    / stand in for the model with each window's energy (a stub .qs.predict), restored afterwards
+    p:.qs.predict; .qs.predict:{[m;X] enlist each {x$x} each X};
+    t:.qs.gw.scan[();h;l;0.25;`margin`merger!(6;0.5)];
+    .qs.predict:p;
+    .t.eq[count t;"j"$1+(20-1)%0.25];
+    .t.near[1_deltas t`start;(-1+count t)#0.25;1e-9];
+    best:t first idesc t`score;
+    / windows that contain the whole burst (15.0-15.2 s) start between 14.2 and 15.0 s
+    .t.ok[((best`start)-1000000000f) within 14.2 15.0;"loudest window starts at ",string (best`start)-1000000000f];
+ }];
+
+/ G7.1 on GW150914 with a trained CNN (models/gw_cnn_1.qsm from bench/gw_cnn.q): the score peaks within 0.2 s of
+/ the event, well above everything more than 1.5 s away
+.t.add[`gw_cnn_finds_gw150914;{
+    mf:.t.path "models/gw_cnn_1.qsm";
+    dir:"data/gw/strain/GW150914/";
+    files:{[dir;det] .t.path dir,det,"-32-1126259447.txt.gz"}[dir] each ("H1";"L1");
+    if[any ()~/:key each mf,files; .t.skip "needs GW150914's 32 s files and models/gw_cnn_1.qsm (q bench/gw_cnn.q -save models/gw_cnn_1.qsm)"];
+    t:.qs.gw.scan[.qs.load mf;.qs.gw.strain files 0;.qs.gw.strain files 1;1%16;()!()];
+    best:t first idesc t`score;
+    .t.ok[0.2>abs best[`merger]-1126259462.4;"best window's merger at ",string best[`merger]-1126259462.4];
+    .t.ok[(best`score)>0.9;"score ",string best`score];
+    .t.ok[0.5>max exec score from t where 1.5<abs merger-1126259462.4;"high scores away from the event"];
+ }];
+
 .t.add[`gw_catalogue_cached;{
      file:.t.path "data/gw/allevents.json";
      if[()~key file; .t.skip "fetch the GWOSC catalogue with .qs.gw.events[]"];
