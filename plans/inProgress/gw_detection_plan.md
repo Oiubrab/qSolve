@@ -314,6 +314,17 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: G7 first pass over real events (`bench/gw_events.q`, `.qs.gw.scanEvent`, about 25 s). `fetch_gw.sh
+  --test-events` got 32 s H1/L1 text files for 43 events (3.4 GB with the noise files; O4 events mostly have no
+  32 s text pair and were skipped). `.qs.gw.confidentBBH[...;10;80;0.9]` with data gives **35 held-out events,
+  all O3 (GWTC-2.1/3)**; GW150914 isn't among them (its catalogue row lacks p_astro) but was checked separately.
+  Preliminary "found" = best score within 0.3 s of the catalogue time above the 1% validation threshold (0.71) and
+  above every window more than 1.5 s away in the same 20 s: **31 of 35**: SNR 8-10 7/9, 10-15 18/20, 15+ 6/6.
+  Missed: GW190408 (0.93 at the event but 0.98 elsewhere), GW191230 (0.68), GW190527 (0.18), GW190916 (0.06).
+  Merger-time offsets within +-0.21 s. **Caveat:** the local background in O3 data is high (0.2-0.98 elsewhere in
+  20 s), so the 0.71 threshold is far from a low false-alarm rate there; and the planned G6.1 background (test
+  noise from GW150914's hour, O1) is cleaner than O3. Next: measure the false-alarm rate in O3 conditions by
+  time-sliding L1 against H1 within each event's own data.
 - 2026-10-25: G7.1 started: `.qs.gw.whitenStrain` (resample to 2048 Hz, own Welch PSD, Tukey taper, keep the middle)
   and `.qs.gw.scan` (1 s windows in steps, scored by a model; reports each window's start and the merger time it
   implies at 0.75 of the window). **On GW150914's real 32 s data the first CNN (never trained on any data from that

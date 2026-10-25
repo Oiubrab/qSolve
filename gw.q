@@ -492,6 +492,24 @@
     ([] start:a[`gps]+starts%r; merger:a[`gps]+(starts%r)+o[`merger]*len%r; score:sc)
  }
 
+/ scan one event's 32 s H1/L1 files (data/gw/strain/<event>/) with model m: the best score within `near` seconds
+/ of the event's GPS time (on the implied merger time) and the best more than `far` seconds away (the local
+/ background in the same data). Events with missing samples in the scanned stretch are reported as gaps
+.qs.gw.scanEvent:{[m;event;gps;o]
+    o:(`step`near`far!(1%16;0.3;1.5)),o;
+    dir:.qs.gw.dataDir[],"/strain/",string event;
+    f:key hsym `$dir; f:f where (f like "*-32-*") and f like "*.txt.gz";
+    hf:f where f like "H1*"; lf:f where f like "L1*";
+    if[not (1=count hf) and 1=count lf; :`event`status!(event;`missing)];
+    h:.qs.gw.strain hsym `$dir,"/",string first hf; l:.qs.gw.strain hsym `$dir,"/",string first lf;
+    if[any null h[`h],l`h; :`event`status!(event;`gap)];
+    t:.qs.gw.scan[m;h;l;o`step;o];
+    near:select from t where (o`near)>=abs merger-gps;
+    away:select from t where (o`far)<abs merger-gps;
+    best:near first idesc near`score;
+    `event`status`score`offset`background!(event;`ok;best`score;best[`merger]-gps;max away`score)
+ }
+
 / Newtonian stationary-phase time-to-coalescence for an inspiral chirp mass in solar masses.
 .qs.gw.newtonianTime:{[frequency;chirpMass]
     if[frequency<=0 or chirpMass<=0; '"frequency and chirp mass must be positive"];
