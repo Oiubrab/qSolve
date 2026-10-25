@@ -23,7 +23,8 @@ one-letter string lists) will come up.
 
 **Current status (2026-10-25):** stages G1–G4 are complete: the GW150914 gate passes (G3.4), and the
 noise library (6 events, about 11 hours of coincident H1/L1 noise), injections, glitches and training on
-generated data are built and tested. G5.1 (MLP baseline) is next. The owner chose pure-q waveforms and the
+generated data are built and tested; G5.1 (the MLP baseline) is done and weak, as expected. G5.2 (Conv1D
+layers in the qSolve core) is next. The owner chose pure-q waveforms and the
 plan's default download budget, and asked to include binary neutron stars (a separate 1–3 M☉ track, 256 s
 windows at 2048 Hz, its own model) and an LSTM/GRU. Reference sources for waveform coefficients: LALSuite's
 `lalsimulation/lib` and `lal/lib` on git.ligo.org (raw files fetch without a login).
@@ -210,7 +211,7 @@ long-duration signals (see scope).
 
 ### G5 — Models
 
-- [ ] **G5.1 MLP baseline.** 2 × 2048 whitened inputs (or 2 × 1024), dense hidden layers in the thesis's spirit,
+- [x] **G5.1 MLP baseline.** 2 × 2048 whitened inputs (or 2 × 1024), dense hidden layers in the thesis's spirit,
   sigmoid output with `bce`. Record speed, memory and validation curves.
 - [ ] **G5.2 Conv1D in the qSolve core.** New layer types: 1-D convolution with channels (H1 and L1 as two
   input channels), max pooling and flatten, mixed with dense layers in one model; forward and backward passes
@@ -310,6 +311,23 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: G5.1 complete. `bench/gw_mlp.q` (options for layers, activation, SNR range, merger range, glitch
+  share, epochs, learning rate, rows per epoch): trains on a fresh `.qs.gw.batch` per epoch from the four training
+  events, scores a fixed 2,000-window batch from GW170814, and reports efficiency by SNR at the threshold giving
+  1% false alarms on validation negatives. Findings:
+  - **tanh hidden units can't learn this at all**, even the easy control (merger fixed at 0.75 s, SNR 30-50, no
+    glitches): validation stays at 50%. The reason is symmetry: a chirp's phase is random, so its sign is too, and a
+    sum of tanh units (odd functions) can't make a sign-blind detector. **ReLU can** (relu(w.x) + relu(-w.x) =
+    |w.x|): the same control reaches 98% validation accuracy and 95-99% efficiency at 1% false alarms.
+    Before suspecting the model, the batch was checked: signal windows carry the expected extra energy (about SNR
+    squared) and labels line up.
+  - **Full task, ReLU 64 hidden (262k parameters), 20 epochs of 6,000 windows, Adam lr 5e-4, l2 1e-3:** validation
+    accuracy 50% -> 68% and still rising; efficiency at 1% false alarms 2% (SNR 5-10), 5% (10-15), 10% (15-20),
+    23% (20-25), 44% (25-30); false alarms from blips 0%, from sine-Gaussians 3%. Training accuracy (on each
+    epoch's own batch after training on it) reached 96%: the MLP memorises rather than generalises, because it
+    must learn the chirp separately at every merger time. That is what G5.2's convolutions address. About 12 s per
+    epoch with `-s 4` (half generating injections), 5 min 45 s in total; memory dominated by the 1.6 GB of
+    loaded noise library plus about 200 MB per batch.
 - 2026-10-25: **Stage G4 complete.**
   - **G4.1 noise library.** `scripts/fetch_gw.sh` downloaded the six events' 4096 s H1/L1 files (1.8 GB).
     `.qs.gw.noiseEvent` / `buildNoise` / `loadNoise`: per detector, 64 s chunks at 2048 Hz (resampled), own Welch
