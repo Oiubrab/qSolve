@@ -1,8 +1,11 @@
 / G7: scan the real data around every in-scope catalogued binary black hole with a trained detector
 /   q bench/gw_events.q -s 4 -q [-model models/gw_cnn_1.qsm] [-threshold 0.71]
 / needs the events' 32 s files: scripts/fetch_gw.sh --test-events
-/ an event counts as found when its best score near the catalogue time is above the threshold and above everything
-/ else in the same 20 s of data; events whose surroundings were training or validation noise are flagged
+/ the false-alarm rate is measured in the events' own (O3) data: L1 time-slid against H1 by 1-19 s in each event's
+/ 20 clean seconds, windows touching either detector's event left out; each event's false-alarm rate is how often
+/ that background produces a trigger scoring at least as high. Also reported: the earlier local criterion (above the
+/ threshold and above everything else in the same 20 s). Events whose surroundings were training or validation
+/ noise are flagged
 .gwe.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f;
 {system "l ",.gwe.root,"/",x} each ("defineEquation.q";"data.q";"signal.q";"gw.q");
 .qs.data.dir:.gwe.root,"/data";
@@ -22,7 +25,15 @@ res:update split:.qs.gw.noiseSplit name from res;
 res:update found:(status=`ok)&(score>thr)&score>background from res;
 show `snr xdesc select name,snr,mass1,mass2,split,status,score,offset,background,found from res;
 -1 "";
+-1 "measuring background by time slides (37 shifts per event)...";
+bg:{[m;e] .qs.gw.slides[m;e`name;e`gps;1+0.5*til 37;()!()]}[m] each select name,gps from ev where name in exec name from res where status=`ok;
+trig:desc raze bg@\:`triggers; hours:(sum bg@\:`seconds)%3600;
+-1 "background: ",(string count trig)," triggers in ",(string hours)," hours";
+show ([] perHour:1 0.2 0.1; threshold:{[trig;hours;r] trig 0|-1+floor r*hours}[trig;hours] each 1 0.2 0.1);
+res:update far:{[trig;hours;sc] $[null sc;0n;(1|sum trig>=sc)%hours]}[trig;hours] each score from res;
+res:update farUpper:{[trig;hours;sc] $[null sc;0n;(sum trig>=sc)%hours]}[trig;hours] each score from res;
+show `snr xdesc select name,snr,mass1,mass2,split,score,offset,farPerHour:farUpper,found1h:farUpper<1,found5h:farUpper<0.2 from res where status=`ok;
 ok:select from res where status=`ok, null split;
 -1 "held-out events scanned: ",(string count ok)," (gaps: ",(string count select from res where status=`gap),")";
-show select events:count i, found:sum found, share:avg found by snrBin:5 xbar snr from ok;
+show select events:count i, localCriterion:sum found, farBelow1h:sum farUpper<1, farBelow5h:sum farUpper<0.2 by snrBin:5 xbar snr from ok;
 \\

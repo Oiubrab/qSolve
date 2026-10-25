@@ -510,6 +510,36 @@
     `event`status`score`offset`background!(event;`ok;best`score;best[`merger]-gps;max away`score)
  }
 
+/ background in an event's own data by time slides (G6.1 in O3-like conditions): L1 is shifted against H1 by each
+/ of `shifts` seconds, circularly within the clean stretch, and every 1 s window is scored; windows touching either
+/ detector's event (within `guard` s) are left out, so only noise remains. Triggers are local maxima of the score
+/ at least `sep` seconds apart. Returns the trigger scores and the seconds of background searched
+.qs.gw.peaks:{[score;w] keep:{[score;w;i] score[i]=max score (0|i-w)+til 1+(2*w)&(count score)-0|i-w}[score;w] each til count score; score where keep}
+.qs.gw.slides:{[m;event;gps;shifts;o]
+    o:(`step`margin`merger`guard`sep!(1%16;6;0.75;1;1)),o;
+    dir:.qs.gw.dataDir[],"/strain/",string event;
+    f:key hsym `$dir; f:f where (f like "*-32-*") and f like "*.txt.gz";
+    hf:f where f like "H1*"; lf:f where f like "L1*";
+    if[not (1=count hf) and 1=count lf; :`triggers`seconds!(`float$();0f)];
+    h:.qs.gw.strain hsym `$dir,"/",string first hf; l:.qs.gw.strain hsym `$dir,"/",string first lf;
+    if[any null h[`h],l`h; :`triggers`seconds!(`float$();0f)];
+    a:.qs.gw.whitenStrain[h;o`margin]; b:.qs.gw.whitenStrain[l;o`margin];
+    r:.qs.gw.noiseDefaults`rate; len:r*(.qs.gw.injectDefaults,o)`window; n:min count each (a`w;b`w);
+    stepN:"j"$o[`step]*r; starts:stepN*til 1+(n-len) div stepN;
+    ev:"j"$r*gps-a`gps;
+    / (q functions take at most 8 parameters, so the fixed values travel in one dictionary)
+    c:`a`b`r`len`n`starts`ev`o`m!(a;b;r;len;n;starts;ev;o;m);
+    one:{[c;k]
+        sh:"j"$k*c`r; len:c`len; n:c`n;
+        / L1 sample j pairs with H1 sample j+sh (mod n): a window is clean if neither detector's span holds the event
+        ok:c[`starts] where {[len;n;ev;g;sh;s] not any (abs ((s,s+sh) mod n)+(len div 2)-ev)<g+len%2}[len;n;c`ev;c[`o;`guard]*c`r;sh] each c`starts;
+        X:{[a;b;len;n;sh;s] (a[`w] s+til len),b[`w] (s+sh+til len) mod n}[c`a;c`b;len;n;sh] each ok;
+        sc:$[count X; first each .qs.predict[c`m;X]; `float$()];
+        `triggers`seconds!(.qs.gw.peaks[sc;"j"$c[`o;`sep]%c[`o;`step]];(count ok)*c[`o;`step])}[c];
+    res:one each shifts;
+    `triggers`seconds!(raze res@\:`triggers;sum res@\:`seconds)
+ }
+
 / Newtonian stationary-phase time-to-coalescence for an inspiral chirp mass in solar masses.
 .qs.gw.newtonianTime:{[frequency;chirpMass]
     if[frequency<=0 or chirpMass<=0; '"frequency and chirp mass must be positive"];

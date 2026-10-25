@@ -25,9 +25,10 @@ one-letter string lists) will come up.
 noise library (6 events, about 11 hours of coincident H1/L1 noise), injections, glitches and training on
 generated data are built and tested; G5.1 (the MLP baseline) is done and weak, as expected; G5.2 (Conv1D in
 the core) is done; a first CNN run is strong (93% found at SNR 10-15, 99% above 15, at 1% false alarms). **It finds
-GW150914 in the real data** (score 0.9994, 25 ms from the catalogue time, nothing above 0.2 elsewhere). Next: G7.1
-for all test events, G5.4 (longer runs with early stopping), G6 (false-alarm rates from time slides, efficiency
-against the matched filter) and the optional G5.3 LSTM/GRU. The owner chose pure-q waveforms and the
+GW150914 in the real data**, and on 35 held-out O3 detections with a false-alarm rate measured by time slides in O3
+data it finds 12 at under 1 false alarm per hour (all 6 with SNR >= 15). Real O3 glitches are what limits it. Next:
+improve the detector against real glitches (see the 2026-10-25 "O3 background" log entry for the options), then
+G5.4, G6.2-G6.3, G7.3 and the optional G5.3 LSTM/GRU. The owner chose pure-q waveforms and the
 plan's default download budget, and asked to include binary neutron stars (a separate 1–3 M☉ track, 256 s
 windows at 2048 Hz, its own model) and an LSTM/GRU. Reference sources for waveform coefficients: LALSuite's
 `lalsimulation/lib` and `lal/lib` on git.ligo.org (raw files fetch without a login).
@@ -314,6 +315,21 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: **O3 background and honest real-event results.** `.qs.gw.slides` slides L1 against H1 within an
+  event's own 20 clean seconds (shifts 1-19 s in 0.5 s steps; windows touching either detector's event left out)
+  and `.qs.gw.peaks` takes local score maxima at least 1 s apart as triggers. Over the 35 events: **4.85 hours of
+  O3 background, 8,338 triggers; the score threshold for 1 false alarm per hour is 0.979, for 1 per 5 hours
+  0.990.** Each event's false-alarm rate = background triggers at least as high / hours. **Found at < 1/hour: 12
+  of 35** (SNR 8-10 1/9, 10-15 5/20, 15-20 3/3, 20+ 3/3); at < 1 per 5 hours: 8 of 35. (The local criterion had
+  said 31.) The loud events are solid; quiet ones drown in O3 glitches, which score near 1 far more often than the
+  synthetic glitches did in validation (the 1% validation threshold was 0.71). 4 min 40 s for the whole run.
+  Options to improve, roughly in order of expected value: (1) rank by the output before the sigmoid (logit), since
+  scores saturate near 1 and the tail can't be ordered; (2) train on more and glitchier O3 noise (add O3 events to
+  the training split; currently 2 of the 4 training events are O3) and with real glitches mined from the noise
+  library as hard negatives; (3) longer training with early stopping (G5.4), the first model was still improving;
+  (4) require consistency between detectors (e.g. score each detector's data separately as well); (5) measure more
+  background (longer stretches around events, or the 4096 s files of O3 test events) so rates below 1/day can be
+  quoted. Also worth adding an O3 event to the test noise split so G6.1's background matches what G7 faces.
 - 2026-10-25: G7 first pass over real events (`bench/gw_events.q`, `.qs.gw.scanEvent`, about 25 s). `fetch_gw.sh
   --test-events` got 32 s H1/L1 text files for 43 events (3.4 GB with the noise files; O4 events mostly have no
   32 s text pair and were skipped). `.qs.gw.confidentBBH[...;10;80;0.9]` with data gives **35 held-out events,
