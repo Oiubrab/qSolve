@@ -310,6 +310,19 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: **Bug fix in `.qs.sig.tukey` (from G2.2), found while building G4.1.** Right-to-left precedence made
+  `2*i%(alpha*(n-1))-1` mean `2*(i%(alpha*(n-1)-1))`, so the window started at 1, dipped to about 0 at the end of
+  its rise and jumped back to 1: a notch rather than a taper. The G2.2 test only checked alpha 0 and 1 and symmetry,
+  all of which the broken window passed; `signal_windows` now checks the shape against the textbook formula.
+  **G3.4 rerun with the fixed taper:** H1 SNR 19.0, L1 13.4, L1 leading by 7.3 ms; background now at most 4.6 (H1)
+  and 3.9 (L1). L1's earlier 7.7 "background" was the broken taper, not the detector; with the fix even a 4 s margin
+  is clean. The gate still passes; the numbers in the G3.4 entry above are superseded by these. Also: the
+  periodogram's window-length check parsed as `count (window=n)` and could never fire (fixed), and the test runner
+  crashed on `-only` matching nothing (now prints "no tests match" and exits 1).
+- 2026-10-25: G4.1 in progress. `.qs.gw.noiseChunks` and `.qs.gw.noiseSplit` added (see G4.1's entry when ticked);
+  synthetic test `gw_noise_chunks` passes. A first version of that test failed because its 300 s of synthetic noise
+  wasn't a power of two: the FFT used to colour it zero-padded to 512 s, so the noise faded within the stream. Use
+  power-of-two lengths for synthetic noise. Downloading the six events' 4096 s files (about 2 GB).
 - 2026-10-25: G3.4 complete: **the gate passes.** New: `.qs.sig.matchedFilterMax` (the template and its
   90-degree-shifted copy, SNR as their magnitude, plus the best phase; `.qs.sig.atan2` moved to `signal.q`),
   `.qs.gw.template` (face-on PhenomB time series with its reference at t=0 and the offset of its peak) and

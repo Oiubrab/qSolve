@@ -263,6 +263,37 @@
     .t.near[abs first best`phase;1f;0.3];
  }];
 
+/ G4.1 on synthetic coloured noise: chunks tile without gaps, whitening gives unit-variance white noise at the
+/ new rate, and chunks with a gap or near an event are dropped
+.t.add[`gw_noise_chunks;{
+    / 256 s: a power-of-two length, so the FFT used to colour the noise doesn't pad it (padding would make the
+    / test noise fade within the stream and stop being stationary)
+    system "S 11"; rate:1024; seconds:256; n:rate*seconds;
+    / coloured noise: white noise with its spectrum shaped (more power at low frequency)
+    sp:.qs.sig.rfft .qs.data.normal n; f:rate*(til count sp 0)%n; shape:1+(30%1+f) xexp 2;
+    x:1e-21*.qs.sig.irfft (shape*sp 0;shape*sp 1);
+    x[(100*rate)+til rate]:0n;
+    strain:`gps`rate`h!(1000000000f;rate;x);
+    o:`rate`chunk`margin`guard!(512;32;4;2);
+    t:.qs.gw.noiseChunks[strain;enlist 1000000200f;o];
+    span:24f;
+    / kept parts start every 24 s; the gap at 100 s and the event at 200 s each knock some out
+    gaps:1_deltas t`gps;
+    .t.ok[all 0=(gaps mod span);"kept parts should start on a 24 s grid"];
+    / the chunks whose 32 s span covers the gap keep 76-100 s and 100-124 s: both must be gone
+    .t.ok[not any (t`gps) in 1000000076 1000000100f;"a chunk containing the gap was kept"];
+    .t.ok[not any ((t`gps)<=1000000202f)&((t`gps)+span)>=1000000198f;"a chunk near the event was kept"];
+    .t.ok[4<=count t;"too few chunks kept: ",string count t];
+    .t.eq[distinct count each t`w;enlist 512*24];
+    .t.eq[type first t`w;8h];
+    / whitened: unit variance and flat in frequency
+    w:"f"$raze t`w;
+    .t.near[avg w*w;1f;0.05];
+    p:.qs.sig.welch[w;512;2048;1024];
+    band:where (p[`freq]>10)&p[`freq]<200;
+    .t.near[(avg p[`psd] band)*512%2;1f;0.1];
+ }];
+
 .t.add[`gw_catalogue_cached;{
      file:.t.path "data/gw/allevents.json";
      if[()~key file; .t.skip "fetch the GWOSC catalogue with .qs.gw.events[]"];

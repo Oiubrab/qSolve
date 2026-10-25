@@ -87,7 +87,8 @@
 .qs.sig.tukeyInner:{[n;alpha]
     edge:alpha*(n-1)%2;
     i:til n;
-    left:0.5*(1+cos .qs.sig.pi*(2*i%(alpha*(n-1))-1));
+    / 0.5 (1 + cos(pi (2i/(alpha (n-1)) - 1))): rises from 0 to 1 over the first alpha/2 of the window
+    left:0.5*1+cos .qs.sig.pi*((2*i)%alpha*n-1)-1;
     right:reverse left;
     ?[i<edge;left;?[i>(n-1)-edge;right;1f]]
  }
@@ -101,7 +102,7 @@
 .qs.sig.periodogram:{[segment;window;rate]
     n:count segment;
     if[not n=.qs.sig.pow2ceil n; '"Welch segment length must be a power of two"];
-    if[not count window=n; '"window length must match segment length"];
+    if[not n=count window; '"window length must match segment length"];
     spectrum:.qs.sig.rfft segment*window;
     realSpectrum:spectrum 0;
     imagSpectrum:spectrum 1;

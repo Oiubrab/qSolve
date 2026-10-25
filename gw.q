@@ -298,6 +298,41 @@
     `snr`gps`phase`background!(mf[`snr] best;time;mf[`phase] best;max mf[`snr] away)
  }
 
+/ the noise library (G4.1). Each detector's long strain is cut into overlapping chunks; each chunk is
+/ resampled, whitened with its own PSD, and only its middle is kept (the whitening corrupts about a PSD
+/ segment at each end, see G3.4), so the kept parts tile the stream without gaps. Chunks with missing samples,
+/ or kept parts within `guard` seconds of a catalogued event, are dropped.
+.qs.gw.noiseDefaults:`rate`chunk`margin`guard!(2048;64;6;8)
+
+/ which events' noise is used for what: no noise from a test event is ever used for training (G-D9), and
+/ GW150914, the headline test detection, is a test event
+.qs.gw.noiseSplit:`GW151226`GW170104`GW190412`GW200322_091133`GW170814`GW150914!`train`train`train`train`validation`test
+
+/ whitened noise from one detector's strain dictionary (`gps`rate`h) at o`rate Hz, avoiding the GPS times in
+/ avoid. Returns a table: gps (start of the kept samples), w (whitened samples as reals) and psd (`freq`psd)
+.qs.gw.noiseChunks:{[strain;avoid;o]
+    o:.qs.gw.noiseDefaults,o;
+    x:strain`h; rate:strain`rate; n:count x;
+    len:rate*o`chunk; stride:rate*o[`chunk]-2*o`margin;
+    starts:stride*til 1+0|(n-len) div stride;
+    starts:starts where (starts+len)<=n;
+    one:{[x;rate;o;len;s]
+        c:x s+til len;
+        if[any null c; :()];
+        c:$[rate=o`rate; c; .qs.sig.resample[c;rate;o`rate]];
+        r:o`rate; m:r*o`margin;
+        psd:.qs.sig.welch[c;r;4*r;2*r];
+        w:.qs.sig.whiten[c*.qs.sig.tukey[count c;0.1];r;`freq`asd!(psd`freq;sqrt psd`psd)];
+        enlist `start`w`psd!(s;"e"$w m+til (count w)-2*m;psd)
+    }[x;rate;o;len] each starts;
+    t:raze one;
+    if[not count t; :([] gps:`float$(); w:(); psd:())];
+    gps:strain[`gps]+(t[`start]%rate)+o`margin;
+    span:o[`chunk]-2*o`margin;
+    far:{[avoid;g;guard;span] not any (avoid>=g-guard)&avoid<=g+span+guard}[avoid;;o`guard;span] each gps;
+    select from ([] gps; w:t`w; psd:t`psd) where far
+ }
+
 / Newtonian stationary-phase time-to-coalescence for an inspiral chirp mass in solar masses.
 .qs.gw.newtonianTime:{[frequency;chirpMass]
     if[frequency<=0 or chirpMass<=0; '"frequency and chirp mass must be positive"];

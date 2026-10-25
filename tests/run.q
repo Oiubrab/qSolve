@@ -21,6 +21,7 @@ if[`only in key .t.opt; .t.names:.t.names where (string .t.names) like "*",(firs
  }
 
 system "c 500 200";
+if[not count .t.names; -1 "no tests match"; exit 1];
 .t.results:.t.run1 each .t.names;
 show .t.results;
 -1 "";

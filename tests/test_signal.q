@@ -50,6 +50,14 @@
      .t.eq[.qs.sig.tukey[9;0];9#1f];
      .t.near[.qs.sig.tukey[9;1];hann;1e-12];
      .t.near[.qs.sig.tukey[9;0.5];reverse .qs.sig.tukey[9;0.5];1e-12];
+     / its shape: 0 at the ends, rising monotonically to 1 over the first alpha/2, flat in the middle, and equal
+     / to the textbook form 0.5 (1 + cos(pi (2i/(alpha (n-1)) - 1))) on the rise (an earlier version dipped to 0
+     / at the end of the rise and jumped back to 1, which passed the checks above)
+     w:.qs.sig.tukey[1001;0.2]; i:til 101;
+     .t.near[w 0 500 1000;0 1 0f;1e-12];
+     .t.ok[all 0<=1_deltas w til 101;"the rise should be monotonic"];
+     .t.near[w i;0.5*1+cos .qs.sig.pi*((2*i)%0.2*1000)-1;1e-12];
+     .t.ok[all 1=w 100+til 801;"the middle should be flat"];
  }];
 
 .t.add[`signal_welch_white_noise;{
