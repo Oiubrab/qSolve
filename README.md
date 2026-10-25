@@ -236,6 +236,33 @@ same tools would show an edge if one existed, so they're ready for data where on
 other markets, or other inputs (rates, news, order flow). `eurusd` and `gbpusd` are also datasets in the
 dashboard and `train.q`, with the naive forecast shown alongside.
 
+### Slow trends: months and years instead of days
+
+A second study asks whether slow structure (1-12 month momentum, distance from the 3-year mean, volatility, month of
+the year) helps forecast the next week to six months. It is purged walk-forward by year (2010-2026, training rows
+whose targets overlap the test year are dropped), over six pairs and horizons of 5, 20, 60 and 120 trading days, with
+fixed trend and reversion rules, linear models, small networks and one model pooled over the pairs. Intervals come
+from a block bootstrap, because overlapping targets make ordinary standard errors far too narrow.
+
+```bash
+q bench/fx_trends.q -s 4      # the whole study, about 25 minutes
+q bench/fx_trends_l2.q -s 4    # does more shrinkage change the answer?
+```
+
+**Result: no edge.** Of 192 forecast configurations 29 had skill above zero, 2 of those with one-sided p <= 0.05,
+against about 10 expected at that level if all were noise, and none survives a correction for the 204 tried. The
+average skill was negative for every model and horizon, and worse for flexible models and longer horizons (linear
+-0.06 to -0.32, small network -0.05 to -0.61, rules about 0, pooled linear -0.003 to -0.04). The best, a pooled
+linear model of EUR/USD at six months, had skill +0.06 (interval -0.02 to +0.13, p = 0.08) and ranged from -0.80 to
++0.43 between years. Mean reversion at six months looks mildly useful for EUR/USD and GBP/USD (correlation about 0.2)
+and harmful for USD/JPY and USD/CAD. Holding the forecast's sign for 20 days lost money after costs on average.
+
+The checks behind it: a synthetic series with a hidden drift is found and the same noise without the drift is not;
+shuffled targets give no skill and a leaked answer gives +0.95; forecasting volatility (which is predictable) gives skill
+up to +0.30 on the same pipeline; and a split that mixes training and test rows shows fake skill (+0.59) on a random
+walk, which is what the purging prevents. The limit is the sample: 27 years is about 330 independent months per pair.
+`plans/completed/fx_trends_plan.md` has every number and the places the study departed from its plan.
+
 ## Serving a model
 
 `train.q -save` stores the model, and for table or CSV data the column encoding too. `serve.q` answers
@@ -301,6 +328,7 @@ fx.q                    exchange rates (ECB), currency pairs, forecast scoring a
 tests/                  test runner, assertion helpers, tests
 bench/benchmarks.q      benchmark suite
 bench/fx.q              the FX forecasting experiment
+bench/fx_trends.q       the slow-trend study (months and years), bench/fx_trends_l2.q its shrinkage check
 scripts/fetch_data.sh   dataset downloader
 plans/                  development plans and progress logs (finished ones in plans/completed/)
 ```
