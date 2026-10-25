@@ -24,7 +24,8 @@ one-letter string lists) will come up.
 **Current status (2026-10-25):** stages G1–G4 are complete: the GW150914 gate passes (G3.4), and the
 noise library (6 events, about 11 hours of coincident H1/L1 noise), injections, glitches and training on
 generated data are built and tested; G5.1 (the MLP baseline) is done and weak, as expected; G5.2 (Conv1D in
-the core) is done. Next: a CNN on the GW task (G5.4 run, ahead of the optional G5.3 LSTM/GRU). The owner chose pure-q waveforms and the
+the core) is done; a first CNN run is strong (93% found at SNR 10-15, 99% above 15, at 1% false alarms). Next: G7.1
+(scan the real GW150914 data), then G5.4 (longer runs with early stopping), G6 and the optional G5.3 LSTM/GRU. The owner chose pure-q waveforms and the
 plan's default download budget, and asked to include binary neutron stars (a separate 1–3 M☉ track, 256 s
 windows at 2048 Hz, its own model) and an LSTM/GRU. Reference sources for waveform coefficients: LALSuite's
 `lalsimulation/lib` and `lal/lib` on git.ligo.org (raw files fetch without a login).
@@ -311,6 +312,21 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-25: **First GW CNN** (`bench/gw_cnn.q`; saved as `models/gw_cnn_1.qsm`, git-ignored). Two input channels
+  (whitened H1 and L1, 1 s at 2048 Hz); conv 8x32, 16x16, 32x8 filters (relu, pool 4 each), dense 32 relu, sigmoid:
+  35,449 parameters. Adam lr 1e-3, l2 1e-4, batch 128, 20 epochs of 6,000 fresh windows (SNR 8-30, merger 0.6-0.9 s,
+  a quarter of negatives glitchy), about 31 s per epoch with `-s 4` (13.5 min in total). Validation accuracy 76% ->
+  97.6%, still rising. **At 1% false alarms on validation noise, found: SNR 5-10 63%, 10-15 93%, 15-20 99%, 20-25
+  99%, 25-30 99.6%** (the MLP: 2%, 5%, 10%, 23%, 44%). False alarms: clean noise 0.4%, blips 0.8%, sine-Gaussians
+  4.2%, which are the main confuser. A first attempt died with `'stop` (out of memory) evaluating the 6,000-row
+  training batch in one go: `.qs.predict` now works through `.qs.predictBlock` (128) rows at a time for conv models
+  (test `conv_predict_blocks`). Full suite: 146 passed.
+- 2026-10-25: Conv layers rewritten **channel-major** (one long vector per channel, all examples' samples in turn)
+  instead of row-major (one small vector per example and time step): gathers and scatters become a few vector
+  index operations per kernel tap, the convolution is `K mmu P`, the kernel gradient is dot products of long
+  vectors. Same results (all conv tests, finite differences included, pass unchanged); the toy task trains 4.5x
+  faster (10.7 s -> 2.4 s). On a GW-sized batch (64 windows, 2 x 2048, three conv layers, 35k parameters) forward
+  0.32 -> 0.27 s and gradient 1.21 -> 0.83 s, measured while another training job was running, so pessimistic.
 - 2026-10-25: G5.2 complete. In `defineEquation.q`: an optional conv front end. A model may carry `conv`
   (`channels`length`layers`, layers a table of filters, kernel, pool, act), `ckernel` (filters x kernel*channels
   per layer) and `cbias`; `.qs.initConv[channels;length;layers;sizes;acts;seed]` builds one (He-uniform kernels,

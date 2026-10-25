@@ -87,3 +87,11 @@
     .t.ok[ac>am+0.1;"CNN ",(string ac)," should clearly beat the MLP ",string am];
     .t.ok[(sum .qs.summary[cnn]`params)<sum .qs.summary[mlp]`params;"the CNN should be the smaller model"];
  }];
+
+/ predicting in blocks gives the same outputs as one pass
+.t.add[`conv_predict_blocks;{
+    m:.qs.initConv[2;24;([] filters:3 2; kernel:5 3; pool:2 2; act:`tanh`relu);4 1;`tanh`sigmoid;1];
+    system "S 6"; X:{x?1f} each 50#48;
+    b:.qs.predictBlock; .qs.predictBlock:7; p:.qs.predict[m;X]; .qs.predictBlock:b;
+    .t.near[p;last last .qs.forward[m;X];1e-12];
+ }];

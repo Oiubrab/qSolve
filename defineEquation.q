@@ -87,50 +87,53 @@
 / number of inputs a model takes per row
 .qs.inputSize:{[m] $[`conv in key m; m[`conv;`channels]*m[`conv;`length]; count first first m`weight]}
 
-/ batch rows to the long layout: n x (channels*length) -> (n*length) x channels
-.qs.conv.toLong:{[X;c;len] raze {[c;len;x] flip (c;len)#x}[c;len] each X}
+/ batch rows to channel-major long layout: n x (channels*length) -> channels x (n*length), one vector per channel
+/ holding every example's samples in turn (long simple vectors keep the gathers and scatters fast in q)
+.qs.conv.toLong:{[X;c;len] {[X;len;ch] raze X[;(ch*len)+til len]}[X;len] each til c}
 
-/ one conv layer forward on long input A of n examples of length t: returns the output and what backward needs
+/ one conv layer forward on channel-major input A (cin x n*t): returns the output (filters x n*tp), its length
+/ and what backward needs. P holds, for each kernel tap j and input channel c (row j*cin+c), the input shifted by j
 .qs.conv.layer:{[A;n;t;K;b;l]
     k:l`kernel; tout:t-k-1; pool:l`pool; tp:tout div pool;
     base:raze (t*til n)+\:til tout;
-    P:raze each A base+\:til k;
-    Z:(P mmu flip K)+\:b;
+    P:raze {[A;base;j] A[;base+j]}[A;base] each til k;
+    Z:(K mmu P)+b;
     U:.qs.act.f[l`act] Z;
     pbase:raze (tout*til n)+\:pool*til tp;
-    V:{[U;pbase;i] U pbase+i}[U;pbase] each til pool;
+    V:{[U;pbase;i] U[;pbase+i]}[U;pbase] each til pool;
     O:(|/) V;
-    / which position in each pooling block won (the first, on a tie), for routing gradients back
-    / (?[...] needs simple lists, so set the winner by arithmetic, which works element-wise on matrices)
+    / which position in each pooling block won (the first, on a tie), for routing gradients back; ?[...] needs
+    / simple lists, so it is set by arithmetic
     arg:{[V;O;arg;i] arg+(i-arg)*V[i]=O}[V;O]/[(count O;count first O)#pool-1;reverse til pool];
     `out`t`cache!(O;tp;`P`Z`U`arg`base`pbase`tin`tout!(P;Z;U;arg;base;pbase;t;tout))
  }
 
-/ the conv stack on batch X: the flattened features and the caches of each layer
+/ the conv stack on batch X: the flattened features (time-major per example) and the caches of each layer
 .qs.conv.forward:{[m;X]
     spec:m`conv; n:count X;
     A:.qs.conv.toLong["f"$X;spec`channels;spec`length];
     r:{[n;s;K;b;l] o:.qs.conv.layer[s 0;n;s 1;K;b;l]; (o`out;o`t;s[2],enlist o`cache)}[n]/[(A;spec`length;());m`ckernel;m`cbias;spec`layers];
-    `features`caches!(raze each (r 1) cut r 0;r 2)
+    tp:r 1; O:r 0;
+    `features`caches!({[O;tp;e] raze flip O[;(e*tp)+til tp]}[O;tp] each til n;r 2)
  }
 
-/ one conv layer backward: gradient at its output (long) -> kernel, bias and input gradients
+/ one conv layer backward: gradient at its output (filters x n*tp) -> kernel, bias and input gradients
 .qs.conv.back:{[dO;K;l;c;cin]
     pool:l`pool; k:l`kernel;
-    dU:{[dO;c;dU;i] @[dU;c[`pbase]+i;+;dO*"f"$c[`arg]=i]}[dO;c]/[(count c`U;count first c`U)#0f;til pool];
+    dU:{[dO;c;dU;i] .[dU;(::;c[`pbase]+i);+;dO*c[`arg]=i]}[dO;c]/[(count c`U;count first c`U)#0f;til pool];
     dZ:dU*.qs.act.d[l`act][c`Z;c`U];
-    dK:flip[dZ] mmu c`P;
-    db:sum dZ;
-    dP:dZ mmu K;
-    rows:(c`tin)*count[c`base] div c`tout;
-    dA:{[dP;c;cin;dA;j] @[dA;c[`base]+j;+;dP[;(j*cin)+til cin]]}[dP;c;cin]/[(rows;cin)#0f;til k];
+    dK:{[P;z] z$/:P}[c`P] each dZ;
+    db:sum each dZ;
+    dP:(flip K) mmu dZ;
+    n:count[c`base] div c`tout;
+    dA:{[dP;c;cin;dA;j] .[dA;(::;c[`base]+j);+;dP (j*cin)+til cin]}[dP;c;cin]/[(cin;n*c`tin)#0f;til k];
     (dK;db;dA)
  }
 
 / gradients of the conv parameters from the gradient at the flattened features
 .qs.conv.backward:{[m;caches;dFeatures]
     spec:m`conv; f:last spec[`layers]`filters;
-    d:raze {[f;x] ((count x) div f;f)#x}[f] each dFeatures;
+    d:flip raze {[f;x] ((count x) div f;f)#x}[f] each dFeatures;
     cins:spec[`channels],-1_spec[`layers]`filters;
     r:{[m;spec;cins;s;i] g:.qs.conv.back[s 2;m[`ckernel] i;spec[`layers] i;s[3] i;cins i];
         (s[0],enlist g 0;s[1],enlist g 1;g 2;s 3)}[m;spec;cins]/[(();();d;caches);reverse til count spec`layers];
@@ -174,10 +177,16 @@
 .qs.threads:{system "s"}
 .qs.shards:{[n] p:1|.qs.threads[]&n div .qs.minShard; ceiling[n%p] cut til n}
 
+/ rows per block when predicting with a conv model
+.qs.predictBlock:128
+
 / model outputs for a batch matrix X, or for a single example vector; large batches are spread over threads
 .qs.predict:{[m;X]
     v:0h<type X; X:"f"$$[v;enlist X;X];
-    out:{[m;X] last last .qs.forward[m;X]}[m];
+    / conv models work through bounded blocks of rows: their intermediate matrices grow with rows x length
+    out:$[`conv in key m;
+        {[m;X] raze {[m;X;i] last last .qs.forward[m;X i]}[m;X] each .qs.predictBlock cut til count X}[m];
+        {[m;X] last last .qs.forward[m;X]}[m]];
     A:$[1<count i:.qs.shards count X; raze {[f;X;i] f X i}[out;X] peach i; out X];
     $[v;first A;A]
  }
