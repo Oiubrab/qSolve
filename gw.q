@@ -540,6 +540,61 @@
     `triggers`seconds!(raze res@\:`triggers;sum res@\:`seconds)
  }
 
+/ bulk data (open-search plan, S1): files converted from GWOSC HDF5 by scripts/gwosc_bulk.py into
+/ data/gw/bulk/<run>/<det>-<gps>-<duration>.{f32,dq,inj,json}: float32 strain, int32 per-second masks, a description
+
+/ one converted file by its base path (no extension): like .qs.gw.strain (`gps`rate`h) plus the masks
+.qs.gw.bulk:{[base]
+    info:.j.k raze read0 hsym `$base,".json";
+    h:"f"$first (enlist "e";enlist 4) 1: hsym `$base,".f32";
+    dq:first (enlist "i";enlist 4) 1: hsym `$base,".dq";
+    inj:first (enlist "i";enlist 4) 1: hsym `$base,".inj";
+    if[not (count h)="j"$info[`duration]*info`rate; '"strain length doesn't match ",base];
+    `detector`gps`rate`h`dq`inj`dqBits`injBits!(`$info`detector;"f"$info`gps;"j"$info`rate;h;dq;inj;`$info`dqBits;`$info`injBits)
+ }
+
+/ the converted files of a run: detector, start, duration, missing samples, base path
+.qs.gw.bulkIndex:{[run]
+    dir:.qs.gw.dataDir[],"/bulk/",string run;
+    f:key hsym `$dir; f:f where f like "*.json";
+    if[not count f; :([] detector:`symbol$(); gps:`float$(); duration:`long$(); nan:`long$(); base:())];
+    info:{[dir;f] .j.k raze read0 hsym `$dir,"/",string f}[dir] each f;
+    `detector`gps xasc ([] detector:`$info@\:`detector; gps:"f"$info@\:`gps; duration:"j"$info@\:`duration;
+        nan:"j"$info@\:`nan; base:{[dir;f] dir,"/",-5_string f}[dir] each f)
+ }
+
+/ whether bit `name` is set in each of a mask's values, given the mask's bit names
+.qs.gw.bit:{[mask;bits;name] if[not name in bits; '"no mask bit ",string name]; 1=(mask div "j"$2 xexp bits?name) mod 2}
+
+/ per second of a converted file: usable for a CBC search (data present, CAT1 and CAT2 vetoes passed, no CBC
+/ hardware injection)
+.qs.gw.usable:{[b]
+    (.qs.gw.bit[b`dq;b`dqBits;`DATA])&(.qs.gw.bit[b`dq;b`dqBits;`CBC_CAT1])&(.qs.gw.bit[b`dq;b`dqBits;`CBC_CAT2])&
+        .qs.gw.bit[b`inj;b`injBits;`NO_CBC_HW_INJ]
+ }
+
+/ contiguous runs of true in a boolean vector of seconds starting at gps: start, end, duration (at least minimum)
+.qs.gw.segments:{[ok;gps;minimum]
+    if[not any ok; :([] start:`float$(); end:`float$(); duration:`long$())];
+    / d[k] = ok[k] - ok[k-1] (with ok[-1] and ok[n] false): starts where it rises, ends (exclusive) where it falls
+    e:"j"$ok; d:1_deltas 0,e,0; st:where 1=d; en:where -1=d;
+    t:([] start:gps+st; end:gps+en; duration:en-st);
+    select from t where duration>=minimum
+ }
+
+/ the seconds of a run between two GPS times where both H1 and L1 are usable, as segments of at least minimum s
+.qs.gw.analysable:{[run;start;stop;minimum]
+    ix:select from .qs.gw.bulkIndex[run] where (gps+duration)>start, gps<stop;
+    secs:"f"$start+til "j"$stop-start;
+    good:{[ix;secs;det]
+        r:select from ix where detector=det;
+        ok:(count secs)#0b;
+        {[secs;ok;row] b:.qs.gw.bulk row`base; u:.qs.gw.usable b; t:row[`gps]+til count u;
+            i:secs?t; w:where i<count secs; @[ok;i w;:;u w]}[secs]/[ok;r]
+    }[ix;secs] each `H1`L1;
+    .qs.gw.segments[(&). good;start;minimum]
+ }
+
 / Newtonian stationary-phase time-to-coalescence for an inspiral chirp mass in solar masses.
 .qs.gw.newtonianTime:{[frequency;chirpMass]
     if[frequency<=0 or chirpMass<=0; '"frequency and chirp mass must be positive"];
