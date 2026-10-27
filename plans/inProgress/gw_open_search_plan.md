@@ -9,7 +9,9 @@ Read the "q gotchas" in [completed/improvemet_plan.md](../completed/improvemet_p
 **How to use this file:** as the other plans. Tick an item only when its check passes and `q tests/run.q` passes;
 add a dated line to the Progress log; commit each finished stage before starting the next (the owner's rule).
 
-**Current status (2026-10-27):** S1.1 and S1.2 done (HDF5 -> q works); S1.3 (analysable time on a real day) next.
+**Current status (2026-10-28):** S1 done; S2.1 and S2.2 done on the hour around GW231226 (recovered, but at only
+1.7 false alarms/hour: O4a noise fools the O1-O3-trained CNN). Glitch tools (G-B below) built; full-day search and
+an O4a-noise retrain next.
 
 ---
 
@@ -50,14 +52,28 @@ add a dated line to the Progress log; commit each finished stage before starting
   a real O4a file converts and loads.
 - [x] **S1.2 q loader.** `.qs.gw.bulk` (one converted file) and `.qs.gw.bulkIndex` (what's converted). *Accept:*
   tests on fixtures written by q; real file loads with matching GPS, rate and NaN count.
-- [ ] **S1.3 Analysable segments.** `.qs.gw.analysable[run;gpsStart;gpsEnd]`: per second, both detectors pass S-D2;
+- [x] **S1.3 Analysable segments.** `.qs.gw.analysable[run;gpsStart;gpsEnd]`: per second, both detectors pass S-D2;
   contiguous segments of at least 64 s. *Accept:* tests on fixture masks; a real day's analysable time reported.
 
 ### S2 — Scan
 
-- [ ] **S2.1** Whiten analysable segments in chunks (S-D3) and score sliding 1 s windows; keep triggers (local
-  maxima at least 1 s apart) above a low threshold, with times.
-- [ ] **S2.2** Recover the catalogued events in the scanned stretch (sanity check).
+- [x] **S2.1** Whiten analysable segments in chunks (S-D3) and score sliding 1 s windows; keep triggers (local
+  maxima at least 1 s apart) above a low threshold, with times. (`.qs.gw.segmentStreams`, `.qs.gw.searchStreams`,
+  `bench/gw_bulk_scan.q`; triggers rank by the logit, `.qs.predictRaw`, and carry each detector's peak amplitude.)
+- [x] **S2.2** Recover the catalogued events in the scanned stretch (sanity check).
+
+### G-B — Glitch tools (the false-alarm problem, both for O3 and here)
+
+- [x] **Logit ranking**: `.qs.predictRaw` returns the output layer's pre-activation, so scores that round to 1
+  still rank.
+- [x] **Amplitude veto**: triggers where either detector's whitened amplitude in the window exceeds 15 (a BBH at
+  network SNR 35 peaks near 6), applied alike to zero lag and background (`-veto` in `bench/gw_bulk_scan.q`).
+- [x] **Hard negatives**: `.qs.gw.mine` (real glitches by whitened amplitude in a noise library) and
+  `.qs.gw.mineScores` (noise windows an earlier model scores high); `.qs.gw.batch` with `mined` puts a share
+  `real` of the glitchy windows on them; `bench/gw_cnn.q -mine 6 -hard <model> -patience 8`.
+- [x] **O4a training noise**: `.qs.gw.bulkNoise` builds a noise library from a run's bulk data (analysable
+  segments, away from catalogued events), from days that aren't searched.
+- [ ] Retrain on O4a noise with hard negatives; compare background and GW231226's rank with gw_cnn_1.
 
 ### S3 — Background and significance
 
@@ -91,3 +107,13 @@ add a dated line to the Progress log; commit each finished stage before starting
   converted and read back exactly with H1/L1 vetoes intersected, the real file (skips without data or `.venv`).
   The first real O4a H1 file has 922 usable seconds of 4096. Fetching one day around GW231226_101520 (SNR 34.7)
   for S1.3 and S2.2.
+- 2026-10-28: S1.3, S2.1, S2.2. The hour around GW231226 (GPS 1387618304-1387622400) has 3897 analysable s in one
+  segment. `bench/gw_bulk_scan.q` with gw_cnn_1 (step 0.25 s, 10 slides of 7 s; 7 min on a machine shared with 17
+  other jobs): 1668 zero-lag triggers in 1.07 h, 16548 background triggers in 10.7 h. **GW231226 is recovered**
+  (implied merger 1387620938.25 against the catalogue's .3, logit 6.04) **but ranks second and has a false-alarm
+  rate of 1.7/hour.** The top trigger (logit 6.29) is a 118-sigma glitch in H1 alone (L1's peak 3.8), which the
+  amplitude veto removes; the next ones look Gaussian (peaks 3-4 sigma in both) yet score logits of 4-5, so the
+  O1-O3-trained CNN is overconfident on O4a noise generally, not just on glitches. Hence the O4a noise library.
+  Real glitches above 6 sigma in the O1-O3 training noise: 42 in 6.3 h; with the windows gw_cnn_1 scores above
+  0.5, 372 hard negatives in the training noise and 128 in validation. A retrain with these (`-mine 6 -hard`, early stopping)
+  is running.

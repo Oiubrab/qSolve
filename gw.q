@@ -448,18 +448,61 @@
     `g`det`snr`f0`q`t0`kind!(g*snr%sqrt g$g;first 1?`H1`L1;snr;f0;q;t0;$[blip;`blip;`sineGaussian])
  }
 
+/ real glitches in a noise library (hard negatives): in each chunk, samples whose whitened amplitude exceeds thr
+/ (Gaussian noise reaches about 4.5 in a 52 s chunk), merged into one glitch per `sep` seconds. Returns chunk row,
+/ detector, sample index of the loudest sample and its amplitude
+.qs.gw.mine:{[lib;thr;sep]
+    gap:"j"$sep*.qs.gw.noiseDefaults`rate;
+    one:{[thr;gap;w] a:abs "f"$w; i:where a>thr;
+        if[not count i; :([] at:`long$(); peak:`float$())];
+        grp:value group sums 1b,gap<1_deltas i;
+        top:{[a;i;k] i k first idesc a i k}[a;i] each grp;
+        ([] at:top; peak:a top)}[thr;gap];
+    t:raze {[lib;one;r] t:one lib[r;`w]; ([] row:(count t)#r; det:(count t)#lib[r;`det]),'t}[lib;one] each til count lib;
+    $[count t; t; ([] row:`long$(); det:`symbol$(); at:`long$(); peak:`float$())]
+ }
+
+/ the noise a model mistakes for signals (hard negatives by score): every pair of a library scanned in 1 s windows
+/ every `step` seconds, keeping local maxima of the logit (at least `sep` s apart) above `logit`. Returns rows as
+/ .qs.gw.mine's (row is the pair's H1 row, at the window's middle sample, peak the logit)
+.qs.gw.mineScores:{[m;lib;pairs;o]
+    o:(`step`sep`logit!(0.25;1;0f)),o;
+    r:.qs.gw.noiseDefaults`rate; len:r; st:"j"$o[`step]*r; w:"j"$o[`sep]%o`step;
+    t:raze {[m;lib;len;st;w;o;p]
+        span:count lib[p 0;`w]; s:st*til 1+(span-len) div st;
+        X:{[lib;p;len;s] "f"$raze lib[p;`w]@\:s+til len}[lib;p;len] each s;
+        z:first each .qs.predictRaw[m;X];
+        keep:where (z>o`logit)&{[z;w;i] z[i]=max z (0|i-w)+til 1+(2*w)&(count z)-0|i-w}[z;w] each til count z;
+        ([] row:(count keep)#p 0; det:(count keep)#`both; at:(s keep)+len div 2; peak:z keep)}[m;lib;len;st;w;o] each pairs;
+    $[count t; t; ([] row:`long$(); det:`symbol$(); at:`long$(); peak:`float$())]
+ }
+
+/ a window of len samples from both detectors containing a mined glitch g (a row of .qs.gw.mine's table) at a
+/ random place in its middle 80%; owner maps a library row to its pair
+.qs.gw.glitchWindow:{[lib;pairs;owner;len;g]
+    rows:pairs owner g`row; span:count lib[rows 0;`w];
+    start:0|(span-len)&g[`at]-"j"$len*0.1+first 1?0.8;
+    `x`snr`kind!(raze {[lib;start;len;r] "f"$lib[r;`w] start+til len}[lib;start;len] each rows;g`peak;`real)
+ }
+
 / a batch of n windows from a library for training: a share sig of them with an injected chirp (label 1), and of
 / the rest a share glitchy with a glitch in one detector (label 0), the remainder clean noise (label 0).
+/ With o`mined (a .qs.gw.mine table of the same library) a share `real` of the glitchy windows hold a real glitch
+/ instead of a simulated one (kind `real, snr its peak amplitude).
 / Returns `X`Y`meta, meta holding each row's kind and SNRs. Signals are made in parallel (peach)
 .qs.gw.batch:{[lib;pairs;n;o]
-    o:(`signal`glitchy!(0.5;0.25)),o;
+    o:(`signal`glitchy`real!(0.5;0.25;0.5)),o;
     ns:"j"$n*o`signal; ng:"j"$(n-ns)*o`glitchy; nn:n-ns+ng;
+    owner:(raze pairs)!raze {2#x} each til count pairs;
+    mined:$[`mined in key o; select from o`mined where row in key owner; ()];
+    nr:$[count mined; "j"$ng*o`real; 0];
     params:.qs.gw.drawParams[ns;o];
     rate:.qs.gw.noiseDefaults`rate; len:rate*(.qs.gw.injectDefaults,o)`window;
     sig:{[lib;pairs;o;p] .qs.gw.sample[lib;pairs;p;o]}[lib;pairs;o] peach params;
     clean:{[lib;pairs;o;k] .qs.gw.sample[lib;pairs;()!();o]}[lib;pairs;o] each til nn+ng;
     gl:{[len;rate;o;c] g:.qs.gw.glitch[len;rate;o]; x:c`x; off:$[`H1=g`det;0;len]; x[off+til len]+:g`g;
-        `x`snr`kind!(x;g`snr;g`kind)}[len;rate;o] each ng#clean;
+        `x`snr`kind!(x;g`snr;g`kind)}[len;rate;o] each (ng-nr)#clean;
+    gl,:.qs.gw.glitchWindow[lib;pairs;owner;len] each mined nr?count mined;
     rows:(sig@\:`x),(nn#clean@\:`x),gl@\:`x;
     / (meta is a keyword, so the row descriptions are called info here)
     info:([] kind:(ns#`signal),(nn#`noise),gl@\:`kind; snr:(sig@\:`snr),(nn#0n),gl@\:`snr;
@@ -594,6 +637,75 @@
     }[ix;secs] each `H1`L1;
     .qs.gw.segments[(&). good;start;minimum]
  }
+
+/ the strain of one detector over [start, stop) from a run's converted bulk files (NaN where there are none)
+.qs.gw.bulkStretch:{[run;det;start;stop]
+    ix:select from .qs.gw.bulkIndex[run] where detector=det, (gps+duration)>start, gps<stop;
+    r:4096; n:"j"$r*stop-start; h:n#0n;
+    h:{[r;start;n;h;row] b:.qs.gw.bulk row`base; off:"j"$r*b[`gps]-start;
+        idx:off+til count b`h; w:where (idx>=0)&idx<n; @[h;idx w;:;b[`h] w]}[r;start;n]/[h;ix];
+    `gps`rate`h!(start;r;h)
+ }
+
+/ whiten a stretch as the noise library does (64 s chunks at 2048 Hz, own PSD, middle 52 s kept), returning the
+/ kept parts joined into one stream starting `margin` seconds in (chunks containing missing samples are zeroed)
+.qs.gw.whitenStream:{[strain;o]
+    o:.qs.gw.noiseDefaults,o;
+    x:strain`h; rate:strain`rate; len:rate*o`chunk; stride:rate*o[`chunk]-2*o`margin;
+    starts:stride*til 1+0|(count[x]-len) div stride;
+    one:{[x;rate;o;len;s]
+        c:x s+til len; r:o`rate; m:r*o`margin; keep:(r*o[`chunk])-2*m;
+        if[any null c; :keep#0f];
+        c:$[rate=r; c; .qs.sig.resample[c;rate;r]];
+        psd:.qs.sig.welch[c;r;4*r;2*r];
+        w:.qs.sig.whiten[c*.qs.sig.tukey[count c;0.1];r;`freq`asd!(psd`freq;sqrt psd`psd)];
+        w m+til keep}[x;rate;o;len] peach starts;
+    `gps`rate`w`ok!(strain[`gps]+o`margin;o`rate;raze one;raze {(count x)#not all 0=x} each one)
+ }
+
+/ a noise library (as .qs.gw.buildNoise's: event, det, gps, w, psd) from a run's bulk data between two GPS times:
+/ the analysable segments' chunks in both detectors, away from catalogued events (by o`guard seconds). For training
+/ on the noise of the run being searched, from days that aren't searched
+.qs.gw.bulkNoise:{[run;start;stop;o]
+    o:.qs.gw.noiseDefaults,o;
+    segs:.qs.gw.analysable[run;start;stop;o`chunk];
+    avoid:exec gps from .qs.gw.events[] where gps within (start-60;stop+60);
+    t:raze {[run;avoid;o;seg]
+        raze {[run;avoid;o;seg;d] c:.qs.gw.noiseChunks[.qs.gw.bulkStretch[run;d;seg`start;seg`end];avoid;o];
+            ([] event:(count c)#run; det:(count c)#d),'c}[run;avoid;o;seg] each `H1`L1}[run;avoid;o] each segs;
+    $[count t; t; ([] event:`symbol$(); det:`symbol$(); gps:`float$(); w:(); psd:())]
+ }
+
+/ both detectors of [start, stop) whitened for the search (S2.1)
+.qs.gw.segmentStreams:{[run;start;stop]
+    {[run;start;stop;d] .qs.gw.whitenStream[.qs.gw.bulkStretch[run;d;start;stop];()!()]}[run;start;stop] each `H1`L1
+ }
+
+/ search whitened streams (H1;L1) with model m: score 1 s windows every `step` seconds (skipping windows touching
+/ a zeroed chunk), L1 optionally slid by `shift` seconds against H1 (circularly, for background), and keep
+/ triggers: local maxima of the logit at least `sep` s apart. Returns `triggers`seconds: a table of window start
+/ (GPS), the merger time implied at `merger` of the window, score, logit and each detector's largest whitened
+/ amplitude in the window (ampH1, ampL1: Gaussian noise reaches about 4; a loud BBH about 6, a glitch far more);
+/ and the time searched (windows x step)
+.qs.gw.searchStreams:{[m;ab;o]
+    o:(`step`sep`merger`shift!(0.125;1;0.75;0)),o;
+    a:ab 0; b:ab 1; r:a`rate; len:r; n:min count each (a`w;b`w);
+    none:`triggers`seconds!(([] gps:`float$(); merger:`float$(); score:`float$(); logit:`float$(); ampH1:`float$(); ampL1:`float$());0f);
+    if[n<len; :none];
+    sh:("j"$r*o`shift) mod n; st:"j"$o[`step]*r;
+    s:st*til 1+(n-len) div st;
+    s:s where {[a;b;len;n;sh;s] (all a[`ok] s+til len) and all b[`ok] (s+sh+til len) mod n}[a;b;len;n;sh] each s;
+    if[not count s; :none];
+    X:{[a;b;len;n;sh;s] (a[`w] s+til len),b[`w] (s+sh+til len) mod n}[a;b;len;n;sh] each s;
+    z:first each .qs.predictRaw[m;X];
+    w:"j"$o[`sep]%o`step;
+    keep:where {[z;w;i] z[i]=max z (0|i-w)+til 1+(2*w)&(count z)-0|i-w}[z;w] each til count z;
+    t:a[`gps]+s%r;
+    amp:{[Xk;i] max each abs Xk[;i]}[X keep] each (til len;len+til len);
+    `triggers`seconds!(([] gps:t keep; merger:t[keep]+o[`merger]*len%r; score:reciprocal 1+exp neg z keep; logit:z keep;
+        ampH1:amp 0; ampL1:amp 1);o[`step]*count s)
+ }
+.qs.gw.searchSegment:{[m;run;start;stop;o] .qs.gw.searchStreams[m;.qs.gw.segmentStreams[run;start;stop];o]}
 
 / Newtonian stationary-phase time-to-coalescence for an inspiral chirp mass in solar masses.
 .qs.gw.newtonianTime:{[frequency;chirpMass]

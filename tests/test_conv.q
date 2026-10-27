@@ -95,3 +95,13 @@
     b:.qs.predictBlock; .qs.predictBlock:7; p:.qs.predict[m;X]; .qs.predictBlock:b;
     .t.near[p;last last .qs.forward[m;X];1e-12];
  }];
+
+/ the raw output is the logit of the sigmoid output, and it keeps order where probabilities round to 1
+.t.add[`predict_raw_logit;{
+    m:.qs.initConv[2;24;([] filters:3 2; kernel:5 3; pool:2 2; act:`tanh`relu);4 1;`tanh`sigmoid;1];
+    system "S 6"; X:{x?1f} each 20#48;
+    lz:first each .qs.predictRaw[m;X]; p:first each .qs.predict[m;X];
+    .t.near[reciprocal 1+exp neg lz;p;1e-12];
+    d:.qs.init[3;4 1;`tanh`sigmoid;1];
+    .t.near[first each .qs.predictRaw[d;(1 2 3f;3 2 1f)];{log x%1-x} first each .qs.predict[d;(1 2 3f;3 2 1f)];1e-9];
+ }];

@@ -476,3 +476,35 @@
      .t.eq[count strain`h;131072];
      .t.ok[all not null strain`h;"unexpected NaN in GW150914 H1 data"];
  }];
+/ real-glitch mining: a spike in one chunk is found where it is, and batches built with the mined table carry it
+/ in their `real` windows (label 0)
+.t.add[`gw_mine_glitches;{
+    lib:.t.fakeLib[3;30]; pairs:.qs.gw.pairs lib; r:.qs.gw.noiseDefaults`rate;
+    lib:update w:@[w;3;{[r;v] @[v;(10*r)+til 3;:;25 -30 20e]}[r]] from lib;
+    g:.qs.gw.mine[lib;8;0.5];
+    .t.eq[g`row;enlist 3];
+    .t.eq[g`det;enlist lib[3;`det]];
+    .t.eq[g`at;enlist 1+10*r];
+    .t.eq[g`peak;enlist 30f];
+    system "S 5";
+    b:.qs.gw.batch[lib;pairs;40;`snr`buffer`mined`real!(10 20f;4;g;1f)];
+    k:exec count i by kind from b`meta;
+    .t.eq[k`real;5];
+    rx:b[`X] where `real=b[`meta]`kind;
+    .t.ok[all 30=max each abs rx;"real windows should hold the spike"];
+    .t.eq[distinct b[`Y] where `real=b[`meta]`kind;enlist enlist 0f];
+ }];
+
+/ score mining reports windows whose logit is what the model gives them, and keeps only local maxima above the cut
+.t.add[`gw_mine_scores;{
+    lib:.t.fakeLib[2;6]; pairs:.qs.gw.pairs lib; r:.qs.gw.noiseDefaults`rate;
+    m:.qs.initConv[2;r;([] filters:enlist 2; kernel:enlist 16; pool:enlist 8; act:enlist `relu);4 1;`relu`sigmoid;3];
+    g:.qs.gw.mineScores[m;lib;pairs;`step`sep`logit!(0.25;1;-1e9)];
+    .t.ok[count g;"some windows"];
+    X:{[lib;len;g] p:.qs.gw.pairs[lib] first where g[`row]=first each .qs.gw.pairs lib;
+        "f"$raze lib[p;`w]@\:(g[`at]-len div 2)+til len}[lib;r] each g;
+    .t.near[first each .qs.predictRaw[m;X];g`peak;1e-9];
+    .t.ok[all {all 1<=1_deltas x} each value exec at%r by row from g;"maxima at least 1 s apart"];
+    top:.qs.gw.mineScores[m;lib;pairs;`step`sep`logit!(0.25;1;max g`peak)];
+    .t.eq[count top;0];
+ }];

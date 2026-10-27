@@ -2,6 +2,10 @@
 / generated windows each epoch, a fixed validation batch, efficiency by SNR at a 1% false-alarm threshold
 /   q bench/gw_cnn.q -s 4 -q [-filters 8 16 32] [-kernel 32 16 8] [-pool 4 4 4] [-hidden 32] [-snr 8 30]
 /        [-merger 0.6 0.9] [-glitchy 0.25] [-epochs 20] [-lr 0.001] [-rows 6000] [-batch 128] [-save file]
+/        [-mine 6] [-hard models/gw_cnn_1.qsm] [-real 0.5] [-patience 8]
+/   -mine: real glitches above that whitened amplitude in the training noise become hard negatives (kind `real);
+/   -hard: so do windows that model scores above 0.5; -real: their share of the glitchy windows; -patience: early
+/   stopping on validation loss, keeping the best epoch
 / needs the noise library: .qs.gw.buildNoise[key .qs.gw.noiseSplit;()!()] (see plans/inProgress/gw_detection_plan.md)
 .gwb.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f;
 {system "l ",.gwb.root,"/",x} each ("defineEquation.q";"data.q";"signal.q";"gw.q");
@@ -18,12 +22,21 @@ epochs:g[`epochs;20;{"J"$first x}]; lr:g[`lr;0.001;{"F"$first x}]; n:g[`rows;600
 train:raze .qs.gw.loadNoise each `GW151226`GW170104`GW190412`GW200322_091133;
 val:.qs.gw.loadNoise`GW170814;
 tp:.qs.gw.pairs train; vp:.qs.gw.pairs val;
+/ hard negatives: real glitches by amplitude and by an earlier model's score, in each library
+mined:{[a;g;lib;pairs]
+    t:$[`mine in key a; .qs.gw.mine[lib;"F"$first a`mine;0.5]; ()];
+    t,:$[`hard in key a; .qs.gw.mineScores[.qs.load hsym `$first a`hard;lib;pairs;()!()]; ()];
+    t}[a;g];
+if[count tm:mined[train;tp]; o[`mined]:tm; o[`real]:g[`real;0.5;{"F"$first x}];
+    -1 "hard negatives in the training noise: ",string count tm];
+ov:o; if[count vm:mined[val;vp]; ov[`mined]:vm; -1 "hard negatives in the validation noise: ",string count vm];
 system "S 1";
-vb:.qs.gw.batch[val;vp;2000;o];
+vb:.qs.gw.batch[val;vp;2000;ov];
 gen:{[train;tp;o;n;e] .qs.gw.batch[train;tp;n;o]}[train;tp;o;n];
 m:.qs.initConv[2;2048;layers;hidden,1;((count hidden)#act),`sigmoid;1];
 show .qs.summary m;
-r:.qs.train[m;`gen`Xval`Yval!(gen;vb`X;vb`Y);`epochs`batch`lr`loss`optimiser`l2`verbose!(epochs;batch;lr;`bce;`adam;0.0001;1)];
+patience:g[`patience;0N;{"J"$first x}];
+r:.qs.train[m;`gen`Xval`Yval!(gen;vb`X;vb`Y);`epochs`batch`lr`loss`optimiser`l2`patience`keepBest`verbose!(epochs;batch;lr;`bce;`adam;0.0001;patience;not null patience;1)];
 if[`save in key a; .qs.save[`$first a`save;r`model]];
 p:first each .qs.predict[r`model;vb`X];
 info:update score:p from vb`meta;

@@ -191,6 +191,17 @@
     $[v;first A;A]
  }
 
+/ the output layer's input to its activation (the logit, for a sigmoid output), for a batch matrix X: ranking by
+/ it keeps the order among examples whose probabilities all round to 1
+.qs.predictRaw:{[m;X]
+    v:0h<type X; X:"f"$$[v;enlist X;X];
+    out:$[`conv in key m;
+        {[m;X] raze {[m;X;i] last first .qs.forward[m;X i]}[m;X] each .qs.predictBlock cut til count X}[m];
+        {[m;X] last first .qs.forward[m;X]}[m]];
+    A:$[1<count i:.qs.shards count X; raze {[f;X;i] f X i}[out;X] peach i; out X];
+    $[v;first A;A]
+ }
+
 / gradient of loss over batch (X;Y), returns `weight`bias!(gW;gB) shaped like the model
 .qs.grad:{[m;X;Y;loss] .qs.gradDrop[m;X;Y;loss;0f]}
 

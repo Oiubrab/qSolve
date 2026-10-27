@@ -58,3 +58,50 @@
     .t.eq[sum null b`h;13000704i];
     .t.eq[sum .qs.gw.usable b;922i];
  }];
+
+/ the search's whitening (S2.1) matches the noise library's, chunk for chunk, and zeroes chunks with missing data
+.t.add[`bulk_whiten_stream_matches_noise;{
+    system "S 3"; r:256; n:r*200;
+    h:1e-21*(n?1f)-0.5; h:@[h;(150*r)+til r;:;0n];
+    s:`gps`rate`h!(1e9;r;h);
+    o:`rate`chunk`margin`guard!(256;16;2;0);
+    a:.qs.gw.whitenStream[s;o];
+    b:.qs.gw.noiseChunks[s;`float$();o];
+    .t.eq[a`gps;1e9+2];
+    .t.eq[a`rate;256];
+    keep:r*12;
+    .t.eq[count a`w;keep*1+(n-r*16) div keep];
+    / the chunks the library kept appear in the stream at their own times; the others are zero and not ok
+    i:"j"$r*(b`gps)-a`gps;
+    .t.near[raze {[a;keep;i] a[`w] i+til keep}[a;keep] each i;"f"$raze b`w;1e-6];
+    .t.eq["j"$sum not a`ok;keep*(count[a`w] div keep)-count b];
+    .t.ok[all 0=(a`w) where not a`ok;"zeroed chunks"];
+ }];
+
+/ the stream search (S2.1): skips windows touching unusable data, finds a burst present in both detectors at zero
+/ lag, and a slide of L1 moves where the coincidence appears
+.t.add[`bulk_search_streams;{
+    system "S 8"; r:256; n:r*40;
+    mk:{[r;n] `gps`rate`w`ok!(1e9;r;.qs.data.normal n;n#1b)}[r];
+    a:mk n; b:mk n;
+    burst:(20*r)+til r div 4;
+    a[`w;burst]+:6*.qs.data.normal count burst; b[`w;burst]+:6*.qs.data.normal count burst;
+    a[`ok;(30*r)+til 2*r]:0b;
+    / stand in for the model with each window's energy (a stub .qs.predictRaw), restored afterwards
+    p:.qs.predictRaw; .qs.predictRaw:{[m;X] enlist each 0.001*{x$x} each X};
+    res:.qs.gw.searchStreams[();(a;b);`step`sep`merger!(0.25;2;0.5)]; t:res`triggers;
+    ts:.qs.gw.searchStreams[();(a;b);`step`sep`merger`shift!(0.25;2;0.5;5)]`triggers;
+    .qs.predictRaw:p;
+    / no window overlaps 30-32 s: of the 157 windows 0-39 s, 11 (29.25-31.75 s) are skipped
+    .t.near[res`seconds;0.25*157-11;1e-9];
+    .t.ok[not any ((t`gps)-1e9) within 29.01 31.99;"windows touching unusable data were scored"];
+    best:t first idesc t`logit;
+    .t.ok[((best`gps)-1e9) within 19.25 20;"loudest window starts at ",string (best`gps)-1e9];
+    .t.near[best`merger;0.5+best`gps;1e-9];
+    .t.near[best`score;reciprocal 1+exp neg best`logit;1e-12];
+    / the amplitudes are each detector's largest |w| in the window
+    i:"j"$256*(best`gps)-1e9;
+    .t.near[best`ampH1`ampL1;{[i;s] max abs s[`w] i+til 256}[i] each (a;b);1e-12];
+    .t.ok[all 2<=1_deltas t`gps;"triggers at least 2 s apart"];
+    .t.ok[(max ts`logit)<0.8*best`logit;"a slid L1 should lose the coincidence"];
+ }];
