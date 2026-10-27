@@ -9,9 +9,11 @@ Read the "q gotchas" in [completed/improvemet_plan.md](../completed/improvemet_p
 **How to use this file:** as the other plans. Tick an item only when its check passes and `q tests/run.q` passes;
 add a dated line to the Progress log; commit each finished stage before starting the next (the owner's rule).
 
-**Current status (2026-10-28):** S1 done; S2.1 and S2.2 done on the hour around GW231226 (recovered, but at only
-1.7 false alarms/hour: O4a noise fools the O1-O3-trained CNN). Glitch tools (G-B below) built; full-day search and
-an O4a-noise retrain next.
+**Current status (2026-10-28):** S1-S3 done for one O4a day (2023-12-26, 20.6 h analysable) with gw_cnn_4:
+GW231226 is louder than all 412 h of background (under 1 false alarm per 412 h) and every other trigger matches
+the background's expectation, so **no new candidates in that day**. Next: more days (the pipeline is ready; about
+1.3 GB to download and 2-3 h to search per day on a shared machine), and S4's vetting tools for when a candidate
+appears.
 
 ---
 
@@ -77,12 +79,12 @@ an O4a-noise retrain next.
 - [x] **Exclusive background**: `.qs.gw.far` drops background triggers where a catalogued event sits in either
   detector's (slid) window.
 - [x] **Single-detector chirps as negatives**: `.qs.gw.batch` `single` (`bench/gw_cnn.q -single`).
-- [ ] Retrain with single-detector negatives (gw_cnn_4) and compare.
+- [x] Retrain with single-detector negatives (gw_cnn_4) and compare.
 
 ### S3 — Background and significance
 
-- [ ] **S3.1** Time slides over the same segments; false-alarm rate per trigger score.
-- [ ] **S3.2** Candidate list: triggers ranked by false-alarm rate, with the catalogue cross-match.
+- [x] **S3.1** Time slides over the same segments; false-alarm rate per trigger score.
+- [x] **S3.2** Candidate list: triggers ranked by false-alarm rate, with the catalogue cross-match.
 
 ### S4 — Vetting
 
@@ -143,3 +145,27 @@ an O4a-noise retrain next.
   network fires on a chirp in one detector alone. Two fixes: the false-alarm rate now uses an exclusive
   background (`.qs.gw.far`; the inclusive one put GW231226 at 0.09/h with gw_cnn_3), and training can include
   single-detector chirps as negatives (H1 and L1 are nearly aligned, so a real signal is in both).
+- 2026-10-28: `gw_cnn_4` (as gw_cnn_3 plus `-single 0.25`, hard negatives mined with gw_cnn_3; best epoch 49,
+  67 min): validation false alarms are now all single-detector chirps (3.6%; real glitches, blips, sine-Gaussians
+  and noise 0), efficiency at 1% false alarms 46% at SNR 5-10, 83% at 10-15, 97% above. On the GW231226 hour:
+  GW231226 logit 17.0, loudest background (inclusive, event left in) 4.1 against 16.3 for gw_cnn_3, next zero-lag
+  1.2. On the O3 held-out events (`bench/gw_events.q`): 29/35 under 1 false alarm/hour (gw_cnn_1 12, gw_cnn_2 29).
+- 2026-10-28: **S3 on a full O4a day**, `bench/gw_bulk_scan.q -run O4a -start 1387577000 -stop 1387663400
+  -slides 20 -model models/gw_cnn_4.qsm` (2 h 15 min on the shared machine): 5 analysable segments, 20.6 h
+  searched, 32932 zero-lag triggers, 412.5 h of background (658858 triggers), amplitude veto 36 zero-lag and 771
+  background. **GW231226 is the loudest trigger, above all the background: false-alarm rate under 1 per 412 h.**
+  The next is logit 2.51 at 0.065/h (1 per 15 h). Unvetoed, uncatalogued zero-lag triggers against the number the
+  background predicts in 20.6 h:
+
+  | false alarms/h at most | expected | observed |
+  |---|---|---|
+  | 0.05 | 1.0 | 0 |
+  | 0.1 | 2.1 | 2 |
+  | 0.3 | 6.2 | 7 |
+  | 1 | 20.6 | 15 |
+  | 3 | 61.9 | 58 |
+  | 10 | 206 | 216 |
+
+  Everything apart from GW231226 is consistent with noise, so nothing in this day merits S4 vetting. The amplitudes
+  of the top noise triggers are Gaussian-like (3-4 sigma in both detectors). Results in
+  `data/gw/search/O4a-1387577000-1387663400-gw_cnn_4.*.csv` (git-ignored).
