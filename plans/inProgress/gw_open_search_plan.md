@@ -117,3 +117,10 @@ an O4a-noise retrain next.
   Real glitches above 6 sigma in the O1-O3 training noise: 42 in 6.3 h; with the windows gw_cnn_1 scores above
   0.5, 372 hard negatives in the training noise and 128 in validation. A retrain with these (`-mine 6 -hard`, early stopping)
   is running.
+- 2026-10-28: Retrain `gw_cnn_2` (`bench/gw_cnn.q -mine 6 -hard models/gw_cnn_1.qsm -epochs 60 -patience 8`,
+  43 min on the shared machine): on its validation batch (half the glitchy windows real) it finds 89% of SNR 5-10
+  signals at 1% false alarms (gw_cnn_1: 63% on the simulated-glitch batch), 98% at 10-15, all above; false alarms
+  on real glitches 3.2%. **On the GW231226 hour GW231226's logit goes from 6.0 to 21.8, louder than all 10.7 h of
+  background (false-alarm rate under 0.09/hour)**; the loudest noise trigger stays near 4.7 for both models.
+  The fetched day (1387577000-1387663400; one L1 file absent) has 20.7 h analysable in 5 segments, the longest
+  9.7 h, so `.qs.gw.searchStreams` now scores windows in blocks of `.qs.gw.searchBlock` (8192).

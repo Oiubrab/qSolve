@@ -91,6 +91,10 @@
     p:.qs.predictRaw; .qs.predictRaw:{[m;X] enlist each 0.001*{x$x} each X};
     res:.qs.gw.searchStreams[();(a;b);`step`sep`merger!(0.25;2;0.5)]; t:res`triggers;
     ts:.qs.gw.searchStreams[();(a;b);`step`sep`merger`shift!(0.25;2;0.5;5)]`triggers;
+    / scoring in small blocks gives the same triggers
+    bk:.qs.gw.searchBlock; .qs.gw.searchBlock:7;
+    tb:.qs.gw.searchStreams[();(a;b);`step`sep`merger!(0.25;2;0.5)]`triggers;
+    .qs.gw.searchBlock:bk;
     .qs.predictRaw:p;
     / no window overlaps 30-32 s: of the 157 windows 0-39 s, 11 (29.25-31.75 s) are skipped
     .t.near[res`seconds;0.25*157-11;1e-9];
@@ -104,4 +108,5 @@
     .t.near[best`ampH1`ampL1;{[i;s] max abs s[`w] i+til 256}[i] each (a;b);1e-12];
     .t.ok[all 2<=1_deltas t`gps;"triggers at least 2 s apart"];
     .t.ok[(max ts`logit)<0.8*best`logit;"a slid L1 should lose the coincidence"];
+    .t.eq[tb;t];
  }];

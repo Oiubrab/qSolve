@@ -687,6 +687,7 @@
 / (GPS), the merger time implied at `merger` of the window, score, logit and each detector's largest whitened
 / amplitude in the window (ampH1, ampL1: Gaussian noise reaches about 4; a loud BBH about 6, a glitch far more);
 / and the time searched (windows x step)
+.qs.gw.searchBlock:8192
 .qs.gw.searchStreams:{[m;ab;o]
     o:(`step`sep`merger`shift!(0.125;1;0.75;0)),o;
     a:ab 0; b:ab 1; r:a`rate; len:r; n:min count each (a`w;b`w);
@@ -696,12 +697,13 @@
     s:st*til 1+(n-len) div st;
     s:s where {[a;b;len;n;sh;s] (all a[`ok] s+til len) and all b[`ok] (s+sh+til len) mod n}[a;b;len;n;sh] each s;
     if[not count s; :none];
-    X:{[a;b;len;n;sh;s] (a[`w] s+til len),b[`w] (s+sh+til len) mod n}[a;b;len;n;sh] each s;
-    z:first each .qs.predictRaw[m;X];
+    / windows are built and scored a block at a time (a day's segment would otherwise be gigabytes)
+    win:{[a;b;len;n;sh;s] (a[`w] s+til len;b[`w] (s+sh+til len) mod n)}[a;b;len;n;sh];
+    z:raze {[m;win;k] first each .qs.predictRaw[m;raze each win each k]}[m;win] each .qs.gw.searchBlock cut s;
     w:"j"$o[`sep]%o`step;
     keep:where {[z;w;i] z[i]=max z (0|i-w)+til 1+(2*w)&(count z)-0|i-w}[z;w] each til count z;
     t:a[`gps]+s%r;
-    amp:{[Xk;i] max each abs Xk[;i]}[X keep] each (til len;len+til len);
+    amp:flip {max abs x} each/: win each s keep;
     `triggers`seconds!(([] gps:t keep; merger:t[keep]+o[`merger]*len%r; score:reciprocal 1+exp neg z keep; logit:z keep;
         ampH1:amp 0; ampL1:amp 1);o[`step]*count s)
  }
