@@ -488,25 +488,30 @@
 / a batch of n windows from a library for training: a share sig of them with an injected chirp (label 1), and of
 / the rest a share glitchy with a glitch in one detector (label 0), the remainder clean noise (label 0).
 / With o`mined (a .qs.gw.mine table of the same library) a share `real` of the glitchy windows hold a real glitch
-/ instead of a simulated one (kind `real, snr its peak amplitude).
+/ instead of a simulated one (kind `real, snr its peak amplitude). A share `single` of the non-signal windows hold a
+/ chirp in one detector only (kind `single, label 0): H1 and L1 are nearly aligned, so a real signal is in both.
 / Returns `X`Y`meta, meta holding each row's kind and SNRs. Signals are made in parallel (peach)
 .qs.gw.batch:{[lib;pairs;n;o]
-    o:(`signal`glitchy`real!(0.5;0.25;0.5)),o;
-    ns:"j"$n*o`signal; ng:"j"$(n-ns)*o`glitchy; nn:n-ns+ng;
+    o:(`signal`glitchy`real`single!(0.5;0.25;0.5;0f)),o;
+    ns:"j"$n*o`signal; ng:"j"$(n-ns)*o`glitchy; n1:"j"$(n-ns)*o`single; nn:n-ns+ng+n1;
     owner:(raze pairs)!raze {2#x} each til count pairs;
     mined:$[`mined in key o; select from o`mined where row in key owner; ()];
     nr:$[count mined; "j"$ng*o`real; 0];
     params:.qs.gw.drawParams[ns;o];
     rate:.qs.gw.noiseDefaults`rate; len:rate*(.qs.gw.injectDefaults,o)`window;
     sig:{[lib;pairs;o;p] .qs.gw.sample[lib;pairs;p;o]}[lib;pairs;o] peach params;
-    clean:{[lib;pairs;o;k] .qs.gw.sample[lib;pairs;()!();o]}[lib;pairs;o] each til nn+ng;
+    clean:{[lib;pairs;o;k] .qs.gw.sample[lib;pairs;()!();o]}[lib;pairs;o] each til nn+ng+n1;
     gl:{[len;rate;o;c] g:.qs.gw.glitch[len;rate;o]; x:c`x; off:$[`H1=g`det;0;len]; x[off+til len]+:g`g;
-        `x`snr`kind!(x;g`snr;g`kind)}[len;rate;o] each (ng-nr)#clean;
+        `x`snr`kind!(x;g`snr;g`kind)}[len;rate;o] each (ng-nr)#nn _ clean;
     gl,:.qs.gw.glitchWindow[lib;pairs;owner;len] each mined nr?count mined;
+    / the quieter detector's half (by energy: the one with less of the signal) replaced by other noise
+    one:{[lib;pairs;o;p] .qs.gw.sample[lib;pairs;p;o]}[lib;pairs;o] peach .qs.gw.drawParams[n1;o];
+    gl,:{[len;s;c] x:s`x; i:til len; off:len*(x[i]$x i)>x[len+i]$x len+i; x[off+i]:c[`x] off+i;
+        `x`snr`kind!(x;s`snr;`single)}[len]'[one;neg[n1]#clean];
     rows:(sig@\:`x),(nn#clean@\:`x),gl@\:`x;
     / (meta is a keyword, so the row descriptions are called info here)
     info:([] kind:(ns#`signal),(nn#`noise),gl@\:`kind; snr:(sig@\:`snr),(nn#0n),gl@\:`snr;
-        snrWindow:(sig@\:`snrWindow),(nn+ng)#0n);
+        snrWindow:(sig@\:`snrWindow),(nn+ng+n1)#0n);
     order:neg[n]?n;
     `X`Y`meta`params!(rows order;enlist each "f"$order<ns;info order;params)
  }
@@ -708,6 +713,18 @@
         ampH1:amp 0; ampL1:amp 1);o[`step]*count s)
  }
 .qs.gw.searchSegment:{[m;run;start;stop;o] .qs.gw.searchStreams[m;.qs.gw.segmentStreams[run;start;stop];o]}
+
+/ false alarms per hour for search triggers from time-slide background triggers (both as .qs.gw.searchStreams
+/ gives them, background with its `shift`, both with `vetoed`) over bgSeconds of background: unvetoed background
+/ triggers at least as loud per hour. Background triggers whose H1 window (at merger) or L1 window (at merger+shift)
+/ lies within 1 s of an excluded GPS time are dropped (a known event slid against noise is not noise). A trigger
+/ louder than all of the background gets the bound 1 per background hour, marked `bound`
+.qs.gw.far:{[trig;bg;bgSeconds;exclude]
+    near:{[ex;t] $[count ex; any each 1>abs t-\:ex; (count t)#0b]}["f"$exclude];
+    bl:asc exec logit from bg where not vetoed, not near merger, not near merger+shift;
+    f:3600*((count bl)-bl binr trig`logit)%bgSeconds;
+    update far:?[f=0;3600%bgSeconds;f], bound:f=0 from trig
+ }
 
 / Newtonian stationary-phase time-to-coalescence for an inspiral chirp mass in solar masses.
 .qs.gw.newtonianTime:{[frequency;chirpMass]

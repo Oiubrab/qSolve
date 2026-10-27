@@ -73,7 +73,11 @@ an O4a-noise retrain next.
   `real` of the glitchy windows on them; `bench/gw_cnn.q -mine 6 -hard <model> -patience 8`.
 - [x] **O4a training noise**: `.qs.gw.bulkNoise` builds a noise library from a run's bulk data (analysable
   segments, away from catalogued events), from days that aren't searched.
-- [ ] Retrain on O4a noise with hard negatives; compare background and GW231226's rank with gw_cnn_1.
+- [x] Retrain on O4a noise with hard negatives; compare background and GW231226's rank with gw_cnn_1.
+- [x] **Exclusive background**: `.qs.gw.far` drops background triggers where a catalogued event sits in either
+  detector's (slid) window.
+- [x] **Single-detector chirps as negatives**: `.qs.gw.batch` `single` (`bench/gw_cnn.q -single`).
+- [ ] Retrain with single-detector negatives (gw_cnn_4) and compare.
 
 ### S3 — Background and significance
 
@@ -124,3 +128,18 @@ an O4a-noise retrain next.
   background (false-alarm rate under 0.09/hour)**; the loudest noise trigger stays near 4.7 for both models.
   The fetched day (1387577000-1387663400; one L1 file absent) has 20.7 h analysable in 5 segments, the longest
   9.7 h, so `.qs.gw.searchStreams` now scores windows in blocks of `.qs.gw.searchBlock` (8192).
+- 2026-10-28: `gw_cnn_3`: as gw_cnn_2 plus the first 80% of 12 h of O4a noise before the searched day
+  (`.qs.gw.bulkNoise`, 1387534000-1387577000: 256 chunk pairs, 3.7 h), hard negatives mined with gw_cnn_2; early
+  stopping at epoch 51 (68 min). Validation on the last 20% of that O4a noise: 76% of SNR 5-10 found at 1% false
+  alarms, 95% at 10-15; real-glitch false alarms 4.8%. On the GW231226 hour, loudest unvetoed logits:
+
+  | model | GW231226 | loudest zero-lag noise | background median |
+  |---|---|---|---|
+  | gw_cnn_1 | 6.0 | 5.1 | -2.1 |
+  | gw_cnn_2 | 21.8 | 4.7 | -4.2 |
+  | gw_cnn_3 | 16.2 | 2.7 | -3.3 |
+
+  **The loudest background triggers (logits 12-16) are all GW231226 itself in H1, slid against L1 noise**: the
+  network fires on a chirp in one detector alone. Two fixes: the false-alarm rate now uses an exclusive
+  background (`.qs.gw.far`; the inclusive one put GW231226 at 0.09/h with gw_cnn_3), and training can include
+  single-detector chirps as negatives (H1 and L1 are nearly aligned, so a real signal is in both).

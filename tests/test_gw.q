@@ -403,6 +403,19 @@
     .t.ok[all (exec snr from b[`meta] where kind=`signal) within 10 20;"signal SNRs out of range"];
  }];
 
+/ single-detector chirps (label 0): one detector's half is noise only, the other carries the injection
+.t.add[`gw_batch_single;{
+    lib:.t.fakeLib[3;30]; pairs:.qs.gw.pairs lib; system "S 4";
+    b:.qs.gw.batch[lib;pairs;40;`snr`buffer`glitchy`single!(25 30f;4;0f;0.5)];
+    k:exec count i by kind from b`meta;
+    .t.eq[k`signal`noise`single;20 10 10];
+    .t.eq[distinct b[`Y] where `single=b[`meta]`kind;enlist enlist 0f];
+    / white unit-variance noise: the chirp's half carries about SNR^2 more energy than the other
+    len:.qs.gw.noiseDefaults`rate;
+    e:{[len;x] (x[til len]$x til len;x[len+til len]$x len+til len)}[len] each b[`X] where `single=b[`meta]`kind;
+    .t.ok[all 100<abs (-) ./: e;"one half should hold the chirp: ",-3!(-) ./: e];
+ }];
+
 / the scanner on synthetic strain: window times line up, and a model whose score is the window's energy finds
 / the loud stretch
 .t.add[`gw_scan_mechanics;{

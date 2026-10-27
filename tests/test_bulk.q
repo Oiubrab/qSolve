@@ -110,3 +110,16 @@
     .t.ok[(max ts`logit)<0.8*best`logit;"a slid L1 should lose the coincidence"];
     .t.eq[tb;t];
  }];
+
+/ false-alarm rates from the background, without vetoed triggers or an excluded event slid against noise
+.t.add[`bulk_far;{
+    bg:([] merger:100 200 300 400 500f; shift:7 7 7 14 14f; logit:1 2 3 9 4f; vetoed:00001b);
+    trig:([] merger:10 20 30f; logit:2.5 0.5 10f);
+    f:.qs.gw.far[trig;bg;3600f;`float$()];
+    .t.eq[f`far;2 4 1f];
+    .t.eq[f`bound;001b];
+    / the 9 is an event at GPS 414 seen through L1 (merger+shift): excluded, so 3 is the loudest left
+    g:.qs.gw.far[trig;bg;3600f;enlist 414.5];
+    .t.eq[g`far;1 3 1f];
+    .t.eq[.qs.gw.far[trig;bg;3600f;enlist 400.2]`far;1 3 1f];
+ }];

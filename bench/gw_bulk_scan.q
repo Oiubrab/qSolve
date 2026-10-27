@@ -48,15 +48,11 @@ bg:raze res@\:`background; bgs:sum res@\:`bgSeconds;
 trig:update vetoed:veto<ampH1|ampL1 from trig; bg:update vetoed:veto<ampH1|ampL1 from bg;
 -1 "vetoed by amplitude over ",(string veto),": ",(string sum trig`vetoed)," zero-lag, ",(string sum bg`vetoed)," background";
 
-/ false alarms per hour at a trigger's logit: unvetoed background triggers at least as loud per background hour (a
-/ trigger louder than all of the background gets an upper bound, under 1 per bgs hours)
-bl:asc exec logit from bg where not vetoed;
-trig:update far:3600*((count bl)-bl binr logit)%bgs from trig;
-trig:update bound:far=0 from trig;
-trig:update far:3600%bgs from trig where bound;
-
 / catalogued events in the searched stretch: the loudest trigger within 1 s of each (on the implied merger time)
 ev:select name,gps,mass1,mass2,snr,pAstro from .qs.gw.events[] where gps within (start;stop);
+
+/ false alarms per hour at a trigger's logit, from the background without the catalogued events slid against noise
+trig:.qs.gw.far[trig;bg;bgs;ev`gps];
 inSeg:{[segs;t] any (t>=segs`start)&t<segs`end}[segs];
 ev:update analysable:inSeg each gps from ev;
 hit:{[trig;t] r:`logit xdesc select from trig where 1>abs merger-t;
