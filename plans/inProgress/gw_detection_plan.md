@@ -21,6 +21,9 @@ one-letter string lists) will come up.
   without asking.
 - Keep tests offline: anything needing downloaded data skips itself when the data is missing (`.t.skip`).
 
+**Update (2026-10-28):** glitch-hardened CNNs (gw_cnn_2, gw_cnn_4) find 29 of 35 held-out O3 detections at under
+1 false alarm per hour (was 12); see the 2026-10-28 log entry and the open-search plan.
+
 **Current status (2026-10-25):** stages G1–G4 are complete: the GW150914 gate passes (G3.4), and the
 noise library (6 events, about 11 hours of coincident H1/L1 noise), injections, glitches and training on
 generated data are built and tested; G5.1 (the MLP baseline) is done and weak, as expected; G5.2 (Conv1D in
@@ -315,6 +318,19 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-28: **Glitch work (see [gw_open_search_plan.md](gw_open_search_plan.md), G-B) lifts the O3 results from
+  12 to 29 of 35 held-out detections at under 1 false alarm per hour.** `bench/gw_events.q` (same O3 time-slide
+  background, 4.85 h) per model, events found at under 1/h and under 1 per 5 h:
+
+  | model | training | <1/h | <1/5h |
+  |---|---|---|---|
+  | gw_cnn_1 | O1-O3 noise, simulated glitches, 20 epochs | 12 | 8 |
+  | gw_cnn_2 | + real-glitch and score-mined hard negatives, early stopping (60 max) | 29 | 23 |
+  | gw_cnn_4 | + O4a noise, single-detector chirps as negatives | 29 | 17 |
+
+  gw_cnn_4 trades some O3 sensitivity for not firing on a chirp in one detector (on O4a data its background tail
+  drops from logit 16 to 4 while GW231226 stays at 17). G5.4's early stopping is in use (`-patience 8`, best
+  epochs 49-51).
 - 2026-10-25: **O3 background and honest real-event results.** `.qs.gw.slides` slides L1 against H1 within an
   event's own 20 clean seconds (shifts 1-19 s in 0.5 s steps; windows touching either detector's event left out)
   and `.qs.gw.peaks` takes local score maxima at least 1 s apart as triggers. Over the 35 events: **4.85 hours of
