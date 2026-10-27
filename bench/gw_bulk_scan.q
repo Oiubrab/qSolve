@@ -6,7 +6,8 @@
 / -veto: triggers where either detector's whitened amplitude exceeds it are glitches (GW231226, at network SNR 35,
 / peaks near 6), dropped from the background and marked at zero lag
 / needs the run's files: .venv/bin/python scripts/gwosc_bulk.py fetch --run O4a --start GPS --end GPS
-/ writes data/gw/search/<run>-<start>-<stop>-<model>.{triggers,background}.csv
+/ writes data/gw/search/<run>-<start>-<stop>-<model>.{triggers,background,summary}.csv (summary: searched and
+/ background seconds)
 .gsb.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f;
 {system "l ",.gsb.root,"/",x} each ("defineEquation.q";"data.q";"signal.q";"gw.q");
 .qs.data.dir:.gsb.root,"/data";
@@ -70,5 +71,7 @@ dir:.gsb.root,"/data/gw/search"; system "env mkdir -p ",dir;
 name:dir,"/",("-" sv (string run;string "j"$start;string "j"$stop;first "." vs last "/" vs mf));
 (hsym `$name,".triggers.csv") 0: csv 0: trig;
 (hsym `$name,".background.csv") 0: csv 0: bg;
--1 "wrote ",name,".{triggers,background}.csv";
+(hsym `$name,".summary.csv") 0: csv 0: ([] run:enlist run; start:start; stop:stop; model:enlist `$mf; slides:slides;
+    slide:slide; step:o`step; veto:veto; seconds:secs; bgSeconds:bgs);
+-1 "wrote ",name,".{triggers,background,summary}.csv";
 \\
