@@ -9,11 +9,13 @@ Read the "q gotchas" in [completed/improvemet_plan.md](../completed/improvemet_p
 **How to use this file:** as the other plans. Tick an item only when its check passes and `q tests/run.q` passes;
 add a dated line to the Progress log; commit each finished stage before starting the next (the owner's rule).
 
-**Current status (2026-10-28):** S1-S3 done for one O4a day (2023-12-26, 20.6 h analysable) with gw_cnn_4:
-GW231226 is louder than all 412 h of background (under 1 false alarm per 412 h) and every other trigger matches
-the background's expectation, so **no new candidates in that day**. Next: more days (the pipeline is ready; about
-1.3 GB to download and 2-3 h to search per day on a shared machine), and S4's vetting tools for when a candidate
-appears.
+**Current status (2026-10-30):** S1-S3 done for six days (O4a 2023-12-26; O3a around GW190707, GW190814,
+GW190818 and GW190906; O2 around 170720), about 97 h searched with gw_cnn_4. S4.1 vetting runs on each day's top
+triggers. Known events recovered: GW231226 and GW190706_222641, each louder than all background, and the IAS-only
+GW190707_083226 at 1 false alarm per 47 h. **No new candidates:** every uncatalogued trigger matches the
+background's expectation. Of the 30 vetted, 29 fail the matched-filter consistency check, and the one that passes
+has network SNR 6.6, at noise level. Next: S4.2 and S4.3 when there is a
+candidate to check, or more days.
 
 ---
 
@@ -88,7 +90,7 @@ appears.
 
 ### S4 — Vetting
 
-- [ ] **S4.1** For each top candidate: single-detector scores (is one detector doing all the work?), H1-L1 time
+- [x] **S4.1** For each top candidate: single-detector scores (is one detector doing all the work?), H1-L1 time
   difference within the light travel time, data-quality flags around it, nearby loud glitches, a matched-filter
   follow-up with a small template bank (SNR, best masses, consistency between detectors).
 - [ ] **S4.2** Check against GraceDB public alerts (including retracted) and the latest catalogues.
@@ -224,3 +226,22 @@ appears.
     (background 4.8) but L1 3.6 (background 5.5), so it fails `consistent`. It also lies 13 s before both
     detectors' CBC_CAT2 bit goes off together (the segment's end); L1's strain stops 8 s after that. **Not a
     candidate:** likely data-quality related.
+- 2026-10-30: **O3a 1246478336** (GW190707). The whole-day search failed three times. The first failure was
+  'length; the next two were 'stop, in `.qs.gw.bulkStretch` while loading the third segment after the two long
+  ones (8.7 h and 10.1 h). The same segment loads fine in a fresh process, and the day searched cleanly in two
+  runs: 1246478336-1246545914 (18.7 h, 187 h background) and 1246545914-1246564736 (0.96 h, 9.6 h). The cause
+  isn't found; the machine had 21 GB available.
+  - **GW190707_083226** (IAS only, in no LVK catalogue, 52+32, SNR 8.3): **found**. Logit 3.04, far 0.021/h
+    (about 1 per 47 h), second loudest in the day. Matched filter: network SNR 7.9, H1 6.3 (own background 4.5),
+    L1 4.8 (4.6), dt -3.9 ms, best template 80+80 at the bank's edge. Passes `consistent`. The open-data CNN
+    picks out an event that only the IAS pipeline reported, though at this false-alarm rate it would not stand
+    out on its own in a blind search of many days.
+  - GW190706_222641 (GWTC, SNR 13.1): logit 7.94, louder than all 187 h of background. Matched filter network SNR
+    12.0.
+  - GW190707_093326 (GWTC, 11.5+8.3, SNR 12.7): logit 0.18, far 9.5/h, not found. The bank also gives only 6.4
+    (25+20), below H1's own background. Not examined further.
+  - Uncatalogued: 3 triggers under 0.1/h (1.9 expected), 21 at 0.1-1/h (17.7). The top five (far 0.08-0.15/h)
+    all fail `consistent`, each with one detector below its own background.
+  - **Totals over the five older days and 170720's segment:** 77 h searched, no new candidates. One IAS-only event
+    (GW190707_083226) recovered at 1 per 47 h. Two more (GW190818_232544, GW190906_054335) were missed, as
+    expected at SNR 8 (38% efficiency). One (GW190814_192009) fell in unsearchable data.
