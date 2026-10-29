@@ -45,6 +45,7 @@
     if[not (count each m`weight)~count each m`bias; '"bias length must match the number of nodes"];
     if[not (-1_count each m`weight)~1_count each first each m`weight; '"layer sizes don't chain"];
     if[`conv in key m; .qs.checkConv m];
+    if[`gru in key m; .qs.checkGru m];
     m
  }
 
@@ -58,6 +59,17 @@
     if[not (l[`filters],'l[`kernel]*cins)~(count each m`ckernel),'count each first each m`ckernel; '"conv kernel shapes don't match the layers"];
     if[not (l`filters)~count each m`cbias; '"conv bias lengths don't match the filters"];
     if[not ((last .qs.conv.lengths spec)*last l`filters)=count first first m`weight; '"conv output size doesn't match the first dense layer"];
+ }
+
+/ a GRU layer: the spec and the shapes of its weights and bias, and its hidden size feeding the dense layers
+.qs.checkGru:{[m]
+    if[not all `gW`gU`gb in key m; '"GRU models need gW, gU and gb"];
+    s:m`gru; H:s`hidden; nin:s[`channels]*s`block;
+    if[not 0=s[`length] mod s`block; '"the GRU block must divide the length"];
+    if[not ((3*H),nin)~(count m`gW;count first m`gW); '"GRU input weights must be 3*hidden x channels*block"];
+    if[not ((3*H),H)~(count m`gU;count first m`gU); '"GRU recurrent weights must be 3*hidden x hidden"];
+    if[not (3*H)=count m`gb; '"GRU bias must have 3*hidden values"];
+    if[not H=count first first m`weight; '"the GRU's hidden size doesn't match the first dense layer"];
  }
 
 / new model with nIn inputs and one layer per entry of sizes
@@ -85,7 +97,8 @@
 .qs.conv.lengths:{[spec] spec[`length],{[t;l] (t-l[`kernel]-1) div l`pool}\[spec`length;spec`layers]}
 
 / number of inputs a model takes per row
-.qs.inputSize:{[m] $[`conv in key m; m[`conv;`channels]*m[`conv;`length]; count first first m`weight]}
+.qs.inputSize:{[m] $[`conv in key m; m[`conv;`channels]*m[`conv;`length];
+    `gru in key m; m[`gru;`channels]*m[`gru;`length]; count first first m`weight]}
 
 / batch rows to channel-major long layout: n x (channels*length) -> channels x (n*length), one vector per channel
 / holding every example's samples in turn (long simple vectors keep the gathers and scatters fast in q)
@@ -140,8 +153,62 @@
     `ckernel`cbias!(reverse r 0;reverse r 1)
  }
 
-/ the dense layers' input for a batch: the conv features, or X itself
-.qs.features:{[m;X] $[`conv in key m; .qs.conv.forward[m;X]`features; X]}
+/ GRU front end (G5.3). A model may have, before its dense layers, one gated recurrent unit layer given by m`gru
+/ (`channels`length`block`hidden). Input rows are channel-major as for conv layers; each of the length div block
+/ steps reads the next block samples of every channel (channels*block inputs), so long sequences take few steps
+/ without discarding samples. The final hidden state feeds the dense layers. Parameters: m`gW (3*hidden x
+/ channels*block; update, reset and candidate rows in that order), m`gU (3*hidden x hidden) and m`gb (3*hidden).
+/ One step, from state h (zero at the start):
+/   z = sigmoid(x Wz + h Uz + bz), r = sigmoid(x Wr + h Ur + br), n = tanh(x Wn + r*(h Un) + bn), h' = (1-z) n + z h
+.qs.gru.sig:.qs.act.f`sigmoid
+
+/ the inputs of each step for batch X: one (rows x channels*block) matrix per step
+.qs.gru.steps:{[X;spec]
+    c:spec`channels; len:spec`length; k:spec`block;
+    {[X;c;len;k;t] raze each flip {[X;len;k;t;ch] X[;(ch*len)+(t*k)+til k]}[X;len;k;t] each til c}[X;c;len;k] each til len div k
+ }
+
+/ the GRU over batch X: the final hidden states (the features), each step's cache and the steps' inputs
+.qs.gru.forward:{[m;X]
+    xs:.qs.gru.steps["f"$X;m`gru]; H:m[`gru;`hidden];
+    p:`W`U`b`jz`jr`jn!(m`gW;m`gU;m`gb;til H;H+til H;(2*H)+til H);
+    one:{[p;s;x]
+        h:s 0; a:(x mmu flip p`W)+\:p`b; u:h mmu flip p`U;
+        z:.qs.gru.sig a[;p`jz]+u[;p`jz]; r:.qs.gru.sig a[;p`jr]+u[;p`jr]; hn:u[;p`jn];
+        n:.qs.act.f[`tanh] a[;p`jn]+r*hn;
+        (((1-z)*n)+z*h;s[1],enlist `h`z`r`n`hn!(h;z;r;n;hn))}[p];
+    r:one/[((count X;H)#0f;());xs];
+    `features`caches`steps!(r 0;r 1;xs)
+ }
+
+/ gradients of the GRU parameters by backpropagation through time, from the gradient at the final state
+.qs.gru.backward:{[m;f;dh]
+    one:{[U;s;c;x]
+        dh:s 0; z:c`z; r:c`r; n:c`n; h:c`h;
+        dn:dh*1-z; dz:dh*h-n; dan:dn*1-n*n;
+        daz:dz*z*1-z; dar:(dan*c`hn)*r*1-r; dhn:dan*r;
+        / gradients at the input and recurrent pre-activations (rows x 3*hidden)
+        dA:daz,'dar,'dan; dU:daz,'dar,'dhn;
+        ((dh*z)+dU mmu U;s[1]+flip[dA] mmu x;s[2]+flip[dU] mmu h;s[3]+sum dA)}[m`gU];
+    r:one/[(dh;0f*m`gW;0f*m`gU;0f*m`gb);reverse f`caches;reverse f`steps];
+    `gW`gU`gb!(r 1;r 2;r 3)
+ }
+
+/ a model with a GRU layer: channels x length inputs read block samples per channel a step, hidden units, then
+/ dense layers as .qs.init (sizes and acts). Input weights are Xavier-uniform, recurrent ones uniform in
+/ +-1/sqrt(hidden), biases zero
+.qs.initGru:{[channels;length;block;hidden;sizes;acts;seed]
+    if[not 0=length mod block; '"the GRU block must divide the length"];
+    spec:`channels`length`block`hidden!"j"$(channels;length;block;hidden);
+    if[not null seed; system "S ",string seed];
+    nin:channels*block; a:sqrt 6%nin+hidden; b:1%sqrt hidden;
+    W:(3*hidden;nin)#a*-1+2*(3*hidden*nin)?1f; U:(3*hidden;hidden)#b*-1+2*(3*hidden*hidden)?1f;
+    d:.qs.init[hidden;sizes;acts;0N];
+    .qs.check d,`gru`gW`gU`gb!(spec;W;U;(3*hidden)#0f)
+ }
+
+/ the dense layers' input for a batch: the conv or GRU features, or X itself
+.qs.features:{[m;X] $[`conv in key m; .qs.conv.forward[m;X]`features; `gru in key m; .qs.gru.forward[m;X]`features; X]}
 
 / a model with conv layers: channels x length inputs, conv layers (a table or list of dictionaries of filters,
 / kernel, pool and act), then dense layers as .qs.init (sizes and acts). Kernels are He-uniform, biases zero
@@ -183,8 +250,8 @@
 / model outputs for a batch matrix X, or for a single example vector; large batches are spread over threads
 .qs.predict:{[m;X]
     v:0h<type X; X:"f"$$[v;enlist X;X];
-    / conv models work through bounded blocks of rows: their intermediate matrices grow with rows x length
-    out:$[`conv in key m;
+    / conv and GRU models work through bounded blocks of rows: their intermediates grow with rows x length
+    out:$[any `conv`gru in key m;
         {[m;X] raze {[m;X;i] last last .qs.forward[m;X i]}[m;X] each .qs.predictBlock cut til count X}[m];
         {[m;X] last last .qs.forward[m;X]}[m]];
     A:$[1<count i:.qs.shards count X; raze {[f;X;i] f X i}[out;X] peach i; out X];
@@ -195,7 +262,7 @@
 / it keeps the order among examples whose probabilities all round to 1
 .qs.predictRaw:{[m;X]
     v:0h<type X; X:"f"$$[v;enlist X;X];
-    out:$[`conv in key m;
+    out:$[any `conv`gru in key m;
         {[m;X] raze {[m;X;i] last first .qs.forward[m;X i]}[m;X] each .qs.predictBlock cut til count X}[m];
         {[m;X] last first .qs.forward[m;X]}[m]];
     A:$[1<count i:.qs.shards count X; raze {[f;X;i] f X i}[out;X] peach i; out X];
@@ -216,9 +283,9 @@
 
 / gradient of loss over a single shard, with one mask per layer as for .qs.forwardMasked
 .qs.grad1:{[m;X;Y;loss;M]
-    conv:`conv in key m;
-    cf:$[conv; .qs.conv.forward[m;X]; ()!()];
-    X:$[conv; cf`features; X];
+    conv:`conv in key m; gru:`gru in key m;
+    cf:$[conv; .qs.conv.forward[m;X]; gru; .qs.gru.forward[m;X]; ()!()];
+    X:$[conv or gru; cf`features; X];
     za:.qs.forwardMasked[m;X;M]; Z:za 0; U:za 1; A:za 2; out:last A; f:last m`act;
     dOut:$[any (f;loss)~/:.qs.paired; (out-Y)%count Y;
         f=`softmax; '"softmax output needs xent loss";
@@ -226,8 +293,9 @@
     / deltas from the output layer back: d_l = (d_(l+1) mmu W[l+1]) * f_l'(Z[l]) * mask_l
     D:{[ds;w;z;u;k;f] (enlist k*.qs.act.d[f][z;u]*first[ds] mmu w),ds}/[enlist dOut;reverse 1_m`weight;reverse -1_Z;reverse -1_U;reverse -1_M;reverse -1_m`act];
     g:`weight`bias!({flip[x] mmu y}'[D;-1_A];sum each D);
-    / with conv layers, carry the gradient at the dense layers' input back through them
-    $[conv; g,.qs.conv.backward[m;cf`caches;first[D] mmu first m`weight]; g]
+    / with conv or GRU layers, carry the gradient at the dense layers' input back through them
+    $[conv; g,.qs.conv.backward[m;cf`caches;first[D] mmu first m`weight];
+        gru; g,.qs.gru.backward[m;cf;first[D] mmu first m`weight]; g]
  }
 
 / predicted class per row: argmax, or a 0.5 threshold for single-output models
@@ -285,13 +353,13 @@
     10;32;0.1;`mse;`sgd;0.9;0.9;0.999;0f;0f;`none;0.5;10;0f;0N;0b;1b;42;1;{[r]})
 
 / the numeric parameter keys of a model
-.qs.params:{[m] `weight`bias`ckernel`cbias inter key m}
+.qs.params:{[m] `weight`bias`ckernel`cbias`gW`gU`gb inter key m}
 
 / one gradient step on batch rows b; s holds `model`state (and anything else, passed through)
 .qs.step:{[o;X;Y;s;b]
     m:s`model;
     g:.qs.gradDrop[m;X b;Y b;o`loss;o`dropout];
-    if[o[`l2]>0; g[`weight]+:o[`l2]*m`weight; if[`ckernel in key m; g[`ckernel]+:o[`l2]*m`ckernel]];
+    if[o[`l2]>0; g:{[o;m;g;k] g[k]+:o[`l2]*m k; g}[o;m]/[g;`weight`ckernel`gW`gU inter key m]];
     r:.qs.opt.step[o`optimiser][o;s`state;g];
     m:{[m;r;k] m[k]-:r[0] k; m}[;r]/[m;.qs.params m];
     s[`model]:m; s[`state]:r 1;
@@ -368,6 +436,12 @@
 / outputs as channels x length), with a type column when there are any
 .qs.summary:{[m]
     d:.qs.summaryDense m;
+    if[`gru in key m;
+        s:m`gru; H:s`hidden;
+        c:([] layer:enlist 0; kind:enlist `gru; inputs:enlist (string s`channels),"x",string s`length;
+            outputs:enlist string H; act:enlist `tanh; params:enlist sum count each raze each (m`gW;m`gU;enlist m`gb));
+        d:update kind:`dense, layer:layer+1, inputs:string inputs, outputs:string outputs from d;
+        :c,`layer`kind`inputs`outputs`act`params xcols d];
     if[not `conv in key m; :d];
     spec:m`conv; l:spec`layers; ts:.qs.conv.lengths spec; cins:spec[`channels],-1_l`filters;
     c:([] layer:til count l; kind:(count l)#`conv; inputs:{[c;t] (string c),"x",string t}'[cins;-1_ts];

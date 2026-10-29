@@ -3,11 +3,12 @@
 /   q bench/gw/gw_cnn.q -s 4 -q [-filters 8 16 32] [-kernel 32 16 8] [-pool 4 4 4] [-hidden 32] [-snr 8 30]
 /        [-merger 0.6 0.9] [-glitchy 0.25] [-epochs 20] [-lr 0.001] [-rows 6000] [-batch 128] [-save file]
 /        [-mine 6] [-hard models/gw_cnn_1.qsm] [-real 0.5] [-patience 8] [-bulk O4a -bstart GPS -bstop GPS [-mix]]
-/        [-single 0.25] [-shuffle]
+/        [-single 0.25] [-shuffle] [-gru 16 32]
 /   -bulk: train on that run's bulk noise between bstart and bstop (.qs.gw.bulkNoise, cached in data/gw/noise),
 /   its last 20% of time held out for validation; -mix also keeps the O1-O3 training noise; -single: share of the
 /   non-signal windows with a chirp in one detector only; -shuffle: a control that trains on shuffled labels (the
-/   validation labels stay true, so such a model must do no better than chance)
+/   validation labels stay true, so such a model must do no better than chance); -gru block units: a GRU front end
+/   (G5.3) instead of the conv layers, reading block samples per detector a step (2048/block steps)
 /   -mine: real glitches above that whitened amplitude in the training noise become hard negatives (kind `real);
 /   -hard: so do windows that model scores above 0.5; -real: their share of the glitchy windows; -patience: early
 /   stopping on validation loss, keeping the best epoch
@@ -47,7 +48,9 @@ system "S 1";
 vb:.qs.gw.batch[val;vp;2000;ov];
 gen:{[train;tp;o;n;e] .qs.gw.batch[train;tp;n;o]}[train;tp;o;n];
 if[`shuffle in key a; gen:{[f;e] b:f e; b[`Y]:b[`Y] neg[c]?c:count b`Y; b}[gen]; -1 "control: training labels shuffled"];
-m:.qs.initConv[2;2048;layers;hidden,1;((count hidden)#act),`sigmoid;1];
+m:$[`gru in key a;
+    .qs.initGru[2;2048;"J"$a[`gru;0];"J"$a[`gru;1];hidden,1;((count hidden)#act),`sigmoid;1];
+    .qs.initConv[2;2048;layers;hidden,1;((count hidden)#act),`sigmoid;1]];
 show .qs.summary m;
 patience:g[`patience;0N;{"J"$first x}];
 r:.qs.train[m;`gen`Xval`Yval!(gen;vb`X;vb`Y);`epochs`batch`lr`loss`optimiser`l2`patience`keepBest`verbose!(epochs;batch;lr;`bce;`adam;0.0001;patience;not null patience;1)];

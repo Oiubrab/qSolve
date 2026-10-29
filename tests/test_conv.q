@@ -1,13 +1,15 @@
 / 1-D convolution layers (G5.2)
 
-/ numeric gradient of every parameter (dense and conv) by central differences
+/ numeric gradient of every parameter (dense, conv and GRU) by central differences
 .t.fdAll:{[m;X;Y;loss;h]
     L:{[X;Y;loss;m] .qs.loss.v[loss][.qs.predict[m;X];Y]}[X;Y;loss];
     fd:{[L;m;h;k;i] (L[@[m;k;.[;i;+;h]]]-L[@[m;k;.[;i;-;h]]])%2*h}[L;m;h];
     ixM:{[ms] raze {[l;w] raze l,/:'til[count w],/:\:til count first w}'[til count ms;ms]};
     ixV:{[vecs] raze {[l;b] l,/:til count b}'[til count vecs;vecs]};
     ks:.qs.params m;
-    ixs:{[ixM;ixV;m;k] $[k in `weight`ckernel; ixM m k; ixV m k]}[ixM;ixV;m] each ks;
+    / (a GRU's gW and gU are single matrices and gb a single vector)
+    ixs:{[ixM;ixV;m;k] $[k in `weight`ckernel; ixM m k; k in `gW`gU; raze (til count m k),/:\:til count first m k;
+        k=`gb; enlist each til count m k; ixV m k]}[ixM;ixV;m] each ks;
     ks!{[m;fd;k;ix] {.[x;y 0;:;y 1]}/[0f*m k;flip (ix;fd[k] each ix)]}[m;fd]'[ks;ixs]
  }
 
