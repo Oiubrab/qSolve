@@ -23,7 +23,7 @@ test:.qs.gw.loadNoise`GW150914; tp:.qs.gw.pairs test;
 t0:.z.p;
 bg:.qs.gw.libSlides[m;test;tp;`slides`step`sep!(slides;0.25;1)];
 -1 "background: ",(string count bg`logit)," triggers in ",(string bg[`seconds]%3600)," h (",(string .z.p-t0),")";
-rates:1,(1%24),1%24*30;
+rates:1f,(1%24),1%24*30;
 th:([] rate:`$("1/hour";"1/day";"1/month"); perHour:rates; logit:.qs.gw.thresholds[bg`logit;bg`seconds;rates]);
 -1 ""; -1 "thresholds (null: the background is too short to measure that rate):"; show th;
 

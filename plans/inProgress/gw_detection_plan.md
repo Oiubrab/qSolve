@@ -234,9 +234,9 @@ almost every size in this one.
 
 ### G6 — Evaluation on simulations
 
-- [ ] **G6.1 Background and false-alarm rate.** Time slides on the held-out test noise give many hours of
+- [x] **G6.1 Background and false-alarm rate.** Time slides on the held-out test noise give many hours of
   noise-only coincident windows; score them all; map score thresholds to false alarms per hour, day and month.
-- [ ] **G6.2 Efficiency.** Injections into test noise across SNR bins (e.g. 4–30); detection efficiency per
+- [ ] **G6.2 Efficiency.** (Done for the CNN, see the 2026-10-29 log; the matched-filter comparison remains.) Injections into test noise across SNR bins (e.g. 4–30); detection efficiency per
   bin at thresholds for false-alarm rates of 1/hour, 1/day and 1/month; ROC curves. Compare with the
   matched-filter baseline (G2.4) on the same injections, using a small template bank built from the same
   waveform model.
@@ -245,14 +245,14 @@ almost every size in this one.
 
 ### G7 — Real detections
 
-- [ ] **G7.1 Scan.** Slide the 1 s window over each test event's 32 s H1 and L1 data (whitened with a PSD from
+- [x] **G7.1 Scan.** Slide the 1 s window over each test event's 32 s H1 and L1 data (whitened with a PSD from
   nearby data; a 4096 s file for a few events gives a better PSD) in steps of about 1/8 s; cluster peaks;
   record the top score and its time.
-- [ ] **G7.2 Results.** For every confident BBH in scope, held out from training noise: catalogue name, run,
+- [x] **G7.2 Results.** For every confident BBH in scope, held out from training noise: catalogue name, run,
   masses, catalogue network SNR, our top score, the time offset from the catalogue GPS time, and whether it
   was found at each false-alarm rate. Plot found and missed events against catalogue SNR. Note the loud
   events and any surprises (e.g. GW190521's very high mass, near the edge of the window).
-- [ ] **G7.3 Negative check.** Scan stretches of real noise with no catalogued event, including loud glitches
+- [x] **G7.3 Negative check.** Scan stretches of real noise with no catalogued event, including loud glitches
   if we can find them, and confirm the false alarms match the G6.1 estimate.
 
 ### G8 — Dashboard and documentation
@@ -320,6 +320,33 @@ almost every size in this one.
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-29: **G6.1, G7 done; G6.2 and G6.3 done for the CNN** (matched-filter comparison and shuffled-label
+  control pending). `bench/gw/gw_eval.q -model models/gw_cnn_4.qsm -injections 3000` (60 min on the shared
+  machine), in GW150914's held-out O1 noise (77 chunk pairs, 67 min, never trained or validated on):
+  - **Background**: every pair's H1 against every other pair's L1, 83.3 h, 135,185 triggers (local maxima 1 s
+    apart, 1/4 s steps, as the search). Logit thresholds: **1.26 for 1 false alarm per hour, 3.53 for 1 per day**;
+    1 per month needs about 720 h, not measured.
+  - **Efficiency** (3000 injections, SNR uniform 4-30, masses 10-80 M☉, random sky, orientation and spins, scored as
+    the search would see them):
+
+    | network SNR | 4-6 | 6-8 | 8-10 | 10-12 | 12-14 | 14-16 | 16-18 | 20-22 | 26-28 |
+    |---|---|---|---|---|---|---|---|---|---|
+    | found at 1/hour | 1% | 10% | 38% | 70% | 84% | 92% | 96% | 97% | 97% |
+    | found at 1/day | 0% | 1% | 7% | 30% | 63% | 82% | 89% | 93% | 96% |
+
+    Half are found at SNR about 9 (1/hour) and 11.5 (1/day). Above SNR 20, 3-4% are still missed: mostly signals
+    whose merger falls outside the trained 0.6-0.9 part of every window the search tries, or that sit mostly in
+    one detector (the single-detector negatives teach the model to distrust those).
+  - **By mass** (SNR 10 and up): 86-94% at 1/hour from 20 to 100 M☉ total, 99% above 120 M☉; **by mass ratio**:
+    92-93% everywhere. **Simulated glitches** (1000 single windows with a blip or sine-Gaussian in one detector):
+    none above either threshold.
+  - **G7.3, real noise**: on the searched O4a day (20.6 h, no catalogued event but GW231226, which is excluded),
+    11 unvetoed triggers exceed the 1/hour threshold where 20.6 are expected, and none the 1/day one (0.86
+    expected); 5 and 2 vetoed glitches would have. So the simulated background predicts the real false alarms (if
+    anything, pessimistically), provided the amplitude veto removes loud single-detector glitches.
+  - G7.1 and G7.2 are `bench/gw/gw_events.q` (35 held-out O3 detections, 29 found at under 1 false alarm per hour
+    with gw_cnn_2 and gw_cnn_4; table by SNR bin in the 2026-10-28 entry) and the O4a day (GW231226 above 412 h of
+    background).
 - 2026-10-29: G5.3 done, with a negative result. A GRU front end in the core (`.qs.initGru`, `.qs.gru.forward`,
   `.qs.gru.backward`; m`gru, m`gW, m`gU, m`gb): one layer whose steps each read a block of samples per channel (so
   1 s at 2048 Hz is 128 steps of 2 x 16 inputs, nothing discarded), the final state feeding dense layers.
