@@ -263,6 +263,66 @@ up to +0.30 on the same pipeline; and a split that mixes training and test rows 
 walk, which is what the purging prevents. The limit is the sample: 27 years is about 330 independent months per pair.
 `plans/completed/fx_trends_plan.md` has every number and the places the study departed from its plan.
 
+## Finding gravitational waves in LIGO data
+
+A second real-world test, revisiting the owner's honours thesis
+([recurrent_grav_detector](https://github.com/Oiubrab/recurrent_grav_detector)): a network that finds binary
+black hole mergers in real detector data from LIGO's Hanford (H1) and Livingston (L1) observatories. Everything is
+pure q except one small Python converter for GWOSC's HDF5 files.
+
+- **Signal processing** (`src/signal.q`): FFT, Welch power spectra, whitening, band-pass, resampling, spectrograms
+  and phase-maximised matched filtering.
+- **Waveforms and detectors** (`src/gw.q`): TaylorF2 and IMRPhenomB in the frequency domain, checked against
+  LALSuite's conventions; antenna patterns and light-travel delays for H1 and L1. A matched filter with these
+  templates finds GW150914 at SNR 19 in H1 and 13 in L1, 7 ms apart.
+- **Training data made fresh each epoch**: real whitened noise from the public 4096 s files around six events and
+  from O4a bulk data, chirps (10–80 M☉, aligned spins, random sky) injected at a chosen network SNR, simulated
+  glitches, real glitches mined from the noise, and chirps in one detector only. These last three are labelled
+  noise, which is what made the detector usable on real data.
+- **Models**: a 1-D convolutional network (the core gained Conv1D layers for this) on 1 s of both detectors at
+  2048 Hz. A GRU (also in the core, gradient-checked) didn't learn the task from raw samples.
+
+Results for the best model, `gw_cnn_4`. Each false-alarm rate is measured by sliding one detector's noise against
+the other's, never on the data it's applied to:
+
+| test | result |
+|---|---|
+| Simulated chirps in held-out O1 noise (83 h of background) | at 1 false alarm per hour: half found at network SNR 10, 95% or more above SNR 16. At 1 per day: half at SNR 12 |
+| 35 confident O3 detections, never trained on | 29 found at under 1 false alarm per hour (the first CNN, before the glitch work, found 12) |
+| GW150914 and GW231226 | both found clearly; GW231226 (O4a) is louder than all 412 h of its day's background |
+| A full day of O4a data (20.6 h searched) | nothing else stands out: uncatalogued triggers match what the background predicts (11 above the 1/hour threshold where 20.6 were expected, none above 1/day) |
+
+So it finds loud mergers reliably, and finds quieter ones only some of the time. LIGO's own matched-filter searches
+found those O3 events at false-alarm rates typically below 1 per year, so this is far from competitive. The point is a
+working, honest pipeline in q. The full numbers and every decision are in `plans/inProgress/gw_detection_plan.md`
+and `plans/inProgress/gw_open_search_plan.md`.
+
+```bash
+scripts/gw/fetch_gw.sh                     # 4096 s event files for the noise library (a few GB)
+scripts/gw/fetch_gw.sh --test-events --duration 32              # 32 s files around the test detections
+q bench/gw/gw_cnn.q -s 4 -q -save models/gw_cnn_1.qsm          # train (options in the file's header)
+q bench/gw/gw_events.q -s 4 -q -model models/gw_cnn_1.qsm      # the O3 detections, with time-slide background
+q bench/gw/gw_eval.q -s 4 -q -model models/gw_cnn_1.qsm        # background, efficiency and glitch checks
+python3 -m venv .venv && .venv/bin/pip install h5py numpy       # for bulk data only
+scripts/gw/search_days.sh models/gw_cnn_1.qsm 10 O4a:1387577000 # fetch, search and time-slide whole days
+q bench/gw/gw_vet.q -s 4 -q -run O4a -start 1387577000 -stop 1387663400   # matched-filter follow-up of the top triggers
+```
+
+The dashboard's **Waves** tab shows any downloaded event, or a chirp you inject into held-out noise. It plots the
+whitened strain, a spectrogram and the network's output over time, and gives the verdict at each measured
+false-alarm rate.
+
+**Data.** This uses data obtained from the Gravitational Wave Open Science Center (https://gwosc.org), a service of
+the LIGO Scientific Collaboration, the Virgo Collaboration and KAGRA, under the CC BY 4.0 licence. LIGO is funded
+by the U.S. National Science Foundation; see https://gwosc.org/acknowledgement/ for the full acknowledgement.
+
+**References.** Abbott et al., *Open data from the first and second observing runs of Advanced LIGO and Advanced
+Virgo*, SoftwareX 13 (2021); Ajith et al., *Inspiral-merger-ringdown waveforms for black-hole binaries with
+nonprecessing spins*, PRL 106 (2011) (IMRPhenomB); LALSuite (https://git.ligo.org/lscsoft/lalsuite) for waveform
+and detector conventions; George and Huerta, *Deep learning for real-time gravitational wave detection and
+parameter estimation*, PLB 778 (2018), and Gabbard et al., *Matching matched filtering with deep networks for
+gravitational-wave astronomy*, PRL 120 (2018), for CNN detectors on whitened strain.
+
 ## Serving a model
 
 `train.q -save` stores the model, and for table or CSV data the column encoding too. `serve.q` answers

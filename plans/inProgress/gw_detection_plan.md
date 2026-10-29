@@ -260,7 +260,7 @@ almost every size in this one.
 - [x] **G8.1 Dashboard.** A gravitational-waves view: the event list with our result per event; the whitened
   H1/L1 strain and a spectrogram around an event; the network's score over time; injecting a chosen chirp
   into real noise and watching the detector respond.
-- [ ] **G8.2 README.** A section with results stated plainly (efficiency curve, real events found and missed),
+- [x] **G8.2 README.** A section with results stated plainly (efficiency curve, real events found and missed),
   data acknowledgement (GWOSC, LIGO/Virgo/KAGRA, CC BY 4.0), references, and how to rerun everything.
 
 ---
@@ -320,6 +320,8 @@ almost every size in this one.
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-29: G8.2 done: README section "Finding gravitational waves in LIGO data" (what's built, the results table
+  for gw_cnn_4, how to rerun, GWOSC acknowledgement under CC BY 4.0, references).
 - 2026-10-29: **G6.1, G7 done; G6.2 and G6.3 done for the CNN** (matched-filter comparison and shuffled-label
   control pending). `bench/gw/gw_eval.q -model models/gw_cnn_4.qsm -injections 3000` (60 min on the shared
   machine), in GW150914's held-out O1 noise (77 chunk pairs, 67 min, never trained or validated on):
@@ -334,7 +336,7 @@ almost every size in this one.
     | found at 1/hour | 1% | 10% | 38% | 70% | 84% | 92% | 96% | 97% | 97% |
     | found at 1/day | 0% | 1% | 7% | 30% | 63% | 82% | 89% | 93% | 96% |
 
-    Half are found at SNR about 9 (1/hour) and 11.5 (1/day). Above SNR 20, 3-4% are still missed; why isn't
+    Half are found at SNR about 10 (1/hour) and 12 (1/day), interpolating between bins. Above SNR 20, 3-4% are still missed; why isn't
     examined yet (this run's per-injection table wasn't saved: the CSV write failed on a typing slip, now fixed).
     Candidates to check: signals mostly in one detector (which the single-detector negatives teach the model to
     distrust) and the highest masses, whose mergers sit near the window's edge.
