@@ -15,6 +15,7 @@
     <button role="tab" data-view="search">Search</button>
     <button role="tab" data-view="predict">Predict</button>
     <button role="tab" data-view="models">Models</button>
+    <button role="tab" data-view="waves">Waves</button>
   </nav>
   <div class="status"><span class="dot" id="conn-dot"></span><span class="text" id="conn-text">connecting</span></div>
   <button class="icon-btn" id="theme" title="Switch light or dark theme" aria-label="Switch theme"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
@@ -179,6 +180,39 @@
   <!-- models -->
   <section class="view" id="view-models">
     <div class="card"><h2>Saved models <span class="sub">in models/</span></h2><div class="table-wrap" id="models-table"></div></div>
+  </section>
+  <section class="view" id="view-waves">
+    <div class="split">
+      <div class="stack">
+        <div class="card">
+          <h2>Detector</h2>
+          <div class="field"><label for="w-model">GW model <span class="sub">models/gw_*.qsm</span></label><select id="w-model"></select></div>
+          <p class="hint" id="w-hint"></p>
+        </div>
+        <div class="card">
+          <h2>Real event</h2>
+          <div class="field"><label for="w-event">Catalogued event with its 32 s files here</label><select id="w-event"></select></div>
+          <div class="btns"><button class="btn primary" id="w-show">Show event</button></div>
+        </div>
+        <div class="card">
+          <h2>Simulated chirp</h2>
+          <div class="row2">
+            <div class="field"><label for="w-m1">Mass 1 (M☉)</label><input type="number" id="w-m1" value="36" min="5" max="100" step="1"></div>
+            <div class="field"><label for="w-m2">Mass 2 (M☉)</label><input type="number" id="w-m2" value="29" min="5" max="100" step="1"></div>
+          </div>
+          <div class="field"><label for="w-snr">Network SNR</label><input type="number" id="w-snr" value="12" min="0" max="100" step="1"></div>
+          <div class="btns"><button class="btn" id="w-inject">Inject into test noise</button></div>
+          <p class="hint">Random sky position, orientation and spins, added to real noise the models never trained on.</p>
+        </div>
+      </div>
+      <div class="stack">
+        <div class="card"><h2 id="w-title">Gravitational waves</h2><div id="w-summary" class="about">Pick a model, then show a real event or inject a chirp.</div></div>
+        <div class="card"><h2>H1 <span class="sub">whitened strain, s from the merger</span></h2><div class="chart" id="w-h1"></div></div>
+        <div class="card"><h2>L1 <span class="sub">whitened strain, s from the merger</span></h2><div class="chart" id="w-l1"></div></div>
+        <div class="card"><h2>Spectrogram <span class="sub">H1 + L1 power, 20–512 Hz</span></h2><div class="chart" id="w-spec"></div></div>
+        <div class="card"><h2>Network output <span class="sub">logit of the 1 s window whose implied merger is at t</span></h2><div class="chart" id="w-score"></div></div>
+      </div>
+    </div>
   </section>
 </main>
 <div id="toasts" aria-live="polite"></div>

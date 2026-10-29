@@ -84,6 +84,15 @@
     0.5-0.5*cos (2*.qs.sig.pi*til n)%(n-1)
  }
 
+/ power spectrogram: Hann-windowed segments of len samples every hop samples. Returns `t (each segment's centre, s
+/ from the first sample), `f (Hz) and `p (one row of power per segment, |rfft|^2 of the windowed segment)
+.qs.sig.spectrogram:{[x;rate;len;hop]
+    x:"f"$x; w:.qs.sig.hann len;
+    st:hop*til 1+(count[x]-len) div hop;
+    p:{[x;w;len;s] f:.qs.sig.rfft w*x s+til len; (f[0]*f 0)+f[1]*f 1}[x;w;len] each st;
+    `t`f`p!((st+len%2)%rate;rate*(til count first p)%.qs.sig.pow2ceil len;p)
+ }
+
 .qs.sig.tukeyInner:{[n;alpha]
     edge:alpha*(n-1)%2;
     i:til n;

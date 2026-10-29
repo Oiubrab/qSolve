@@ -109,12 +109,26 @@ async function scenario({ ev, until, shot, size, sleep }) {
   await ev(`[...document.querySelectorAll('#models-table button')].find(b => b.closest('tr').textContent.includes(${JSON.stringify(name)})).click(), true`);
   await until(`document.querySelector('#view-predict').classList.contains('active') && document.querySelector('#p-in-area')`);
   fs.rmSync(path.join(ROOT, "models", name + ".qsm"), { force: true });
+  // gravitational waves, when a GW model (models/gw_*.qsm) and GW150914's files are here
+  const waves = async (tag) => {
+    await ev(`document.querySelector('nav button[data-view=waves]').click(), true`);
+    await until(`WV.loaded`);
+    if (!(await ev(`!document.querySelector('#w-show').disabled`))) return;
+    await ev(`(WV.last = null, document.querySelector('#w-show').click(), true)`);
+    await until(`WV.last`, 120000); await sleep(300);
+    await shot(tag + "-waves-event");
+    await ev(`(WV.last = null, document.querySelector('#w-snr').value = '20', document.querySelector('#w-inject').click(), true)`);
+    await until(`WV.last`, 120000); await sleep(300);
+    await shot(tag + "-waves-inject");
+  };
+  await waves("14");
   await ev(`(document.documentElement.dataset.theme='dark', document.querySelector('nav button[data-view=train]').click(), openRun(1), true)`);
   await until(`!document.querySelector('#boundary-card').hidden`);
   await sleep(300);
   await shot("12-dark");
   await size(390, 844); await sleep(600);
   await shot("13-phone");
+  await waves("15");
 }
 
 (async () => {

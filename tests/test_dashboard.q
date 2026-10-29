@@ -180,3 +180,28 @@ system "l ",.t.root,"/app/dashboard.q";
     p:first .t.ask `cmd`run`recent!("predict";d`run;d[`schema]`recent);
     .t.ok[p[`forecast] within 0.8 1.6;"forecast out of range"];
  }];
+
+/ the gravitational-wave view (G8.1): the event list, GW150914's view and an injection, with a trained GW model
+.t.add[`dash_gw;{
+    if[()~key .t.path "models/gw_cnn_4.qsm"; .t.skip "needs models/gw_cnn_4.qsm (q bench/gw/gw_cnn.q ... -save)"];
+    m:first .t.ask (enlist `cmd)!enlist "gwEvents";
+    .t.eq[m`type;"gwEvents"];
+    .t.ok[(enlist "gw_cnn_4") in m`models;"GW models listed"];
+    if[not any (enlist "GW150914") in m[`events]@\:`name; .t.skip "needs GW150914's 32 s files (scripts/gw/fetch_gw.sh)"];
+    e:first .t.ask `cmd`event`model!("gwEvent";"GW150914";"gw_cnn_4");
+    .t.eq[e`type;"gwEvent"];
+    v:e`view;
+    .t.eq[count v`H1;count v`t];
+    .t.eq[count v`L1;count v`t];
+    .t.ok[all (v`t) within -2.001 2.001;"strain within 2 s (and a sample) of the event"];
+    sc:v`scores;
+    near:max sc[`logit] where 0.3>abs sc`t;
+    .t.ok[near>5+max sc[`logit] where 1.5<abs sc`t;"GW150914 should stand out: ",string near];
+    if[()~key .t.path "data/gw/noise/GW150914"; .t.skip "needs the test noise library"];
+    i:first .t.ask `cmd`model`m1`m2`snr!("gwInject";"gw_cnn_4";36;29;25);
+    .t.eq[i`type;"gwInject"];
+    .t.eq[i[`view;`params]`snr;25f];
+    .t.eq[count i[`view]`signalH1;count i[`view]`t];
+    b:first .t.ask `cmd`model`m1`m2`snr!("gwInject";"gw_cnn_4";36;29;500);
+    .t.eq[b`type;"error"];
+ }];

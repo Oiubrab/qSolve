@@ -256,7 +256,7 @@ long-duration signals (see scope).
 
 ### G8 — Dashboard and documentation
 
-- [ ] **G8.1 Dashboard.** A gravitational-waves view: the event list with our result per event; the whitened
+- [x] **G8.1 Dashboard.** A gravitational-waves view: the event list with our result per event; the whitened
   H1/L1 strain and a spectrogram around an event; the network's score over time; injecting a chosen chirp
   into real noise and watching the detector respond.
 - [ ] **G8.2 README.** A section with results stated plainly (efficiency curve, real events found and missed),
@@ -319,6 +319,18 @@ long-duration signals (see scope).
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-29: G8.1 done: a **Waves** tab in the dashboard (`app/dashboard.q` commands `gwEvents`, `gwEvent`,
+  `gwInject`; `app/ui`). Pick a GW model (`models/gw_*.qsm`) and a catalogued event whose 32 s files are here: the
+  whitened H1 and L1 strain within 2 s of the merger, an H1+L1 spectrogram (`.qs.sig.spectrogram`, 1/8 s Hann
+  segments every 1/64 s, the dashboard's sequential ramp), and the network's logit over the file, with a verdict
+  at each false-alarm threshold `bench/gw/gw_eval.q` has measured for the model. Or inject a chirp (masses, network
+  SNR; random sky, orientation and spins) into GW150914's held-out noise and see it with the signal alone overlaid.
+  `.qs.gw.view`, `.qs.gw.eventView`, `.qs.gw.injectView`, `.qs.gw.injectChunk` (now shared with the G6 injections);
+  `.qs.gw.scan` returns logits. Tests: `gw_views`, `dash_gw`; `tests/ui/check.js` drives the tab in light, dark and
+  phone layouts. GW150914 with gw_cnn_4: logit 12.2 within 0.1 s of the merger, -2.2 at most elsewhere in the file.
+- 2026-10-29: G6 evaluation tools (`bench/gw/gw_eval.q`, `.qs.gw.libSlides`, `.qs.gw.thresholds`,
+  `.qs.gw.injectWindows`, `bench/gw/gw_cnn.q -shuffle`); runs in progress. The matched-filter comparison (G6.2's
+  last sentence) is deferred: a fair false-alarm rate for it needs hours of pure-q matched filtering.
 - 2026-10-28: **Glitch work (see [gw_open_search_plan.md](gw_open_search_plan.md), G-B) lifts the O3 results from
   12 to 29 of 35 held-out detections at under 1 false alarm per hour.** `bench/gw/gw_events.q` (same O3 time-slide
   background, 4.85 h) per model, events found at under 1/h and under 1 per 5 h:

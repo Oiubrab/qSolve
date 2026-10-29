@@ -94,7 +94,8 @@ function connect() {
 function call(cmd, payload = {}, onMsg, long = false) {
   const id = conn.next++;
   const final = { hello: ["hello"], upload: ["uploaded"], train: ["done"], search: ["searched"], predict: ["predicted"],
-    save: ["saved"], load: ["loaded"], report: ["done"], forget: ["runs"], runs: ["runs"], datasets: ["datasets"], example: ["example"] }[cmd] || [];
+    save: ["saved"], load: ["loaded"], report: ["done"], forget: ["runs"], runs: ["runs"], datasets: ["datasets"], example: ["example"],
+    gwEvents: ["gwEvents"], gwEvent: ["gwEvent"], gwInject: ["gwInject"] }[cmd] || [];
   const msg = JSON.stringify({ ...payload, cmd, id });
   return new Promise((resolve, reject) => {
     if (long) { conn.busy++; updateBusy(); }
@@ -497,7 +498,7 @@ function lineChart(el, lines, opts = {}) {
   // end labels, unless they would collide
   const ends = lines.map((l) => { const p = l.points.filter((q) => isNum(q[1])); return p.length ? { l, y: Y(p[p.length - 1][1]), v: p[p.length - 1][1] } : null; }).filter(Boolean);
   const apart = ends.every((a, i) => ends.every((b, j) => i === j || Math.abs(a.y - b.y) > 13));
-  if (apart && ends.length <= 4) for (const e of ends) svg.append(s("text", { x: W - m.r + 8, y: e.y + 4, class: "endlabel" }, yf(e.v)));
+  if (apart && ends.length <= 4 && opts.endLabels !== false) for (const e of ends) svg.append(s("text", { x: W - m.r + 8, y: e.y + 4, class: "endlabel" }, yf(e.v)));
   // crosshair and tooltip
   const cross = s("line", { y1: m.t, y2: H - m.b, class: "cross", visibility: "hidden" });
   svg.append(cross);
@@ -1156,16 +1157,127 @@ async function loadModel(name) {
 
 // ---------- views and theme ----------
 
+// ---- gravitational waves: real events and simulated chirps through a trained GW detector ----
+const WV = { loaded: false, last: null };
+
+async function wavesInit() {
+  if (WV.loaded) return;
+  try {
+    const r = await call("gwEvents");
+    WV.loaded = true;
+    const ms = $("#w-model"), es = $("#w-event");
+    ms.replaceChildren(...r.models.map((m) => h("option", { value: m }, m)));
+    if (r.models.includes("gw_cnn_4")) ms.value = "gw_cnn_4";
+    es.replaceChildren(...r.events.map((e) => h("option", { value: e.name }, `${e.name} (${fmt(e.mass1, 3)} + ${fmt(e.mass2, 3)} M☉, SNR ${fmt(e.snr, 3)})`)));
+    if (r.events.some((e) => e.name === "GW150914")) es.value = "GW150914";
+    $("#w-hint").textContent = r.models.length ? "" : "No GW models yet: train one with q bench/gw/gw_cnn.q -save models/gw_cnn_1.qsm";
+    $("#w-show").disabled = !r.models.length || !r.events.length;
+    $("#w-inject").disabled = !r.models.length;
+  } catch (e) { toast(e.message || String(e), "error"); }
+}
+
+// sequential ramp (the --seq tokens, light to dark) at u in [0, 1]
+function seqColour(stops, u) {
+  const k = Math.max(0, Math.min(1, u)) * (stops.length - 1), i = Math.min(stops.length - 2, Math.floor(k)), f = k - i;
+  return stops[i].map((c, j) => Math.round(c + (stops[i + 1][j] - c) * f));
+}
+const rgbOf = (hex) => { const v = parseInt(hex.replace("#", ""), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; };
+
+// spectrogram heat map: spec = {t, f, p (one row per time)}, power already log10
+function heatmap(el, spec) {
+  el.replaceChildren();
+  const W = Math.max(el.clientWidth, 280), H = 200, m = { l: 48, r: 56, t: 8, b: 24 };
+  const nt = spec.t.length, nf = spec.f.length;
+  const all = spec.p.flat().filter(isNum).sort((a, b) => a - b);
+  const lo = all[Math.floor(0.05 * (all.length - 1))], hi = all[all.length - 1];
+  const stops = ["--seq-0", "--seq-1", "--seq-5", "--seq-9"].map((n) => rgbOf(css(n)));
+  const dpr = window.devicePixelRatio || 1, pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const c = h("canvas", { width: Math.round(pw * dpr), height: Math.round(ph * dpr), role: "img", "aria-label": "spectrogram",
+    style: `position:absolute;left:${m.l}px;top:${m.t}px;width:${pw}px;height:${ph}px` });
+  const g = c.getContext("2d"), cw = c.width / nt, ch = c.height / nf;
+  for (let i = 0; i < nt; i++) for (let j = 0; j < nf; j++) {
+    const [r, gg, b] = seqColour(stops, (spec.p[i][j] - lo) / (hi - lo || 1));
+    g.fillStyle = `rgb(${r},${gg},${b})`;
+    g.fillRect(Math.floor(i * cw), Math.floor((nf - 1 - j) * ch), Math.ceil(cw) + 1, Math.ceil(ch) + 1);
+  }
+  const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, "aria-hidden": "true" });
+  const t0 = spec.t[0], t1 = spec.t[nt - 1], f0 = spec.f[0], f1 = spec.f[nf - 1];
+  for (const t of ticks(t0, t1, 4).filter((t) => t >= t0 && t <= t1))
+    svg.append(s("text", { x: m.l + pw * (t - t0) / (t1 - t0), y: H - 6, "text-anchor": "middle", class: "tick" }, t));
+  for (const f of ticks(f0, f1, 4).filter((f) => f >= f0 && f <= f1))
+    svg.append(s("text", { x: m.l - 8, y: m.t + ph * (1 - (f - f0) / (f1 - f0)) + 4, "text-anchor": "end", class: "tick" }, f + " Hz"));
+  el.style.height = H + "px";
+  el.append(svg, c);
+  c.addEventListener("pointermove", (ev) => {
+    const r = c.getBoundingClientRect();
+    const i = Math.min(nt - 1, Math.max(0, Math.floor((ev.clientX - r.left) / r.width * nt)));
+    const j = Math.min(nf - 1, Math.max(0, nf - 1 - Math.floor((ev.clientY - r.top) / r.height * nf)));
+    showTip(ev.clientX, ev.clientY, `t ${fmt(spec.t[i], 3)} s`, [[css("--seq-5"), `${fmt(spec.f[j], 3)} Hz`, "log power " + fmt(spec.p[i][j], 3)]]);
+  });
+  c.addEventListener("pointerleave", hideTip);
+}
+
+function wavesRender(v, title, summary, thresholds, signal) {
+  $("#w-title").textContent = title;
+  $("#w-summary").replaceChildren(...summary.map((p) => h("p", {}, p)));
+  const pts = (ys) => v.t.map((t, i) => [t, ys[i]]);
+  const strain = (el, name, ys, sig) => lineChart(el,
+    [{ name: name + " data", colour: series(0), points: pts(ys) }].concat(sig ? [{ name: "injected signal", colour: series(1), points: pts(sig) }] : []),
+    { xLabel: "t (s)", yFmt: (x) => fmt(x, 2), label: name + " whitened strain", endLabels: false });
+  strain($("#w-h1"), "H1", v.H1, signal && v.signalH1);
+  strain($("#w-l1"), "L1", v.L1, signal && v.signalL1);
+  heatmap($("#w-spec"), v.spec);
+  const sc = v.scores, xs = sc.map((r) => r.t), x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const lines = [{ name: "network output", colour: series(0), points: sc.map((r) => [r.t, r.logit]) }]
+    .concat((thresholds || []).map((th, k) => ({ name: `threshold for ${th.rate}`, colour: series(2 + k), points: [[x0, th.logit], [x1, th.logit]] })));
+  lineChart($("#w-score"), lines, { xLabel: "t (s)", yFmt: (x) => fmt(x, 3), label: "network output over time" });
+  WV.last = { v, title, summary, thresholds, signal };
+}
+
+// the loudest output near t = 0 and its verdict at each measured false-alarm rate
+function verdict(v, thresholds) {
+  const near = v.scores.filter((r) => Math.abs(r.t) <= 0.3), away = v.scores.filter((r) => Math.abs(r.t) > 1.5);
+  const best = near.reduce((a, b) => (b.logit > a.logit ? b : a), near[0] || { logit: NaN, t: NaN });
+  const bg = away.length ? Math.max(...away.map((r) => r.logit)) : NaN;
+  const out = [`Loudest network output within 0.3 s of the merger: logit ${fmt(best.logit, 3)} (score ${fmt(1 / (1 + Math.exp(-best.logit)), 4)}) at ${fmt(best.t, 3)} s; loudest more than 1.5 s away: ${fmt(bg, 3)}.`];
+  if (thresholds && thresholds.length)
+    out.push(thresholds.map((th) => `${best.logit > th.logit ? "found" : "missed"} at 1 false alarm per ${String(th.rate).replace("1/", "")} (logit above ${fmt(th.logit, 3)})`).join("; ") + ".");
+  else out.push("False-alarm thresholds for this model aren't measured yet: run q bench/gw/gw_eval.q -model models/" + $("#w-model").value + ".qsm");
+  return out;
+}
+
+$("#w-show").addEventListener("click", async () => {
+  try {
+    const r = await call("gwEvent", { event: $("#w-event").value, model: $("#w-model").value }, null, true);
+    const e = r.event;
+    wavesRender(r.view, `${e.name} (${e.catalogue})`,
+      [`Catalogue: ${fmt(e.mass1, 3)} + ${fmt(e.mass2, 3)} M☉ (source frame), network SNR ${fmt(e.snr, 3)}, GPS ${e.gpsText}.`].concat(verdict(r.view, r.thresholds)),
+      r.thresholds, false);
+  } catch (e) { toast(e.message || String(e), "error"); }
+});
+
+$("#w-inject").addEventListener("click", async () => {
+  try {
+    const r = await call("gwInject", { model: $("#w-model").value, m1: +$("#w-m1").value, m2: +$("#w-m2").value, snr: +$("#w-snr").value }, null, true);
+    const p = r.view.params;
+    wavesRender(r.view, `Simulated chirp: ${fmt(p.m1, 3)} + ${fmt(p.m2, 3)} M☉ at network SNR ${fmt(p.snr, 3)}`,
+      [`Spins ${fmt(p.chi1, 2)} and ${fmt(p.chi2, 2)}, inclination ${fmt(p.inclination, 2)} rad, in GW150914's held-out noise (O1).`].concat(verdict(r.view, r.thresholds)),
+      r.thresholds, true);
+  } catch (e) { toast(e.message || String(e), "error"); }
+});
+
 function showView(v) {
   for (const b of document.querySelectorAll("nav button")) b.setAttribute("aria-selected", b.dataset.view === v);
   for (const s of document.querySelectorAll(".view")) s.classList.toggle("active", s.id === "view-" + v);
   try { localStorage.setItem("qsolve.view", v); } catch {}
   if (v === "runs") drawCompare();
   if (v === "search") updateSearchCount();
+  if (v === "waves") wavesInit();
 }
 for (const b of document.querySelectorAll("nav button")) b.addEventListener("click", () => showView(b.dataset.view));
 
 function redraw() {
+  if (WV.last && $("#view-waves").classList.contains("active")) { const l = WV.last; wavesRender(l.v, l.title, l.summary, l.thresholds, l.signal); }
   if (state.live && !state.live.done) { drawHistory(state.live.history, state.live.task); }
   else if (state.current && state.reports[state.current]) showReport(state.reports[state.current]);
   drawCompare();

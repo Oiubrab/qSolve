@@ -36,13 +36,13 @@
 
 / Load the cached catalogue, downloading it once when absent.
 .qs.gw.events:{[]
-    file:`:data/gw/allevents.json;
-    if[()~key hsym file;
-        system "env mkdir -p data/gw";
-        system "env curl -fsSL --retry 3 -o data/gw/allevents.json.part https://gwosc.org/eventapi/json/allevents/";
-        if[()~key hsym `:data/gw/allevents.json.part; '"GWOSC catalogue download failed"];
-        system "env mv data/gw/allevents.json.part data/gw/allevents.json"];
-    .qs.gw.parseEvents raze read0 hsym file
+    d:.qs.gw.dataDir[]; file:hsym `$d,"/allevents.json";
+    if[()~key file;
+        system "env mkdir -p ",d;
+        system "env curl -fsSL --retry 3 -o ",d,"/allevents.json.part https://gwosc.org/eventapi/json/allevents/";
+        if[()~key hsym `$d,"/allevents.json.part"; '"GWOSC catalogue download failed"];
+        system "env mv ",d,"/allevents.json.part ",d,"/allevents.json"];
+    .qs.gw.parseEvents raze read0 file
  }
 
 / Select confident binary black holes whose component masses are within the inclusive range.
@@ -545,11 +545,11 @@
     ?[n<1;0n;z "j"$(floor n)&-1+count z]
  }
 
-/ G6.2: windows to score for one injection: a signal with parameters p (as .qs.gw.drawParams) added to a random
-/ chunk pair of a library at a random merger time, then the 1 s windows that hold the merger at fractions u, u+1/4,
-/ u+1/2, u+3/4 of the window (u random below 1/4), as a search stepping by 1/4 s would see it. Returns `X (four
-/ windows) and `snrWindow (the network SNR inside the window with the merger at 3/4)
-.qs.gw.injectWindows:{[lib;pairs;o;p]
+/ a signal with parameters p (as .qs.gw.drawParams) added to a random chunk pair of a library at a random merger
+/ sample mi, at least the buffer less 1 s from the start and a window from the end. Returns `x (H1;L1 whitened
+/ chunks), `mi, `gps (the chunk's start) and `sig (the signal alone, H1;L1, from buffer-1 s before the merger to
+/ 0.5 s after it)
+.qs.gw.injectChunk:{[lib;pairs;o;p]
     o:.qs.gw.injectDefaults,o;
     r:.qs.gw.noiseDefaults`rate; len:r*o`window; rows:pairs first 1?count pairs; span:count lib[rows 0;`w];
     pre:r*o[`buffer]-1; post:r div 2;
@@ -559,15 +559,70 @@
     n:count s[`h;`H1]; rel:(neg pre)+til pre+post;
     sig:{[s;scale;rel;n;d] scale*s[`h;d] (s[`peak]+rel) mod n}[s;scale;rel;n] each `H1`L1;
     x:{[lib;mi;rel;r;v] w:"f"$lib[r;`w]; w[mi+rel]+:v; w}[lib;mi;rel]'[rows;sig];
-    u:first 1?0.25; st:mi-"j"$len*u+0.25*til 4;
-    q:{[pre;len;v] v pre+(til len)-"j"$0.75*len}[pre;len] each sig;
-    `X`snrWindow!({[x;len;s] (x[0] s+til len),x[1] s+til len}[x;len] each st;sqrt sum {x$x} each q)
+    `x`mi`gps`sig`pre!(x;mi;lib[rows 0;`gps];sig;pre)
+ }
+
+/ G6.2: windows to score for one injection (.qs.gw.injectChunk): the 1 s windows that hold the merger at fractions
+/ u, u+1/4, u+1/2, u+3/4 of the window (u random below 1/4), as a search stepping by 1/4 s would see it. Returns
+/ `X (four windows) and `snrWindow (the network SNR inside the window with the merger at 3/4)
+.qs.gw.injectWindows:{[lib;pairs;o;p]
+    c:.qs.gw.injectChunk[lib;pairs;o;p];
+    len:.qs.gw.noiseDefaults[`rate]*(.qs.gw.injectDefaults,o)`window;
+    u:first 1?0.25; st:c[`mi]-"j"$len*u+0.25*til 4;
+    q:{[pre;len;v] v pre+(til len)-"j"$0.75*len}[c`pre;len] each c`sig;
+    `X`snrWindow!({[x;len;s] (x[0] s+til len),x[1] s+til len}[c`x;len] each st;sqrt sum {x$x} each q)
+ }
+
+/ G8.1, the dashboard's views. view: whitened streams a and b (`gps`w at the library rate) around a centre GPS time:
+/ within `span` s of it, every `thin`th sample of each, an H1+L1 power spectrogram (log10, 20-512 Hz, 1/8 s
+/ segments every 1/64 s) and the scores given (a table with merger and logit), all with times relative to centre
+.qs.gw.view:{[a;b;centre;scores;o]
+    o:(`span`thin!(2;4)),o;
+    r:.qs.gw.noiseDefaults`rate; i0:"j"$r*(centre-o`span)-a`gps; k:i0+til "j"$2*r*o`span;
+    k:k where (k>=0)&k<min count each (a`w;b`w);
+    th:k where 0=(k-first k) mod o`thin;
+    sa:.qs.sig.spectrogram[a[`w] k;r;r div 8;r div 64]; sb:.qs.sig.spectrogram[b[`w] k;r;r div 8;r div 64];
+    fk:where sa[`f] within 20 512;
+    `t`H1`L1`spec`scores!((a[`gps]+th%r)-centre;a[`w] th;b[`w] th;
+        `t`f`p!(sa[`t]+((a[`gps]+(first k)%r)-centre);sa[`f] fk;10 xlog 1e-12+(sa[`p]+sb`p)[;fk]);
+        select t:merger-centre, logit, score from scores)
+ }
+
+/ the view of a catalogued event in its 32 s files with model m (merger times on the implied merger)
+.qs.gw.eventView:{[m;event;gps;o]
+    o:(`step`span!(1%16;2)),o;
+    dir:.qs.gw.dataDir[],"/strain/",string event;
+    f:key hsym `$dir; f:f where (f like "*-32-*") and f like "*.txt.gz";
+    hf:f where f like "H1*"; lf:f where f like "L1*";
+    if[not (1=count hf) and 1=count lf; '"no 32 s H1 and L1 files for ",string event];
+    h:.qs.gw.strain hsym `$dir,"/",string first hf; l:.qs.gw.strain hsym `$dir,"/",string first lf;
+    if[any null h[`h],l`h; '"missing samples in ",string event];
+    t:.qs.gw.scan[m;h;l;o`step;()!()];
+    .qs.gw.view[.qs.gw.whitenStrain[h;6];.qs.gw.whitenStrain[l;6];gps;t;o]
+ }
+
+/ the view of a simulated signal (parameters p) injected into a library's noise, scored every `step` s within
+/ span+1 s of the merger, plus the injection's own parameters and the signal alone (thinned as the strain)
+.qs.gw.injectView:{[m;lib;pairs;p;o]
+    o:(`step`span`thin!(1%16;2;4)),o;
+    c:.qs.gw.injectChunk[lib;pairs;()!();p];
+    r:.qs.gw.noiseDefaults`rate; len:r; st:"j"$o[`step]*r;
+    s:c[`mi]+st*(neg "j"$(o[`span]+1)%o`step)+til 1+"j"$(2*o[`span]+1)%o`step;
+    s:s where (s>=0)&(s+len)<=count c[`x] 0;
+    z:first each .qs.predictRaw[m;{[x;len;s] (x[0] s+til len),x[1] s+til len}[c`x;len] each s];
+    mg:c[`gps]+(c[`mi]%r);
+    t:([] merger:c[`gps]+(s%r)+0.75; logit:z; score:reciprocal 1+exp neg z);
+    v:.qs.gw.view[`gps`w!(c`gps;c[`x] 0);`gps`w!(c`gps;c[`x] 1);mg;t;o];
+    / the signal alone on the view's time grid (zero where the stored stretch ends, 0.5 s after the merger)
+    i:c[`pre]+"j"$r*v`t; ok:(i>=0)&i<count c[`sig] 0;
+    on:{[i;ok;x] @[(count i)#0f;where ok;:;x i where ok]}[i;ok];
+    v,`params`signalH1`signalL1!(p;on c[`sig] 0;on c[`sig] 1)
  }
 
 / scanning real data with a trained detector (G7.1): whiten each detector's strain as the noise library does
 / (resampled to the library rate, its own Welch PSD, a Tukey taper, only the middle kept), then score 1 s windows
 / stepping by `step` seconds. Returns a table of window start time (GPS), the time a merger would have if it sat
-/ at the middle of the trained range (`merger` fraction of the window), and the score
+/ at the middle of the trained range (`merger` fraction of the window), the score and the logit
 .qs.gw.whitenStrain:{[strain;margin]
     r:.qs.gw.noiseDefaults`rate; x:strain`h;
     x:$[strain[`rate]=r; x; .qs.sig.resample[x;strain`rate;r]];
@@ -584,8 +639,8 @@
     n:min count each (a`w;b`w);
     starts:("j"$step*r)*til 1+(n-len) div "j"$step*r;
     X:{[a;b;len;s] (a[`w] s+til len),b[`w] s+til len}[a;b;len] each starts;
-    sc:first each .qs.predict[m;X];
-    ([] start:a[`gps]+starts%r; merger:a[`gps]+(starts%r)+o[`merger]*len%r; score:sc)
+    z:first each .qs.predictRaw[m;X];
+    ([] start:a[`gps]+starts%r; merger:a[`gps]+(starts%r)+o[`merger]*len%r; score:reciprocal 1+exp neg z; logit:z)
  }
 
 / scan one event's 32 s H1/L1 files (data/gw/strain/<event>/) with model m: the best score within `near` seconds

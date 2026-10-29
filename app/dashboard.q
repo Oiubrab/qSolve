@@ -12,6 +12,8 @@ system "l ",.dash.root,"/src/defineEquation.q";
 system "l ",.dash.root,"/src/data.q";
 system "l ",.dash.root,"/src/plot.q";
 system "l ",.dash.root,"/src/fx.q";
+system "l ",.dash.root,"/src/signal.q";
+system "l ",.dash.root,"/src/gw.q";
 .qs.data.dir:.dash.root,"/data";
 .dash.modelDir:.dash.root,"/models";
 
@@ -328,6 +330,52 @@ system "l ",.dash.root,"/src/fx.q";
  }
 
 .dash.api.runs:{[r] `type`runs!(`runs;.dash.runList[])}
+
+/ gravitational waves (G8.1): catalogued events whose 32 s H1 and L1 files are here, the GW models in models/
+/ (gw_*.qsm), and views of an event or of a simulated chirp in held-out test noise (GW150914's noise library)
+.dash.gwCache:(`symbol$())!();
+.dash.gwTest:();
+.dash.gwModels:{[] f:key hsym `$.dash.modelDir; f:f where f like "gw_*.qsm"; `$-4_'string f}
+.dash.gwModel:{[name]
+    if[not name in .dash.gwModels[]; '"no GW model called ",string name];
+    if[not name in key .dash.gwCache; .dash.gwCache[name]:.qs.load hsym `$.dash.modelDir,"/",(string name),".qsm"];
+    .dash.gwCache name
+ }
+.dash.gwHave:{[]
+    d:.qs.gw.dataDir[],"/strain"; e:key hsym `$d;
+    e where {[d;e] f:key hsym `$d,"/",string e; 2=count f where (f like "*-32-*") and f like "*.txt.gz"}[d] each e
+ }
+/ the false-alarm thresholds bench/gw/gw_eval.q measured for a model, if it has been run
+.dash.gwThresholds:{[model]
+    f:hsym `$.qs.gw.dataDir[],"/eval/",(string model),".thresholds.csv";
+    $[()~key f; (); select rate, logit from ("SFFF";enlist ",") 0: f where not null logit]
+ }
+.dash.api.gwEvents:{[r]
+    have:.dash.gwHave[];
+    ev:`gps xasc select name,gps,mass1,mass2,snr,catalogue from .qs.gw.events[] where name in have;
+    `type`events`models!(`gwEvents;ev;.dash.gwModels[])
+ }
+.dash.api.gwEvent:{[r]
+    n:.dash.sym[r;`event;`]; md:.dash.sym[r;`model;`];
+    e:select from .qs.gw.events[] where name=n;
+    if[not count e; '"unknown event ",string n];
+    / (JSON numbers carry 7 significant digits, so the GPS time also goes as text)
+    e:first e; e[`gpsText]:.Q.f[1;e`gps]; m:.dash.gwModel md;
+    `type`event`view`thresholds!(`gwEvent;e;.qs.gw.eventView[m;n;e`gps;()!()];.dash.gwThresholds md)
+ }
+.dash.api.gwInject:{[r]
+    md:.dash.sym[r;`model;`]; m:.dash.gwModel md;
+    a:.dash.num[r;`m1;36]; b:.dash.num[r;`m2;29]; snr:.dash.num[r;`snr;15];
+    if[not all (a,b) within 5 100; '"masses must be between 5 and 100 solar masses"];
+    if[not snr within 0 100; '"SNR must be between 0 and 100"];
+    if[not count .dash.gwTest;
+        f:hsym `$.qs.gw.dataDir[],"/noise/GW150914";
+        if[()~key f; '"needs the test noise library (data/gw/noise/GW150914): see plans/inProgress/gw_detection_plan.md"];
+        .dash.gwTest:get f];
+    lib:.dash.gwTest;
+    p:first .qs.gw.drawParams[1;()!()]; p[`m1]:a|b; p[`m2]:a&b; p[`snr]:snr;
+    `type`view`thresholds!(`gwInject;.qs.gw.injectView[m;lib;.qs.gw.pairs lib;p;()!()];.dash.gwThresholds md)
+ }
 
 / one WebSocket message: parse, dispatch, send the reply; errors go back to the client as messages
 .dash.handle:{[x]

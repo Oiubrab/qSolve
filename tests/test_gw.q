@@ -425,13 +425,14 @@
     / a loud 0.2 s burst at 15 s in both detectors
     burst:(15*rate)+til "j"$0.2*rate;
     h[`h;burst]+:2e-20*.qs.data.normal count burst; l[`h;burst]+:2e-20*.qs.data.normal count burst;
-    / stand in for the model with each window's energy (a stub .qs.predict), restored afterwards
-    p:.qs.predict; .qs.predict:{[m;X] enlist each {x$x} each X};
+    / stand in for the model with each window's energy as its logit (a stub .qs.predictRaw), restored afterwards
+    p:.qs.predictRaw; .qs.predictRaw:{[m;X] enlist each {x$x} each X};
     t:.qs.gw.scan[();h;l;0.25;`margin`merger!(6;0.5)];
-    .qs.predict:p;
+    .qs.predictRaw:p;
     .t.eq[count t;"j"$1+(20-1)%0.25];
     .t.near[1_deltas t`start;(-1+count t)#0.25;1e-9];
-    best:t first idesc t`score;
+    .t.near[t`score;reciprocal 1+exp neg t`logit;1e-12];
+    best:t first idesc t`logit;
     / windows that contain the whole burst (15.0-15.2 s) start between 14.2 and 15.0 s
     .t.ok[((best`start)-1000000000f) within 14.2 15.0;"loudest window starts at ",string (best`start)-1000000000f];
  }];
@@ -547,4 +548,25 @@
     .t.ok[(iw`snrWindow) within 1 40;"window SNR ",string iw`snrWindow];
     / the injected windows carry the signal's energy above the noise's 2*r
     .t.ok[all (2*r)<{x$x} each iw`X;"injected windows should be louder than noise"];
+ }];
+
+/ G8.1: a spectrogram finds a tone at its frequency; the injection view's pieces line up
+.t.add[`gw_views;{
+    r:2048; x:sin 2*.qs.sig.pi*100*(til 2*r)%r;
+    sp:.qs.sig.spectrogram[x;r;256;64];
+    .t.eq[count sp`p;1+((2*r)-256) div 64];
+    .t.near[first sp`t;128%r;1e-12];
+    .t.near[sp[`f] first idesc first sp`p;100f;8.1];
+    lib:.t.fakeLib[2;20]; pairs:.qs.gw.pairs lib; system "S 3";
+    p:first .qs.gw.drawParams[1;`snr`buffer!(30 30f;4)];
+    pr:.qs.predictRaw; .qs.predictRaw:{[m;X] enlist each 0.001*{x$x} each X};
+    v:.qs.gw.injectView[();lib;pairs;p;`buffer`step!(4;0.125)];
+    .qs.predictRaw:pr;
+    .t.eq[count v`H1;count v`t];
+    .t.eq[count v`signalH1;count v`t];
+    .t.ok[all (v`t) within -2 2;"times within the span"];
+    .t.ok[((first v[`spec]`t) within -2 -1.9)&2>last v[`spec]`t;"spectrogram times"];
+    .t.ok[all (v[`spec]`f) within 20 512;"spectrogram band"];
+    .t.near[v[`scores]`score;reciprocal 1+exp neg v[`scores]`logit;1e-12];
+    .t.ok[(v[`params]`snr)=30f;"parameters returned"];
  }];
