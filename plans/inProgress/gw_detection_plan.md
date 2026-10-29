@@ -334,9 +334,10 @@ almost every size in this one.
     | found at 1/hour | 1% | 10% | 38% | 70% | 84% | 92% | 96% | 97% | 97% |
     | found at 1/day | 0% | 1% | 7% | 30% | 63% | 82% | 89% | 93% | 96% |
 
-    Half are found at SNR about 9 (1/hour) and 11.5 (1/day). Above SNR 20, 3-4% are still missed: mostly signals
-    whose merger falls outside the trained 0.6-0.9 part of every window the search tries, or that sit mostly in
-    one detector (the single-detector negatives teach the model to distrust those).
+    Half are found at SNR about 9 (1/hour) and 11.5 (1/day). Above SNR 20, 3-4% are still missed; why isn't
+    examined yet (this run's per-injection table wasn't saved: the CSV write failed on a typing slip, now fixed).
+    Candidates to check: signals mostly in one detector (which the single-detector negatives teach the model to
+    distrust) and the highest masses, whose mergers sit near the window's edge.
   - **By mass** (SNR 10 and up): 86-94% at 1/hour from 20 to 100 M☉ total, 99% above 120 M☉; **by mass ratio**:
     92-93% everywhere. **Simulated glitches** (1000 single windows with a blip or sine-Gaussian in one detector):
     none above either threshold.
