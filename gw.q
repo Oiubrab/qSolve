@@ -681,6 +681,47 @@
     $[count t; t; ([] event:`symbol$(); det:`symbol$(); gps:`float$(); w:(); psd:())]
  }
 
+/ data-quality at one GPS second in one detector's bulk data: the names of the mask bits that are off (a set bit
+/ means good data, or no injection, in GWOSC's masks)
+.qs.gw.flagsAt:{[run;det;t]
+    / (the argument isn't called gps: inside select it would be the column)
+    ix:select from .qs.gw.bulkIndex[run] where detector=det, gps<=t, (gps+duration)>t;
+    if[not count ix; :enlist `noData];
+    b:.qs.gw.bulk first ix`base; k:"j"$(floor t)-b`gps;
+    off:{[m;bits;k] bits where not .qs.gw.bit[m k;bits;] each bits};
+    off[b`dq;b`dqBits;k],off[b`inj;b`injBits;k]
+ }
+
+/ S4.1 follow-up of a search trigger: matched filtering with a small bank of PhenomB templates (zero spins) over
+/ `span` s of each detector's bulk strain around it. For each template, H1's loudest SNR within `window` s of the
+/ trigger's merger time and L1's loudest within 12 ms of that (the 10 ms light travel time plus timing error).
+/ Returns one row per template, loudest network SNR first: masses, H1 and L1 SNRs, network SNR, the L1-H1 time
+/ difference, the H1 merger time, and each detector's loudest SNR elsewhere in the stretch (its own background)
+.qs.gw.bank:{m:10 15 20 25 30 40 50 60 80f; b:raze m,/:\:m; b where (b[;0]>=b[;1])&b[;1]>=b[;0]%4} []
+.qs.gw.followUp:{[run;gps;o]
+    o:(`span`margin`window`bank!(64;8;0.5;.qs.gw.bank)),o;
+    st:gps-o[`span]%2;
+    s:{[run;st;sp;d] .qs.gw.bulkStretch[run;d;st;st+sp]}[run;st;o`span] each `H1`L1;
+    if[any any each null s@\:`h; '"missing data within ",(string o[`span]%2)," s of ",string gps];
+    rate:s[0;`rate]; x:s@\:`h; n:count x 0;
+    tap:.qs.sig.tukey[n;0.1];
+    psd:{[rate;x] .qs.sig.welch[x;rate;4*rate;2*rate]}[rate] each x;
+    c:`x`psd`tap`n`rate`st`gps!(x;psd;tap;n;rate;st;gps);
+    one:{[c;o;mm]
+        x:c`x; tap:c`tap; n:c`n; rate:c`rate; st:c`st; gps:c`gps;
+        t:.qs.gw.template[n;rate;mm 0;mm 1;0 0f;20];
+        mf:{[t;rate;tap;x;p] .qs.sig.matchedFilterMax[x*tap;t`h;rate;p]}[t;rate;tap]'[x;c`psd];
+        lag:mf[0;`lag]; time:st+lag+t`peak; ok:(lag>=o`margin)&lag<(n%rate)-o`margin;
+        i:{x first idesc y x}[where ok&o[`window]>abs time-gps;mf[0;`snr]];
+        j:{x first idesc y x}[where ok&0.012>abs time-time i;mf[1;`snr]];
+        far:where ok&1<abs time-time i;
+        h:mf[0;`snr] i; l:mf[1;`snr] j;
+        `m1`m2`snrH1`snrL1`network`dt`merger`bgH1`bgL1!(mm 0;mm 1;h;l;sqrt (h*h)+l*l;time[j]-time i;time i;
+            max mf[0;`snr] far;max mf[1;`snr] far)
+    }[c;o];
+    `network xdesc one peach o`bank
+ }
+
 / both detectors of [start, stop) whitened for the search (S2.1)
 .qs.gw.segmentStreams:{[run;start;stop]
     {[run;start;stop;d] .qs.gw.whitenStream[.qs.gw.bulkStretch[run;d;start;stop];()!()]}[run;start;stop] each `H1`L1

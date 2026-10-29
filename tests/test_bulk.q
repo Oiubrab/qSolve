@@ -123,3 +123,29 @@
     .t.eq[g`far;1 3 1f];
     .t.eq[.qs.gw.far[trig;bg;3600f;enlist 400.2]`far;1 3 1f];
  }];
+
+/ the matched-filter follow-up (S4.1) on synthetic data: a template-shaped signal in white noise, in L1 3 ms after
+/ H1, is found by the matching template with the right time difference and SNRs near the injected 12 and 9
+/ (noise moves a measured SNR by about 1)
+.t.add[`bulk_follow_up;{
+    rate:1024; span:16; n:rate*span; st:1e9; gps:st+9;
+    t:.qs.gw.template[n;rate;30f;30f;0 0f;20];
+    / in unit-variance white noise a signal's optimal SNR is the square root of its sum of squares
+    sh:{[t;rate;n;at;rho] h:rotate[neg "j"$rate*at-t`peak] t`h; h*rho%sqrt h$h}[t;rate;n];
+    system "S 9";
+    / followUp reads span s centred on gps, so the signal sits at span/2 s into the stretch
+    sig:(sh[8;12f];sh[8.003;9f]);
+    noise:(.qs.data.normal n;.qs.data.normal n);
+    data:`H1`L1!((noise 0)+sig 0;(noise 1)+sig 1);
+    b:.qs.gw.bulkStretch; .qs.gw.bulkStretch:{[data;rate;run;det;start;stop] `gps`rate`h!(start;rate;data det)}[data;rate];
+    r:@[.qs.gw.followUp[`X;gps;];`span`margin`window`bank!(span;2;0.2;(30 30f;10 10f));{(`err;x)}];
+    .qs.gw.bulkStretch:b;
+    if[`err~first r; e:r 1; 'e];
+    best:first r;
+    .t.eq[best`m1`m2;30 30f];
+    .t.near[best`dt;0.003;0.0015];
+    .t.near[best`merger;gps;0.002];
+    .t.ok[(best`snrH1) within 10 14;"H1 SNR ",string best`snrH1];
+    .t.ok[(best`snrL1) within 7 11;"L1 SNR ",string best`snrL1];
+    .t.ok[(best`bgH1)<6;"H1 background ",string best`bgH1];
+ }];

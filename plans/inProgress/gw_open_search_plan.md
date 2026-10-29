@@ -169,3 +169,20 @@ appears.
   Everything apart from GW231226 is consistent with noise, so nothing in this day merits S4 vetting. The amplitudes
   of the top noise triggers are Gaussian-like (3-4 sigma in both detectors). Results in
   `data/gw/search/O4a-1387577000-1387663400-gw_cnn_4.*.csv` (git-ignored).
+- 2026-10-29: Owner: with the glitch fixes, look for something, including in older runs. **S4.1 tools**:
+  `.qs.gw.followUp[run;gps;o]` matched-filters 64 s of each detector's bulk strain around a trigger with a
+  41-template PhenomB bank (10-80 M☉, mass ratio up to 4, zero spins; `peach` over templates), giving per
+  template H1's loudest SNR within 0.5 s, L1's within 12 ms of it, network SNR, time difference and each
+  detector's loudest SNR elsewhere (its own background). On GW231226: network SNR 32.9 (catalogue 34.7), best
+  template 50+40 (detector frame; source 40+35), dt 4.4 ms. `.qs.gw.flagsAt` lists the mask bits off at a second.
+  `bench/gw_vet.q` runs both on a searched stretch's loudest uncatalogued triggers and marks `consistent` (both
+  SNRs above their own background, |dt| < 12 ms, no CBC-relevant flags off). The O4a day's top three noise triggers
+  all fail (one detector below its own background). `scripts/search_days.sh MODEL SLIDES RUN:GPS...` fetches and
+  searches whole days, downloading the next while searching the current.
+- 2026-10-29: Catalogue check: the GWOSC event list holds IAS-O3a (42 events, 10 in no LVK catalogue) and 14
+  GWTC-1 marginal candidates. Days chosen around the IAS-only events in the trained mass range and the loudest
+  GWTC-1 marginal one: O3a 1246478336 (GW190707_083226, 52+32, SNR 8.3, plus GWTC's GW190707_093326),
+  1250160640 (GW190818_232544, 70+34, 8.1), 1249800192 (GW190814_192009, 80+50, 8.0, plus GW190814, out of the
+  trained mass range), 1251737600 (GW190906_054335, 39+24, 7.9); O2 1184579584 (170720, SNR 13). O2 and O3 bulk
+  files follow the O4a URL pattern and carry the same mask bits; O1's are named `H-H1_LOSC_4_V1-<gps>-4096.hdf5`
+  under `archive/data/O1/` (not yet supported by `gwosc_bulk.py`). Searching with gw_cnn_4, 10 slides.
