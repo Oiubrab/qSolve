@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root="$(cd "$(dirname "$0")/.." && pwd)"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
 data="$root/data/gw"
 catalogue="$data/allevents.json"
 duration=4096
@@ -14,12 +14,12 @@ declare -a requested=()
 usage() {
     cat <<'EOF'
 Usage:
-  scripts/fetch_gw.sh [--dry-run] [--events-file FILE] [EVENT ...]
-  scripts/fetch_gw.sh --test-events [--dry-run] [--duration 32]
-  scripts/fetch_gw.sh --duration 32 [--dry-run] EVENT ...
+  scripts/gw/fetch_gw.sh [--dry-run] [--events-file FILE] [EVENT ...]
+  scripts/gw/fetch_gw.sh --test-events [--dry-run] [--duration 32]
+  scripts/gw/fetch_gw.sh --duration 32 [--dry-run] EVENT ...
 
 No arguments downloads 4096-second H1/L1 noise files for the six events in
-scripts/gw_noise_events.txt. --test-events selects catalogue BBHs with
+scripts/gw/gw_noise_events.txt. --test-events selects catalogue BBHs with
 p_astro >= 0.9 and source component masses from 10 to 80 solar masses, then
 downloads their 32-second H1/L1 files. Event files contain one common event
 name per line; blank lines and lines beginning with # are ignored.
@@ -88,7 +88,7 @@ if [[ -n "$events_file" ]]; then
         [[ -n "$line" ]] && requested+=("$line")
     done < "$events_file"
 elif [[ ${#requested[@]} -eq 0 && "$mode" == noise ]]; then
-    mapfile -t requested < "$root/scripts/gw_noise_events.txt"
+    mapfile -t requested < "$root/scripts/gw/gw_noise_events.txt"
 elif [[ ${#requested[@]} -eq 0 && "$mode" == test ]]; then
     mapfile -t requested < <(jq -r '
         [.events | to_entries[] | .value]

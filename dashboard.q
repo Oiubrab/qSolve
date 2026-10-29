@@ -7,10 +7,10 @@
 / when loaded from another script (the tests), .dash.root can be set first; otherwise it is this file's directory
 .dash.main:(string .z.f) like "*dashboard.q";
 if[not `root in key `.dash; .dash.root:{$[count x;x;"."]} "/" sv -1_ "/" vs string .z.f];
-system "l ",.dash.root,"/defineEquation.q";
-system "l ",.dash.root,"/data.q";
-system "l ",.dash.root,"/plot.q";
-system "l ",.dash.root,"/fx.q";
+system "l ",.dash.root,"/src/defineEquation.q";
+system "l ",.dash.root,"/src/data.q";
+system "l ",.dash.root,"/src/plot.q";
+system "l ",.dash.root,"/src/fx.q";
 .qs.data.dir:.dash.root,"/data";
 .dash.modelDir:.dash.root,"/models";
 

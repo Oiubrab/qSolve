@@ -125,7 +125,7 @@ long-duration signals (see scope).
 | G-D8 | Models in order: an MLP baseline (the thesis's dense design), 1-D convolution layers added to the qSolve core, then an LSTM or GRU in homage to the thesis. | CNNs on whitened strain are the standard published approach (George & Huerta 2018; Gabbard et al. 2018). The recurrent model revisits the thesis result. |
 | G-D9 | Splits by time, never by window: training noise, validation noise and test noise come from different events' 4096 s files, and every test detection's surrounding data is excluded from training noise. | Overlapping windows from the same minute of noise would leak between sets. |
 | G-D10 | The false-alarm rate is measured by time slides: shift L1 against H1 by many multiples of more than 10 ms (in practice whole seconds) across held-out noise, score every window, and convert score thresholds to false alarms per hour or month. | This is the standard way to get much more background than real time provides, without real signals in it. |
-| G-D11 | New code goes in `signal.q` (`.qs.sig`: FFT and signal processing, general purpose) and `gw.q` (`.qs.gw`: GWOSC access, detectors, waveforms, injections, scanning), plus `bench/gw.q`. Downloads go in `data/gw/` (git-ignored), with parsed strain cached as q binary files so the text is parsed once. | It follows the existing layout (`fx.q`, `bench/fx.q`). |
+| G-D11 | New code goes in `signal.q` (`.qs.sig`: FFT and signal processing, general purpose) and `gw.q` (`.qs.gw`: GWOSC access, detectors, waveforms, injections, scanning), plus `bench/gw.q`. Downloads go in `data/gw/` (git-ignored), with parsed strain cached as q binary files so the text is parsed once. | It follows the existing layout (`fx.q`, `bench/fx/fx.q`). |
 
 ---
 
@@ -146,7 +146,7 @@ long-duration signals (see scope).
   with `.j.k` into a table (name, catalogue, GPS, source masses, distance, network SNR, p_astro), de-duplicate
   across catalogues (keep the latest version), and add selection helpers (confident BBH in mass range with H1
   and L1 data). *Accept:* tests on a saved small JSON sample; real fetch skips without network.
-- [x] **G1.2 Strain download.** `scripts/fetch_gw.sh` (or `fetch_data.sh gw`): for a given event list, fetch
+- [x] **G1.2 Strain download.** `scripts/gw/fetch_gw.sh` (or `fetch_data.sh gw`): for a given event list, fetch
   the 32 s or 4096 s 4 kHz `txt.gz` files for H1 and L1, resuming and skipping what already exists. A default
   list of 6 noise events, spread across O1, O2 and O3, plus the test events.
 - [x] **G1.3 Parse and cache.** `.qs.gw.strain file` -> `` `gps`rate`h `` (start time, sample rate, float
@@ -295,7 +295,7 @@ long-duration signals (see scope).
   confidence/mass and detector-availability selectors, and offline fixture plus optional cached-live tests.
   The live endpoint returned 671 versioned entries and 433 latest-per-name rows; null catalogue fields are
   present and preserved, so selection must explicitly filter them.
-- 2026-10-25: G1.2 complete. Added resumable `scripts/fetch_gw.sh`, six verified O1/O2/O3a/O3b noise defaults,
+- 2026-10-25: G1.2 complete. Added resumable `scripts/gw/fetch_gw.sh`, six verified O1/O2/O3a/O3b noise defaults,
   explicit event-file/name lists, and automatic confident-BBH 32 s selection. GWOSC newer detail versions
   can omit strain URLs, so the downloader tries older versions until it finds an H1/L1 4 kHz `txt` pair.
   Dry-runs resolved all six 4096 s pairs; a real GW150914 H1/L1 32 s fetch passed gzip validation and the
@@ -319,7 +319,7 @@ long-duration signals (see scope).
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
 - 2026-10-28: **Glitch work (see [gw_open_search_plan.md](gw_open_search_plan.md), G-B) lifts the O3 results from
-  12 to 29 of 35 held-out detections at under 1 false alarm per hour.** `bench/gw_events.q` (same O3 time-slide
+  12 to 29 of 35 held-out detections at under 1 false alarm per hour.** `bench/gw/gw_events.q` (same O3 time-slide
   background, 4.85 h) per model, events found at under 1/h and under 1 per 5 h:
 
   | model | training | <1/h | <1/5h |
@@ -346,7 +346,7 @@ long-duration signals (see scope).
   (4) require consistency between detectors (e.g. score each detector's data separately as well); (5) measure more
   background (longer stretches around events, or the 4096 s files of O3 test events) so rates below 1/day can be
   quoted. Also worth adding an O3 event to the test noise split so G6.1's background matches what G7 faces.
-- 2026-10-25: G7 first pass over real events (`bench/gw_events.q`, `.qs.gw.scanEvent`, about 25 s). `fetch_gw.sh
+- 2026-10-25: G7 first pass over real events (`bench/gw/gw_events.q`, `.qs.gw.scanEvent`, about 25 s). `fetch_gw.sh
   --test-events` got 32 s H1/L1 text files for 43 events (3.4 GB with the noise files; O4 events mostly have no
   32 s text pair and were skipped). `.qs.gw.confidentBBH[...;10;80;0.9]` with data gives **35 held-out events,
   all O3 (GWTC-2.1/3)**; GW150914 isn't among them (its catalogue row lacks p_astro) but was checked separately.
@@ -365,7 +365,7 @@ long-duration signals (see scope).
   0.01-0.07 with one bump to 0.20. Scan time under a second. Tests `gw_scan_mechanics` (synthetic burst, a stub
   model) and `gw_cnn_finds_gw150914` (skips without the data or the trained model). G7.1 stays unticked until
   every in-scope test event is scanned. Full suite: 148 passed.
-- 2026-10-25: **First GW CNN** (`bench/gw_cnn.q`; saved as `models/gw_cnn_1.qsm`, git-ignored). Two input channels
+- 2026-10-25: **First GW CNN** (`bench/gw/gw_cnn.q`; saved as `models/gw_cnn_1.qsm`, git-ignored). Two input channels
   (whitened H1 and L1, 1 s at 2048 Hz); conv 8x32, 16x16, 32x8 filters (relu, pool 4 each), dense 32 relu, sigmoid:
   35,449 parameters. Adam lr 1e-3, l2 1e-4, batch 128, 20 epochs of 6,000 fresh windows (SNR 8-30, merger 0.6-0.9 s,
   a quarter of negatives glitchy), about 31 s per epoch with `-s 4` (13.5 min in total). Validation accuracy 76% ->
@@ -397,7 +397,7 @@ long-duration signals (see scope).
   key, the fold's result wasn't assigned back, so no parameter moved; found by the conv training test before the
   full suite ran. Gotchas: `?[c;a;b]` needs simple lists (use `arg+(i-arg)*mask` on matrices); `vs` is a keyword
   (it made a parameter fail with `nyi`); a scan `f\[x;list]` doesn't include x. Full suite: 145 passed.
-- 2026-10-25: G5.1 complete. `bench/gw_mlp.q` (options for layers, activation, SNR range, merger range, glitch
+- 2026-10-25: G5.1 complete. `bench/gw/gw_mlp.q` (options for layers, activation, SNR range, merger range, glitch
   share, epochs, learning rate, rows per epoch): trains on a fresh `.qs.gw.batch` per epoch from the four training
   events, scores a fixed 2,000-window batch from GW170814, and reports efficiency by SNR at the threshold giving
   1% false alarms on validation negatives. Findings:
@@ -415,7 +415,7 @@ long-duration signals (see scope).
     epoch with `-s 4` (half generating injections), 5 min 45 s in total; memory dominated by the 1.6 GB of
     loaded noise library plus about 200 MB per batch.
 - 2026-10-25: **Stage G4 complete.**
-  - **G4.1 noise library.** `scripts/fetch_gw.sh` downloaded the six events' 4096 s H1/L1 files (1.8 GB).
+  - **G4.1 noise library.** `scripts/gw/fetch_gw.sh` downloaded the six events' 4096 s H1/L1 files (1.8 GB).
     `.qs.gw.noiseEvent` / `buildNoise` / `loadNoise`: per detector, 64 s chunks at 2048 Hz (resampled), own Welch
     PSD, whitened, middle 52 s kept, chunks with NaN or within 8 s of any catalogued event dropped, only times
     both detectors have; saved to `data/gw/noise/<event>` (375 MB, reals). Build: 5 min 47 s with `-s 4` (chunks

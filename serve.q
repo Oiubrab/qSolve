@@ -8,8 +8,8 @@
 /   info          any argument -> `layers`inputs`target`port`pid
 
 .srv.root:{$[count x;x;"."]} "/" sv -1_ "/" vs string .z.f;
-system "l ",.srv.root,"/defineEquation.q";
-system "l ",.srv.root,"/data.q";
+system "l ",.srv.root,"/src/defineEquation.q";
+system "l ",.srv.root,"/src/data.q";
 
 .srv.o:.Q.opt .z.x;
 if[not `model in key .srv.o; -2 "usage: q serve.q -model file.qsm -p port"; exit 1];

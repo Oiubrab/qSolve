@@ -588,7 +588,7 @@
     `triggers`seconds!(raze res@\:`triggers;sum res@\:`seconds)
  }
 
-/ bulk data (open-search plan, S1): files converted from GWOSC HDF5 by scripts/gwosc_bulk.py into
+/ bulk data (open-search plan, S1): files converted from GWOSC HDF5 by scripts/gw/gwosc_bulk.py into
 / data/gw/bulk/<run>/<det>-<gps>-<duration>.{f32,dq,inj,json}: float32 strain, int32 per-second masks, a description
 
 / one converted file by its base path (no extension): like .qs.gw.strain (`gps`rate`h) plus the masks

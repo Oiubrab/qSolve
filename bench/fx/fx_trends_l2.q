@@ -1,8 +1,8 @@
-/ l2 sensitivity of the linear model in bench/fx_trends.q: is its negative skill just too little shrinkage?
-/ q bench/fx_trends_l2.q [-s 4]       linear model, l2 in 1 and 10, 6 pairs x horizons 20 60 120, same walk-forward
+/ l2 sensitivity of the linear model in bench/fx/fx_trends.q: is its negative skill just too little shrinkage?
+/ q bench/fx/fx_trends_l2.q [-s 4]       linear model, l2 in 1 and 10, 6 pairs x horizons 20 60 120, same walk-forward
 
-.fxl.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f;
-{system "l ",.fxl.root,"/",x} each ("defineEquation.q";"data.q";"fx.q");
+.fxl.root:{$[count x;x;"."]} "/" sv -3_ "/" vs string .z.f;
+{system "l ",.fxl.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/fx.q");
 system "c 100 250";
 .fxl.t:.qs.fx.ecb `$":",.fxl.root,"/data/fx/eurofxref-hist.csv"; .fxl.dates:.fxl.t`date;
 .fxl.years:2010+til 1+(`year$last .fxl.dates)-2010;

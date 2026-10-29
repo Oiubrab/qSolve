@@ -11,7 +11,7 @@
     .t.eq[.qs.gw.bit[5 4 1i;`a`b`c;`c];110b];
  }];
 
-/ a fixture HDF5 in GWOSC's layout, converted by scripts/gwosc_bulk.py, read back by q; then H1 and L1 fixtures with
+/ a fixture HDF5 in GWOSC's layout, converted by scripts/gw/gwosc_bulk.py, read back by q; then H1 and L1 fixtures with
 / different vetoed stretches, intersected into analysable segments
 .t.add[`bulk_convert_and_segments;{
     py:.t.root,"/.venv/bin/python";
@@ -22,7 +22,7 @@
     mk:{[py;out;det;gps;b0;b1]
         f:out,"/",det,".hdf5";
         system "env ",py," -I ",.t.root,"/tests/fixtures/make_gwosc_hdf5.py ",f," ",det," ",(string gps)," 100 16 ",(string b0)," ",string b1;
-        system "env ",py," -I ",.t.root,"/scripts/gwosc_bulk.py convert ",f;
+        system "env ",py," -I ",.t.root,"/scripts/gw/gwosc_bulk.py convert ",f;
         system "env rm -f ",f}[py;out];
     mk["H1";1000000000;40;50];
     mk["L1";1000000000;60;65];
@@ -52,7 +52,7 @@
 / the real O4a file, if fetched: matches what h5py reported
 .t.add[`bulk_real_o4a;{
     base:.t.root,"/data/gw/bulk/O4a/H1-1368195072-4096";
-    if[()~key hsym `$base,".json"; .t.skip "fetch with .venv/bin/python scripts/gwosc_bulk.py fetch --run O4a --start 1368195072 --end 1368199168 --detectors H1"];
+    if[()~key hsym `$base,".json"; .t.skip "fetch with .venv/bin/python scripts/gw/gwosc_bulk.py fetch --run O4a --start 1368195072 --end 1368199168 --detectors H1"];
     b:.qs.gw.bulk base;
     .t.eq[count b`h;16777216];
     .t.eq[sum null b`h;13000704i];

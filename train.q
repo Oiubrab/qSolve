@@ -25,10 +25,10 @@
 /   -cv K      cross-validate the configuration over K folds before the final training run
 
 .cli.root:{$[count x;x;"."]} "/" sv -1_ "/" vs string .z.f;
-system "l ",.cli.root,"/defineEquation.q";
-system "l ",.cli.root,"/data.q";
-system "l ",.cli.root,"/plot.q";
-system "l ",.cli.root,"/fx.q";
+system "l ",.cli.root,"/src/defineEquation.q";
+system "l ",.cli.root,"/src/data.q";
+system "l ",.cli.root,"/src/plot.q";
+system "l ",.cli.root,"/src/fx.q";
 .qs.data.dir:.cli.root,"/data";
 
 .cli.o:.Q.opt .z.x;

@@ -232,7 +232,7 @@
 .t.add[`gw_finds_gw150914;{
     dir:"data/gw/strain/GW150914/";
     files:{[dir;det] .t.path dir,det,"-32-1126259447.txt.gz"}[dir] each ("H1";"L1");
-    if[any ()~/:key each files; .t.skip "fetch GW150914's 32 s files with scripts/fetch_gw.sh"];
+    if[any ()~/:key each files; .t.skip "fetch GW150914's 32 s files with scripts/gw/fetch_gw.sh"];
     r:{.qs.gw.search[.qs.gw.strain x;38.1;33.0;0 0f;6]} each files;
     .t.ok[r[0;`snr] within 17 22;"H1 SNR ",string r[0;`snr]];
     .t.ok[r[1;`snr] within 11 16;"L1 SNR ",string r[1;`snr]];
@@ -436,13 +436,13 @@
     .t.ok[((best`start)-1000000000f) within 14.2 15.0;"loudest window starts at ",string (best`start)-1000000000f];
  }];
 
-/ G7.1 on GW150914 with a trained CNN (models/gw_cnn_1.qsm from bench/gw_cnn.q): the score peaks within 0.2 s of
+/ G7.1 on GW150914 with a trained CNN (models/gw_cnn_1.qsm from bench/gw/gw_cnn.q): the score peaks within 0.2 s of
 / the event, well above everything more than 1.5 s away
 .t.add[`gw_cnn_finds_gw150914;{
     mf:.t.path "models/gw_cnn_1.qsm";
     dir:"data/gw/strain/GW150914/";
     files:{[dir;det] .t.path dir,det,"-32-1126259447.txt.gz"}[dir] each ("H1";"L1");
-    if[any ()~/:key each mf,files; .t.skip "needs GW150914's 32 s files and models/gw_cnn_1.qsm (q bench/gw_cnn.q -save models/gw_cnn_1.qsm)"];
+    if[any ()~/:key each mf,files; .t.skip "needs GW150914's 32 s files and models/gw_cnn_1.qsm (q bench/gw/gw_cnn.q -save models/gw_cnn_1.qsm)"];
     t:.qs.gw.scan[.qs.load mf;.qs.gw.strain files 0;.qs.gw.strain files 1;1%16;()!()];
     best:t first idesc t`score;
     .t.ok[0.2>abs best[`merger]-1126259462.4;"best window's merger at ",string best[`merger]-1126259462.4];
@@ -482,7 +482,7 @@
 
 .t.add[`gw_strain_gw150914_real;{
      file:.t.path "data/gw/strain/GW150914/H1-32-1126259447.txt.gz";
-     if[()~key hsym file; .t.skip "run scripts/fetch_gw.sh --duration 32 GW150914"];
+     if[()~key hsym file; .t.skip "run scripts/gw/fetch_gw.sh --duration 32 GW150914"];
      strain:.qs.gw.strain file;
      .t.eq[strain`gps;1126259447];
      .t.eq[strain`rate;4096];

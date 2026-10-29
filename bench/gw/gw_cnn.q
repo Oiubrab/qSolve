@@ -1,6 +1,6 @@
-/ G5.4: CNN detector (H1 and L1 as two channels of 1 s at 2048 Hz), trained and scored as bench/gw_mlp.q:
+/ G5.4: CNN detector (H1 and L1 as two channels of 1 s at 2048 Hz), trained and scored as bench/gw/gw_mlp.q:
 / generated windows each epoch, a fixed validation batch, efficiency by SNR at a 1% false-alarm threshold
-/   q bench/gw_cnn.q -s 4 -q [-filters 8 16 32] [-kernel 32 16 8] [-pool 4 4 4] [-hidden 32] [-snr 8 30]
+/   q bench/gw/gw_cnn.q -s 4 -q [-filters 8 16 32] [-kernel 32 16 8] [-pool 4 4 4] [-hidden 32] [-snr 8 30]
 /        [-merger 0.6 0.9] [-glitchy 0.25] [-epochs 20] [-lr 0.001] [-rows 6000] [-batch 128] [-save file]
 /        [-mine 6] [-hard models/gw_cnn_1.qsm] [-real 0.5] [-patience 8] [-bulk O4a -bstart GPS -bstop GPS [-mix]]
 /        [-single 0.25]
@@ -11,8 +11,8 @@
 /   -hard: so do windows that model scores above 0.5; -real: their share of the glitchy windows; -patience: early
 /   stopping on validation loss, keeping the best epoch
 / needs the noise library: .qs.gw.buildNoise[key .qs.gw.noiseSplit;()!()] (see plans/inProgress/gw_detection_plan.md)
-.gwb.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f;
-{system "l ",.gwb.root,"/",x} each ("defineEquation.q";"data.q";"signal.q";"gw.q");
+.gwb.root:{$[count x;x;"."]} "/" sv -3_ "/" vs string .z.f;
+{system "l ",.gwb.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/signal.q";"src/gw.q");
 .qs.data.dir:.gwb.root,"/data";
 system "c 40 200";
 a:.Q.opt .z.x;

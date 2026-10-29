@@ -1,10 +1,10 @@
 / FX slow-trend research (plans/inProgress/fx_trends_plan.md): does months-to-years structure predict the next
-/ weeks to months?   q bench/fx_trends.q [-s 4]       needs scripts/fetch_data.sh fx
+/ weeks to months?   q bench/fx/fx_trends.q [-s 4]       needs scripts/fetch_data.sh fx
 / every forecast is out of sample (walk-forward by year, purged by the horizon); skill = 1 - MSE(model)/MSE(zero change)
 / The experiment list is fixed here before it is run; K counts every configuration scored (F-D8).
 
-.fxt.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f;
-{system "l ",.fxt.root,"/",x} each ("defineEquation.q";"data.q";"fx.q");
+.fxt.root:{$[count x;x;"."]} "/" sv -3_ "/" vs string .z.f;
+{system "l ",.fxt.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/fx.q");
 system "c 400 250";
 
 .fxt.file:`$":",.fxt.root,"/data/fx/eurofxref-hist.csv";

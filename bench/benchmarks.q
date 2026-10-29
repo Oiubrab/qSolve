@@ -3,8 +3,8 @@
 / datasets that haven't been downloaded are skipped; exits 1 if any benchmark misses its target
 
 .b.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f;
-system "l ",.b.root,"/defineEquation.q";
-system "l ",.b.root,"/data.q";
+system "l ",.b.root,"/src/defineEquation.q";
+system "l ",.b.root,"/src/data.q";
 .qs.data.dir:.b.root,"/data";
 
 / one benchmark: dataset, model, training options and target

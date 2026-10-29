@@ -39,7 +39,7 @@ appears.
 
 | # | Decision | Why |
 |---|---|---|
-| S-D1 | HDF5 is converted by a small Python tool (`scripts/gwosc_bulk.py`, `h5py` in a project-local `.venv`, git-ignored) into raw little-endian files q reads with `1:`: float32 strain, int32 per-second data-quality and injection masks, and a JSON description. Everything after conversion is q. | The owner asked for HDF5 ingest; h5py is the standard reader. float32 keeps 7 significant digits, ample for whitening (the noise in band is far above float32 rounding of the strain). |
+| S-D1 | HDF5 is converted by a small Python tool (`scripts/gw/gwosc_bulk.py`, `h5py` in a project-local `.venv`, git-ignored) into raw little-endian files q reads with `1:`: float32 strain, int32 per-second data-quality and injection masks, and a JSON description. Everything after conversion is q. | The owner asked for HDF5 ingest; h5py is the standard reader. float32 keeps 7 significant digits, ample for whitening (the noise in band is far above float32 rounding of the strain). |
 | S-D2 | Analysable time: seconds where both detectors have DATA, CBC_CAT1 and CBC_CAT2 set and no CBC hardware injection (NO_CBC_HW_INJ set). | The vetoes the CBC searches themselves use; hardware injections are LIGO's own test signals. |
 | S-D3 | Whitening and scanning reuse the noise library's method (64 s chunks, own PSD, middle 52 s), so scanned data look like training data. | Consistency with training. |
 | S-D4 | Background by time slides over the searched data itself, enough slides for the false-alarm rates being quoted. | As G6.1, in the same conditions as the search. |
@@ -48,7 +48,7 @@ appears.
 
 ### S1 — Bulk data ingest
 
-- [x] **S1.1 Converter.** `scripts/gwosc_bulk.py`: list a run's 4 kHz files for detectors and a GPS range through
+- [x] **S1.1 Converter.** `scripts/gw/gwosc_bulk.py`: list a run's 4 kHz files for detectors and a GPS range through
   GWOSC's API (v2 `strain-files`), download (resuming), convert to `<base>.f32`, `.dq`, `.inj`, `.json` under
   `data/gw/bulk/<run>/`, optionally removing the HDF5. *Accept:* a fixture HDF5 in GWOSC's layout converts exactly;
   a real O4a file converts and loads.
@@ -61,7 +61,7 @@ appears.
 
 - [x] **S2.1** Whiten analysable segments in chunks (S-D3) and score sliding 1 s windows; keep triggers (local
   maxima at least 1 s apart) above a low threshold, with times. (`.qs.gw.segmentStreams`, `.qs.gw.searchStreams`,
-  `bench/gw_bulk_scan.q`; triggers rank by the logit, `.qs.predictRaw`, and carry each detector's peak amplitude.)
+  `bench/gw/gw_bulk_scan.q`; triggers rank by the logit, `.qs.predictRaw`, and carry each detector's peak amplitude.)
 - [x] **S2.2** Recover the catalogued events in the scanned stretch (sanity check).
 
 ### G-B — Glitch tools (the false-alarm problem, both for O3 and here)
@@ -69,16 +69,16 @@ appears.
 - [x] **Logit ranking**: `.qs.predictRaw` returns the output layer's pre-activation, so scores that round to 1
   still rank.
 - [x] **Amplitude veto**: triggers where either detector's whitened amplitude in the window exceeds 15 (a BBH at
-  network SNR 35 peaks near 6), applied alike to zero lag and background (`-veto` in `bench/gw_bulk_scan.q`).
+  network SNR 35 peaks near 6), applied alike to zero lag and background (`-veto` in `bench/gw/gw_bulk_scan.q`).
 - [x] **Hard negatives**: `.qs.gw.mine` (real glitches by whitened amplitude in a noise library) and
   `.qs.gw.mineScores` (noise windows an earlier model scores high); `.qs.gw.batch` with `mined` puts a share
-  `real` of the glitchy windows on them; `bench/gw_cnn.q -mine 6 -hard <model> -patience 8`.
+  `real` of the glitchy windows on them; `bench/gw/gw_cnn.q -mine 6 -hard <model> -patience 8`.
 - [x] **O4a training noise**: `.qs.gw.bulkNoise` builds a noise library from a run's bulk data (analysable
   segments, away from catalogued events), from days that aren't searched.
 - [x] Retrain on O4a noise with hard negatives; compare background and GW231226's rank with gw_cnn_1.
 - [x] **Exclusive background**: `.qs.gw.far` drops background triggers where a catalogued event sits in either
   detector's (slid) window.
-- [x] **Single-detector chirps as negatives**: `.qs.gw.batch` `single` (`bench/gw_cnn.q -single`).
+- [x] **Single-detector chirps as negatives**: `.qs.gw.batch` `single` (`bench/gw/gw_cnn.q -single`).
 - [x] Retrain with single-detector negatives (gw_cnn_4) and compare.
 
 ### S3 — Background and significance
@@ -101,7 +101,7 @@ appears.
   30 MB per 4096 s 4 kHz file; the first O4a H1 file is 77% NaN (detector down) and carries `quality/simple/DQmask`
   (DATA, CBC_CAT1-3, BURST, STOCH, CW bits) and `quality/injections/Injmask` (NO_CBC_HW_INJ and others).
   `.venv` with h5py 3.16 and numpy 2.5 created (git-ignored).
-- 2026-10-27: S1.1 and S1.2 done. `scripts/gwosc_bulk.py` (`fetch`, `convert`): converts a GWOSC HDF5 file into
+- 2026-10-27: S1.1 and S1.2 done. `scripts/gw/gwosc_bulk.py` (`fetch`, `convert`): converts a GWOSC HDF5 file into
   `<det>-<gps>-<duration>.f32/.dq/.inj/.json` in 0.4 s (67 MB float32 strain per 4096 s file); on the real O4a
   file the NaN pattern is identical and the largest float32 error is 3e-8 of the strain's range. **The API ignores
   GPS ranges and serves 20 files per page (391 pages per detector for O4a)**, so `fetch` builds URLs directly from
@@ -114,7 +114,7 @@ appears.
   The first real O4a H1 file has 922 usable seconds of 4096. Fetching one day around GW231226_101520 (SNR 34.7)
   for S1.3 and S2.2.
 - 2026-10-28: S1.3, S2.1, S2.2. The hour around GW231226 (GPS 1387618304-1387622400) has 3897 analysable s in one
-  segment. `bench/gw_bulk_scan.q` with gw_cnn_1 (step 0.25 s, 10 slides of 7 s; 7 min on a machine shared with 17
+  segment. `bench/gw/gw_bulk_scan.q` with gw_cnn_1 (step 0.25 s, 10 slides of 7 s; 7 min on a machine shared with 17
   other jobs): 1668 zero-lag triggers in 1.07 h, 16548 background triggers in 10.7 h. **GW231226 is recovered**
   (implied merger 1387620938.25 against the catalogue's .3, logit 6.04) **but ranks second and has a false-alarm
   rate of 1.7/hour.** The top trigger (logit 6.29) is a 118-sigma glitch in H1 alone (L1's peak 3.8), which the
@@ -123,7 +123,7 @@ appears.
   Real glitches above 6 sigma in the O1-O3 training noise: 42 in 6.3 h; with the windows gw_cnn_1 scores above
   0.5, 372 hard negatives in the training noise and 128 in validation. A retrain with these (`-mine 6 -hard`, early stopping)
   is running.
-- 2026-10-28: Retrain `gw_cnn_2` (`bench/gw_cnn.q -mine 6 -hard models/gw_cnn_1.qsm -epochs 60 -patience 8`,
+- 2026-10-28: Retrain `gw_cnn_2` (`bench/gw/gw_cnn.q -mine 6 -hard models/gw_cnn_1.qsm -epochs 60 -patience 8`,
   43 min on the shared machine): on its validation batch (half the glitchy windows real) it finds 89% of SNR 5-10
   signals at 1% false alarms (gw_cnn_1: 63% on the simulated-glitch batch), 98% at 10-15, all above; false alarms
   on real glitches 3.2%. **On the GW231226 hour GW231226's logit goes from 6.0 to 21.8, louder than all 10.7 h of
@@ -149,8 +149,8 @@ appears.
   67 min): validation false alarms are now all single-detector chirps (3.6%; real glitches, blips, sine-Gaussians
   and noise 0), efficiency at 1% false alarms 46% at SNR 5-10, 83% at 10-15, 97% above. On the GW231226 hour:
   GW231226 logit 17.0, loudest background (inclusive, event left in) 4.1 against 16.3 for gw_cnn_3, next zero-lag
-  1.2. On the O3 held-out events (`bench/gw_events.q`): 29/35 under 1 false alarm/hour (gw_cnn_1 12, gw_cnn_2 29).
-- 2026-10-28: **S3 on a full O4a day**, `bench/gw_bulk_scan.q -run O4a -start 1387577000 -stop 1387663400
+  1.2. On the O3 held-out events (`bench/gw/gw_events.q`): 29/35 under 1 false alarm/hour (gw_cnn_1 12, gw_cnn_2 29).
+- 2026-10-28: **S3 on a full O4a day**, `bench/gw/gw_bulk_scan.q -run O4a -start 1387577000 -stop 1387663400
   -slides 20 -model models/gw_cnn_4.qsm` (2 h 15 min on the shared machine): 5 analysable segments, 20.6 h
   searched, 32932 zero-lag triggers, 412.5 h of background (658858 triggers), amplitude veto 36 zero-lag and 771
   background. **GW231226 is the loudest trigger, above all the background: false-alarm rate under 1 per 412 h.**
@@ -175,9 +175,9 @@ appears.
   template H1's loudest SNR within 0.5 s, L1's within 12 ms of it, network SNR, time difference and each
   detector's loudest SNR elsewhere (its own background). On GW231226: network SNR 32.9 (catalogue 34.7), best
   template 50+40 (detector frame; source 40+35), dt 4.4 ms. `.qs.gw.flagsAt` lists the mask bits off at a second.
-  `bench/gw_vet.q` runs both on a searched stretch's loudest uncatalogued triggers and marks `consistent` (both
+  `bench/gw/gw_vet.q` runs both on a searched stretch's loudest uncatalogued triggers and marks `consistent` (both
   SNRs above their own background, |dt| < 12 ms, no CBC-relevant flags off). The O4a day's top three noise triggers
-  all fail (one detector below its own background). `scripts/search_days.sh MODEL SLIDES RUN:GPS...` fetches and
+  all fail (one detector below its own background). `scripts/gw/search_days.sh MODEL SLIDES RUN:GPS...` fetches and
   searches whole days, downloading the next while searching the current.
 - 2026-10-29: Catalogue check: the GWOSC event list holds IAS-O3a (42 events, 10 in no LVK catalogue) and 14
   GWTC-1 marginal candidates. Days chosen around the IAS-only events in the trained mass range and the loudest

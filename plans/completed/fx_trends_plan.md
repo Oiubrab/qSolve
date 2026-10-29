@@ -57,7 +57,7 @@ well-measured null. A large edge means a bug (look-ahead, overlapping-window lea
 | F-D7 | Significance: with overlapping targets, the effective sample is about (years × 252 / h), not the row count. Judge results with a **block bootstrap** (blocks of at least h days) or a **permutation test on whole years**, never a naive standard error. | Overlap makes naive t-statistics wildly optimistic. |
 | F-D8 | Count every configuration tried and report the count next to the best result. Choose model settings on a validation slice *inside* the training years, never on the test years. | Trying many currencies × horizons × features guarantees a few lucky hits by chance. |
 | F-D9 | Pool currencies where it helps: one model trained on many pairs (features are scale-free returns), tested per pair. Pairs are all quoted against EUR, so crosses are derived ratios, not independent series. | Roughly 27 years of one pair is only ~330 independent months; pooling raises the sample, though correlated pairs raise it less than the pair count suggests. |
-| F-D10 | New code in `fx.q` (features, purged walk, rules, bootstrap) and `bench/fx_trends.q`. Reuse existing scoring and controls. | Follows the existing layout. |
+| F-D10 | New code in `fx.q` (features, purged walk, rules, bootstrap) and `bench/fx/fx_trends.q`. Reuse existing scoring and controls. | Follows the existing layout. |
 
 ## 3. Stages
 
@@ -90,7 +90,7 @@ well-measured null. A large edge means a bug (look-ahead, overlapping-window lea
 ### Stage F3 — The main experiments
 
 Run on the ECB data for EUR/USD, GBP/USD, USD/JPY, EUR/CHF, AUD/USD, USD/CAD (the major pairs available), each at
-h = 5, 20, 60, 120. In `bench/fx_trends.q`, results as a table in the log.
+h = 5, 20, 60, 120. In `bench/fx/fx_trends.q`, results as a table in the log.
 
 - [x] **F3.1 Rules only.** Trend and reversion rules per pair, horizon and year. Shows whether the raw
   hypotheses have any life before a model is involved.
@@ -157,7 +157,7 @@ h = 5, 20, 60, 120. In `bench/fx_trends.q`, results as a table in the log.
     laggedRows output, so a row whose own return is missing is dropped even though that return isn't a feature.
   - The suite has one failing test, `gw_strain_parse_cache`, from uncommitted work on `gw.q`/`tests/test_gw.q` that
     isn't part of this plan; every other test passes.
-- 2026-10-25: F2.3, F3, F4 done (`q bench/fx_trends.q -s 4`, about 25 minutes; deterministic, a rerun gave identical
+- 2026-10-25: F2.3, F3, F4 done (`q bench/fx/fx_trends.q -s 4`, about 25 minutes; deterministic, a rerun gave identical
   numbers). 2010-2026 walk-forward by year, 6 pairs (EURUSD GBPUSD USDJPY USDCHF AUDUSD USDCAD) x h 5/20/60/120.
   **Result: no reliable edge.**
   - **F2.3 volatility control passes, less strongly than hoped.** Next-20-day log variance, skill vs the training
@@ -205,7 +205,7 @@ h = 5, 20, 60, 120. In `bench/fx_trends.q`, results as a table in the log.
     -0.70%/yr over 36 pair/model combinations, against -0.09%/yr for always long; best net were trend USDJPY
     +4.6%/yr (hold +3.1%), pooled linear EURUSD +2.6%, MLP EURUSD +2.0%, with several of similar size going the
     other way. No edge that survives the number of tries.
-- 2026-10-25: l2 sensitivity (`bench/fx_trends_l2.q`, linear model, l2 1 and 10, h 20/60/120): more shrinkage moves
+- 2026-10-25: l2 sensitivity (`bench/fx/fx_trends_l2.q`, linear model, l2 1 and 10, h 20/60/120): more shrinkage moves
   skill towards zero from below but never above (mean skill -0.038/-0.021 at h=20, -0.103/-0.063 at 60,
   -0.178/-0.124 at 120; 0 of 36 positive, 0 significant), and the information coefficient turns negative. So the
   negative skill is overfitting noise, not a signal held back by too little regularisation.

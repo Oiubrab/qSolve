@@ -1,15 +1,15 @@
 / open-search plan S2-S3: search a run's converted bulk data with a trained CNN. Analysable segments (both
 / detectors usable, at least 64 s), zero-lag triggers, a time-slide background over the same segments, a
 / false-alarm rate per trigger, and the catalogue cross-match
-/   q bench/gw_bulk_scan.q -s 4 -q -run O4a -start GPS -stop GPS [-model models/gw_cnn_1.qsm] [-slides 20]
+/   q bench/gw/gw_bulk_scan.q -s 4 -q -run O4a -start GPS -stop GPS [-model models/gw_cnn_1.qsm] [-slides 20]
 /        [-slide 7] [-step 0.25] [-top 20] [-veto 15]
 / -veto: triggers where either detector's whitened amplitude exceeds it are glitches (GW231226, at network SNR 35,
 / peaks near 6), dropped from the background and marked at zero lag
-/ needs the run's files: .venv/bin/python scripts/gwosc_bulk.py fetch --run O4a --start GPS --end GPS
+/ needs the run's files: .venv/bin/python scripts/gw/gwosc_bulk.py fetch --run O4a --start GPS --end GPS
 / writes data/gw/search/<run>-<start>-<stop>-<model>.{triggers,background,summary}.csv (summary: searched and
 / background seconds)
-.gsb.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f;
-{system "l ",.gsb.root,"/",x} each ("defineEquation.q";"data.q";"signal.q";"gw.q");
+.gsb.root:{$[count x;x;"."]} "/" sv -3_ "/" vs string .z.f;
+{system "l ",.gsb.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/signal.q";"src/gw.q");
 .qs.data.dir:.gsb.root,"/data";
 system "c 40 200"; system "P 14";
 a:.Q.opt .z.x;
@@ -63,7 +63,7 @@ if[count ev; ev:ev,'select trigger:merger, logit, far, vetoed from hit];
 trig:update known:{[ev;t] any 1>abs t-ev`gps}[ev] each merger from trig;
 
 -1 ""; -1 "loudest unvetoed zero-lag triggers (far: false alarms per hour; bound: louder than all background):";
-show top#`logit xdesc select from trig where not vetoed;
+show {[n;t] (n&count t)#t}[top] `logit xdesc select from trig where not vetoed;
 -1 ""; -1 "unvetoed triggers by false-alarm rate:";
 show select n:count i by far:{$[x<0.1;`$"<0.1/h";x<1;`$"0.1-1/h";x<10;`$"1-10/h";`$">=10/h"]} each far from trig where not vetoed;
 

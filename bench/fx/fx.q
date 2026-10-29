@@ -1,9 +1,9 @@
 / FX forecasting experiment (plans/completed/improvemet_plan.md Phase 9): can the model forecast daily exchange-rate returns better
-/ than "no change"?   q bench/fx.q [-s 4]        needs scripts/fetch_data.sh fx
+/ than "no change"?   q bench/fx/fx.q [-s 4]        needs scripts/fetch_data.sh fx
 / every score is on later data than the model trained on; skill = 1 - MSE(model)/MSE(no change)
 
-.fxb.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f;
-{system "l ",.fxb.root,"/",x} each ("defineEquation.q";"data.q";"fx.q");
+.fxb.root:{$[count x;x;"."]} "/" sv -3_ "/" vs string .z.f;
+{system "l ",.fxb.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/fx.q");
 system "c 60 220";
 
 .fxb.file:`$":",.fxb.root,"/data/fx/eurofxref-hist.csv";

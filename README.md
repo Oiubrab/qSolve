@@ -87,9 +87,9 @@ lists every option.
 ## Using it from q
 
 ```q
-\l defineEquation.q
-\l data.q
-\l plot.q                                               / only needed for .qs.plot2D
+\l src/defineEquation.q
+\l src/data.q
+\l src/plot.q                                           / only needed for .qs.plot2D
 
 d:.qs.data.split[.qs.data.spirals[2000;0.02];0.8]      / `X`Y`Xval`Yval
 m:.qs.init[2;32 32 2;`tanh`tanh`softmax;42]             / 2 inputs, two hidden layers, 2 outputs
@@ -102,7 +102,7 @@ r`history                                               / one row per epoch
 .qs.plot2D[r`model;d;`:spirals.svg;"spirals"]           / decision boundary, 2-input models only
 ```
 
-### Core (`defineEquation.q`)
+### Core (`src/defineEquation.q`)
 
 | Function | What it does |
 |---|---|
@@ -144,7 +144,7 @@ and `acts` has one symbol per layer.
 
 `xent` expects one-hot targets. Softmax is only allowed on the output layer, and only with `xent`.
 
-### Data (`data.q`)
+### Data (`src/data.q`)
 
 | Function | Dataset |
 |---|---|
@@ -202,7 +202,7 @@ column), then call `.qs.data.split` and `.qs.data.standardise` and pass the resu
 naive forecast "no change". Skill is `1 - MSE(model) / MSE(no change)`: above 0 beats it, below 0 is worse.
 
 ```bash
-q bench/fx.q -s 4          # the whole experiment, about 30 s
+q bench/fx/fx.q -s 4          # the whole experiment, about 30 s
 ```
 
 ```q
@@ -245,8 +245,8 @@ fixed trend and reversion rules, linear models, small networks and one model poo
 from a block bootstrap, because overlapping targets make ordinary standard errors far too narrow.
 
 ```bash
-q bench/fx_trends.q -s 4      # the whole study, about 25 minutes
-q bench/fx_trends_l2.q -s 4    # does more shrinkage change the answer?
+q bench/fx/fx_trends.q -s 4      # the whole study, about 25 minutes
+q bench/fx/fx_trends_l2.q -s 4    # does more shrinkage change the answer?
 ```
 
 **Result: no edge.** Of 192 forecast configurations 29 had skill above zero, 2 of those with one-sided p <= 0.05,
@@ -318,17 +318,25 @@ Benchmark results (seed 42):
 ## Layout
 
 ```
-defineEquation.q        core library (.qs)
-data.q                  datasets (.qs.data)
-plot.q                  decision-boundary SVGs (.qs.plot2D)
-train.q                 command-line training
-serve.q                 IPC model server
-dashboard.q             web dashboard server (ui/ holds the page)
-fx.q                    exchange rates (ECB), currency pairs, forecast scoring and controls
-tests/                  test runner, assertion helpers, tests
-bench/benchmarks.q      benchmark suite
-bench/fx.q              the FX forecasting experiment
-bench/fx_trends.q       the slow-trend study (months and years), bench/fx_trends_l2.q its shrinkage check
-scripts/fetch_data.sh   dataset downloader
-plans/                  development plans and progress logs (finished ones in plans/completed/)
+train.q                     command-line training          (entry points: run from the repository root)
+serve.q                     IPC model server
+dashboard.q                 web dashboard server
+src/                        the library, loaded by everything else
+  defineEquation.q          core: layers, conv front end, training, search (.qs)
+  data.q                    datasets, tables, CSV, time series (.qs.data)
+  plot.q                    decision-boundary SVGs (.qs.plot2D)
+  fx.q                      exchange rates (ECB), currency pairs, forecast scoring and controls (.qs.fx)
+  signal.q                  FFT, PSD, whitening, filtering, matched filters (.qs.sig)
+  gw.q                      gravitational waves: catalogue, waveforms, noise, injections, search (.qs.gw)
+ui/                         the dashboard's page
+bench/benchmarks.q          benchmark suite
+bench/fx/                   FX experiments: fx.q (forecasting), fx_trends.q (slow trends), fx_trends_l2.q
+bench/gw/                   GW experiments: detector training (gw_mlp.q, gw_cnn.q), real events (gw_events.q),
+                            open-data search (gw_bulk_scan.q) and vetting (gw_vet.q)
+scripts/fetch_data.sh       dataset downloader
+scripts/gw/                 GW data: event strain (fetch_gw.sh), bulk HDF5 conversion (gwosc_bulk.py),
+                            day-by-day search batches (search_days.sh)
+tests/                      test runner, assertion helpers, tests, fixtures, the dashboard's browser check
+plans/                      development plans and progress logs (inProgress/, completed/, future/)
+data/  models/  .venv/      downloads, saved models, the Python venv for HDF5 (all git-ignored)
 ```

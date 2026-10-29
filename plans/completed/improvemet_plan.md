@@ -148,7 +148,7 @@ plot.q                  decision-boundary SVGs (.qs.plot2D)
 train.q                 command-line training script
 serve.q                 IPC model server (predict, predictTable, info)
 fx.q                    ECB exchange rates, pairs, returns, forecast scoring, controls, walk-forward (.qs.fx)
-bench/fx.q              the FX experiment (Phase 9)
+bench/fx/fx.q              the FX experiment (Phase 9)
 dashboard.q             web dashboard: HTTP for ui/, JSON over WebSocket, q IPC for KX Dashboards
 ui/                     the dashboard page: index.html, app.js, style.css (no external libraries)
 dashboards/qsolve.json  KX Dashboards connection for a dashboard on port 8080
@@ -392,7 +392,7 @@ columns (GBP/USD = USD per EUR / GBP per EUR).
 - [x] **9.4 Controls.** Shuffled-target control (skill must be about 0 or below) and a leak control (the
   target's own next return given as an input: skill must be near 1). Both automated as tests on synthetic
   data, and run on the real data in the experiment.
-- [x] **9.5 Experiments** (`bench/fx.q`, results table printed and recorded below in the log):
+- [x] **9.5 Experiments** (`bench/fx/fx.q`, results table printed and recorded below in the log):
   EUR/USD next day from its own 10 lagged returns; from 5 lagged returns of 6 major pairs; linear (no
   hidden layer) vs MLP; 5-day horizon; up/down classification; walk-forward by year (train on all years
   before, test on the next) to see whether any edge is stable.
@@ -632,7 +632,7 @@ Environment used so far: q 5.0 (2026.05.01), Linux, 16 cores.
   refuses such tests; all fixed. Running them for real exposed a real bug: `sum` skips nulls, so a
   multi-day target spanning a gap counted the gap as zero change instead of dropping the row; fixed in
   `laggedRows`. 89 tests pass with and without threads.
-- 2026-10-24: 9.5 and 9.6 done. `bench/fx.q` (about 30 s with `-s 4`), no early stopping on test data;
+- 2026-10-24: 9.5 and 9.6 done. `bench/fx/fx.q` (about 30 s with `-s 4`), no early stopping on test data;
   80/20 time split, testing from 2021-04-07 (1,423 days):
 
   | experiment (next-day log return) | skill | direction | upShare |
