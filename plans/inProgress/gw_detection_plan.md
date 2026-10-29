@@ -106,8 +106,9 @@ acknowledge GWOSC and LIGO/Virgo/KAGRA in the README.
 4. **Extensions to qSolve that are useful beyond this project:** FFT and signal processing, training on data
    generated fresh each epoch, and 1-D convolution layers.
 
-Non-goals: competing with LIGO's search pipelines, parameter estimation, binary neutron stars or other
-long-duration signals (see scope).
+Non-goals: competing with LIGO's search pipelines, parameter estimation. Binary neutron stars (in scope since
+2026-10-24) have their own plan, [../future/gw_bns_plan.md](../future/gw_bns_plan.md): their 256 s windows change
+almost every size in this one.
 
 ---
 
