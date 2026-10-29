@@ -23,6 +23,8 @@ API = "https://gwosc.org/api/v2/runs/{run}/strain-files?detector={det}"
 # bulk files start on multiples of 4096 s and sit in directories named after the GPS time rounded down to a
 # multiple of 2^20 s, so their URLs can be built directly (the API ignores GPS ranges and pages 20 files at a time)
 URL = "https://gwosc.org/archive/data/{run}_4KHZ_R1/{dir}/{site}-{det}_GWOSC_{run}_4KHZ_R1-{gps}-4096.hdf5"
+# O1's files keep the older LOSC names
+URL_O1 = "https://gwosc.org/archive/data/O1/{dir}/{site}-{det}_LOSC_4_V1-{gps}-4096.hdf5"
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
@@ -66,7 +68,8 @@ def convert(path, out_dir):
 def guessed(run, det, start, end):
     """The 4 kHz files a detector would have overlapping [start, end), by URL pattern (missing ones 404)."""
     first = (start // 4096) * 4096
-    return [{"gps_start": g, "hdf5_url": URL.format(run=run, dir=(g >> 20) << 20, site=det[0], det=det, gps=g)}
+    url = URL_O1 if run == "O1" else URL
+    return [{"gps_start": g, "hdf5_url": url.format(run=run, dir=(g >> 20) << 20, site=det[0], det=det, gps=g)}
             for g in range(first, end, 4096)]
 
 
