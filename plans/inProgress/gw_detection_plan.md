@@ -240,7 +240,7 @@ almost every size in this one.
   bin at thresholds for false-alarm rates of 1/hour, 1/day and 1/month; ROC curves. Compare with the
   matched-filter baseline (G2.4) on the same injections, using a small template bank built from the same
   waveform model.
-- [ ] **G6.3 Robustness.** Efficiency split by mass and mass ratio; false alarms caused by synthetic glitches;
+- [x] **G6.3 Robustness.** Efficiency split by mass and mass ratio; false alarms caused by synthetic glitches;
   a shuffled-label control (the network must do no better than chance).
 
 ### G7 — Real detections
@@ -320,6 +320,11 @@ almost every size in this one.
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-29: G6.3's shuffled-label control: gw_cnn_4's recipe with the training labels shuffled
+  (`bench/gw/gw_cnn.q ... -shuffle -epochs 8`, saved as `models/control_shuffled_cnn.qsm` so the dashboard doesn't
+  list it): validation loss 0.6935 (chance 0.693); evaluated on 10.8 h of background and 1000 injections it finds
+  0-2.5% of signals at 1 false alarm per hour at every SNR (gw_cnn_4: 95%+ above SNR 16). The pipeline has no leak
+  that would let a model "find" signals without learning them. G6.3 done.
 - 2026-10-29: G8.2 done: README section "Finding gravitational waves in LIGO data" (what's built, the results table
   for gw_cnn_4, how to rerun, GWOSC acknowledgement under CC BY 4.0, references).
 - 2026-10-29: **G6.1, G7 done; G6.2 and G6.3 done for the CNN** (matched-filter comparison and shuffled-label
