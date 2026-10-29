@@ -70,7 +70,9 @@
     .t.eq[a`gps;1e9+2];
     .t.eq[a`rate;256];
     keep:r*12;
-    .t.eq[count a`w;keep*1+(n-r*16) div keep];
+    / (16 chunks reach 194 s; an end-aligned one adds the 4 s up to the last margin)
+    .t.eq[count a`w;n-r*4];
+    .t.ok[all (neg r*4)#a`ok;"tail covered"];
     / the chunks the library kept appear in the stream at their own times; the others are zero and not ok
     i:"j"$r*(b`gps)-a`gps;
     .t.near[raze {[a;keep;i] a[`w] i+til keep}[a;keep] each i;"f"$raze b`w;1e-6];

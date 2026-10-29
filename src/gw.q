@@ -756,18 +756,24 @@
  }
 
 / whiten a stretch as the noise library does (64 s chunks at 2048 Hz, own PSD, middle 52 s kept), returning the
-/ kept parts joined into one stream starting `margin` seconds in (chunks containing missing samples are zeroed)
+/ kept parts joined into one stream starting `margin` seconds in (chunks containing missing samples are zeroed).
+/ A last chunk aligned with the stretch's end covers what the stride leaves over, keeping only the samples after
+/ the previous chunk's, so the stream runs to `margin` seconds before the end
 .qs.gw.whitenStream:{[strain;o]
     o:.qs.gw.noiseDefaults,o;
-    x:strain`h; rate:strain`rate; len:rate*o`chunk; stride:rate*o[`chunk]-2*o`margin;
+    x:strain`h; rate:strain`rate; len:rate*o`chunk; mx:rate*o`margin; stride:len-2*mx;
     starts:stride*til 1+0|(count[x]-len) div stride;
-    one:{[x;rate;o;len;s]
-        c:x s+til len; r:o`rate; m:r*o`margin; keep:(r*o[`chunk])-2*m;
+    / (start in x, samples of x before the kept part)
+    jobs:starts,'mx;
+    e:count[x]-len; done:last[starts]+len-mx;
+    if[(e>=0)&done<count[x]-mx; jobs,:enlist (e;done-e)];
+    one:{[x;rate;o;len;job]
+        s:job 0; c:x s+til len; r:o`rate; m:r*o`margin; from:"j"$job[1]*r%rate; keep:(r*o[`chunk])-m+from;
         if[any null c; :keep#0f];
         c:$[rate=r; c; .qs.sig.resample[c;rate;r]];
         psd:.qs.sig.welch[c;r;4*r;2*r];
         w:.qs.sig.whiten[c*.qs.sig.tukey[count c;0.1];r;`freq`asd!(psd`freq;sqrt psd`psd)];
-        w m+til keep}[x;rate;o;len] peach starts;
+        w from+til keep}[x;rate;o;len] peach jobs;
     `gps`rate`w`ok!(strain[`gps]+o`margin;o`rate;raze one;raze {(count x)#not all 0=x} each one)
  }
 
