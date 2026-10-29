@@ -226,7 +226,7 @@ almost every size in this one.
   vectorised; gradient checks against finite differences as for dense layers; save, load and summary
   updated. *Accept:* the gradient check passes for conv, pool and flatten stacks; a small CNN solves a toy
   task (e.g. finding a pulse anywhere in a sequence) that an MLP of similar size struggles with.
-- [ ] **G5.3 Optional: LSTM or GRU layer** (thesis homage; owner's call): backpropagation through time,
+- [x] **G5.3 Optional: LSTM or GRU layer** (thesis homage; owner's call): backpropagation through time,
   gradient-checked, run on downsampled sequences.
 - [x] **G5.4 Training runs at scale.** Threads (`-s 4`), epochs on generated data, early stopping on the
   synthetic validation set, best model saved with its configuration. Log wall-clock times. (gw_cnn_2 to gw_cnn_4,
@@ -320,6 +320,18 @@ almost every size in this one.
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-10-29: G5.3 done, with a negative result. A GRU front end in the core (`.qs.initGru`, `.qs.gru.forward`,
+  `.qs.gru.backward`; m`gru, m`gW, m`gU, m`gb): one layer whose steps each read a block of samples per channel (so
+  1 s at 2048 Hz is 128 steps of 2 x 16 inputs, nothing discarded), the final state feeding dense layers.
+  Backpropagation through time matches central differences to 1e-6 for every parameter (`tests/test_gru.q`), and
+  it learns an order-dependent toy task (89%+ on held-out data). **On the GW task it doesn't learn**:
+  `bench/gw/gw_cnn.q -gru 16 32` with gw_cnn_4's recipe (O1-O3 plus O4a noise, hard negatives, single-detector
+  negatives) stopped early at best epoch 14 with validation loss 0.6945 (chance is ln 2 = 0.693), finding 0-4% of
+  signals at 1% false alarms (24 min); `-gru 64 64 -lr 0.003` (32 steps) reached 65% training accuracy but 51% on
+  validation, validation loss 0.694. A recurrent net reading raw whitened samples has to discover oscillation
+  filters through its gates, which the CNN gets from its kernels. The natural next try, not done: a GRU over a conv
+  layer's feature sequence (the published CNN+LSTM detectors), which needs the core to stack front ends.
+  (`models/gw_gru_1.qsm` is kept, git-ignored, as the record; it shows in the dashboard's model list.)
 - 2026-10-29: G8.1 done: a **Waves** tab in the dashboard (`app/dashboard.q` commands `gwEvents`, `gwEvent`,
   `gwInject`; `app/ui`). Pick a GW model (`models/gw_*.qsm`) and a catalogued event whose 32 s files are here: the
   whitened H1 and L1 strain within 2 s of the merger, an H1+L1 spectrogram (`.qs.sig.spectrogram`, 1/8 s Hann
