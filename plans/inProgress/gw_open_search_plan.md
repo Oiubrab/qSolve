@@ -186,3 +186,41 @@ appears.
   trained mass range), 1251737600 (GW190906_054335, 39+24, 7.9); O2 1184579584 (170720, SNR 13). O2 and O3 bulk
   files follow the O4a URL pattern and carry the same mask bits; O1's are named `H-H1_LOSC_4_V1-<gps>-4096.hdf5`
   under `archive/data/O1/` (not yet supported by `gwosc_bulk.py`). Searching with gw_cnn_4, 10 slides.
+- 2026-10-30: **Four older days searched** (gw_cnn_4, 10 slides, amplitude veto 15). Analysable time searched and
+  unvetoed triggers above each false-alarm rate (expected from the background in brackets):
+
+  | Day | Searched | < 0.1/h | 0.1-1/h | Loudest (far/h) |
+  |---|---|---|---|---|
+  | O3a 1250160640 | 16.9 h | 2 (1.7) | 15 (15.2) | 0.006 |
+  | O3a 1249800192 | 14.3 h | 3 (1.4) | 28 (12.9) | 0.014 |
+  | O3a 1251737600 | 12.0 h | 1 (1.2) | 10 (10.8) | 0.050 |
+  | O2 1184579584 | 14.4 h | 1 (1.4) | 21 (12.9) | 0.007 |
+
+  (Counts are of triggers, which can cluster; the 0.1-1/h excesses on two days are not checked further.)
+  Target events:
+  - GW190818_232544 (IAS, SNR 8.1): logit -1.6, far 181/h, not found.
+  - GW190906_054335 (IAS, SNR 7.9): logit 0.65, far 3.1/h, not found.
+  - At SNR 8 the measured efficiency at 1/h is 38% (G6), so missing two such events is unsurprising.
+  - GW190814_192009 (IAS): not searched. L1's usable time that hour is cut into short runs, and the one holding
+    the event is 52 s, under the 64 s chunk.
+  - GW190814: not searched. H1's DATA bit is off at that second in the bulk release.
+  - 170720 (GWTC-1 marginal, SNR 13): not searched. It lies 10 s before a segment's end, beyond the last full
+    52 s stride. **Fixed:** `.qs.gw.whitenStream` adds a chunk aligned with the stretch's end, so a stream now
+    runs to the last 6 s margin. Earlier searches lost up to about a minute at the end of every segment.
+
+  **Vetting** (`gw_vet.q -top 5 -far 0.5` per day; 20 triggers):
+  - Two loud triggers are H1 glitches. Their H1 matched-filter SNRs are 17.9 and 89.6 with L1 below 3.4, and
+    BURST_CAT2/3 flags are off in H1. Their amplitudes (5.3 and 8.8) were under the veto, so the CNN still ranks
+    some single-detector glitches high.
+  - Only one trigger is `consistent`: 1249807911.5, far 0.15/h. Its network SNR is 6.6, with H1 at 4.5 (own
+    background 4.2) and L1 at 4.7 (4.7). That is noise level, not a candidate.
+  - **No new candidates in these days.**
+- 2026-10-30: **170720's segment searched again** with the tail fix (1184616815-1184625900, 2.5 h, 25 h background):
+  - 170720 itself scores logit -3.1, far 738/h. The matched filter (32 s span) doesn't see it either: H1 4.7, L1
+    3.0, both below their own backgrounds (5.5, 5.3).
+  - A trigger 2.5 s earlier (merger 1184625887.25, logit 3.26) is louder than all the segment's background
+    (< 0.04/h). Against the whole day's 144 h it would be about 1 per 144 h, and about 0.4 such triggers are
+    expected by chance in the 60 h searched so far. The matched filter gives network SNR 6.5 (15+15), with H1 5.5
+    (background 4.8) but L1 3.6 (background 5.5), so it fails `consistent`. It also lies 13 s before both
+    detectors' CBC_CAT2 bit goes off together (the segment's end); L1's strain stops 8 s after that. **Not a
+    candidate:** likely data-quality related.
