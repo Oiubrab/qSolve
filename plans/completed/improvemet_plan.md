@@ -151,7 +151,7 @@ fx.q                    ECB exchange rates, pairs, returns, forecast scoring, co
 bench/fx/fx.q              the FX experiment (Phase 9)
 dashboard.q             web dashboard: HTTP for ui/, JSON over WebSocket, q IPC for KX Dashboards
 ui/                     the dashboard page: index.html, app.js, style.css (no external libraries)
-dashboards/qsolve.json  KX Dashboards connection for a dashboard on port 8080
+app/kx/qsolve.json  KX Dashboards connection for a dashboard on port 8080
 tests/ui/check.js       browser check of the dashboard (headless Chromium over DevTools; not in run.q)
 models/                 models saved from the dashboard (git-ignored)
 tests/assert.q          assertion helpers (.t namespace)
@@ -260,7 +260,7 @@ state of the art.
 ### Phase 4 — Usability
 
 - [x] **4.1 `train.q` CLI**: e.g.
-  `q train.q -data moons -hidden 16 -act tanh -epochs 200 -lr 0.1 -save model.qsm` (output size, output
+  `q app/train.q -data moons -hidden 16 -act tanh -epochs 200 -lr 0.1 -save model.qsm` (output size, output
   activation and loss are inferred from the data unless given with `-out` / `-loss`; see the header of `train.q`).
   Replaces `test.q` (deleted).
 - [x] **4.2 Benchmarks** `bench/benchmarks.q`: runs T3–T12 with the suggested configs (skipping datasets not
@@ -336,7 +336,7 @@ Binds to 127.0.0.1 by default.
 - [x] **7.4 KX Dashboards data source.** The dashboard process also answers q IPC queries from localhost
   (tables `.dash.runs`, `.dash.history[]`), plus a connection file and README steps for adding it in KX
   Dashboards.
-- [x] **7.5 Docs and launcher.** README section, `q dashboard.q -port 8080` printing the URL.
+- [x] **7.5 Docs and launcher.** README section, `q app/dashboard.q -port 8080` printing the URL.
 
 ### Phase 8 — A Predict tab that explains itself (owner feedback)
 
@@ -407,8 +407,8 @@ columns (GBP/USD = USD per EUR / GBP per EUR).
 q tests/run.q                       # all tests, exits non-zero on failure
 q bench/benchmarks.q                # train every benchmark dataset and check targets
 scripts/fetch_data.sh               # download MNIST, Fashion-MNIST, Iris into data/
-q train.q -data xor -hidden 4 -epochs 300 -batch 4 -lr 0.5
-q train.q -s 4 -data mnist -hidden 128 -act relu -optimiser adam -lr 0.001 -epochs 5 -batch 64 -plot x.svg
+q app/train.q -data xor -hidden 4 -epochs 300 -batch 4 -lr 0.5
+q app/train.q -s 4 -data mnist -hidden 128 -act relu -optimiser adam -lr 0.001 -epochs 5 -batch 64 -plot x.svg
 ```
 
 Environment used so far: q 5.0 (2026.05.01), Linux, 16 cores.
@@ -454,7 +454,7 @@ Environment used so far: q 5.0 (2026.05.01), Linux, 16 cores.
   `tests/test_cli.q` runs `train.q` as a subprocess and reloads the saved model. `test.q` deleted.
   First full MNIST run: 784-128-10 relu/softmax, adam lr 0.001, batch 64, **1 epoch: 95.15% val in 5.4 s**.
   Gotcha found while writing the CLI test: q's `system` treats a command whose first word is a q system
-  command as that command, so `system "q train.q ..."` runs `\q` (quits!) and `system "cd /x && ..."` runs
+  command as that command, so `system "q app/train.q ..."` runs `\q` (quits!) and `system "cd /x && ..."` runs
   `\cd`. Prefix with `env`. Also give the child `</dev/null` so it doesn't read the parent's stdin, and
   `hdel` needs a `:`-prefixed handle (`hsym`).
 - 2026-10-24: 4.2 done. `bench/benchmarks.q` (`-only name ...`, `-skipLarge`) runs T3-T12; the case table is
@@ -594,7 +594,7 @@ Environment used so far: q 5.0 (2026.05.01), Linux, 16 cores.
   the final tiles, dark-mode heatmap text was unreadable, the phone header overflowed. The driver is now
   `tests/ui/check.js` and passes.
 - 2026-10-24: 7.4 and 7.5 done. The dashboard port answers q IPC (tested: `.dash.runs`, `.dash.history[]`);
-  `dashboards/qsolve.json` is a KX Dashboards connection in the format of the installed samples. Not done:
+  `app/kx/qsolve.json` is a KX Dashboards connection in the format of the installed samples. Not done:
   adding it to `~/.kx/dashboards` or building a Dashboards layout, since that changes the owner's install.
   README has a Dashboard section. 79 tests pass with and without threads.
 - 2026-10-24: Owner found the Predict tab confusing (spirals: two unnamed numbers, "class 0"). Added

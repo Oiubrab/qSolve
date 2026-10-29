@@ -118,7 +118,7 @@ async function scenario({ ev, until, shot, size, sleep }) {
 }
 
 (async () => {
-  const q = spawn("q", [path.join(ROOT, "dashboard.q"), "-q", "-port", String(PORT)], { stdio: "ignore" });
+  const q = spawn("q", [path.join(ROOT, "app", "dashboard.q"), "-q", "-port", String(PORT)], { stdio: "ignore" });
   const chrome = spawn("chromium", ["--headless=new", `--remote-debugging-port=${DEBUG}`, "--no-first-run", "--no-default-browser-check",
     "--user-data-dir=" + path.join(OUT, ".profile"), "--window-size=1400,1000", "--hide-scrollbars", "about:blank"], { stdio: "ignore" });
   let failed = false;

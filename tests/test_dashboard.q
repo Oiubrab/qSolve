@@ -2,7 +2,7 @@
 / IPC against a real dashboard process
 
 .dash.root:.t.root;
-system "l ",.t.root,"/dashboard.q";
+system "l ",.t.root,"/app/dashboard.q";
 .dash.sent:();
 .dash.send:{[msg] .dash.sent,:enlist .j.j .dash.clean .dash.reqId,msg};
 / send one request, return every reply as parsed JSON
@@ -104,7 +104,7 @@ system "l ",.t.root,"/dashboard.q";
 / a real dashboard process: static files, refused paths, and q IPC for KX Dashboards
 .t.add[`dash_http_ipc;{
     p:30000+(.z.i+7) mod 20000;
-    system "env ",(first .z.X)," ",.t.root,"/dashboard.q -q -port ",(string p)," </dev/null >/dev/null 2>&1 &";
+    system "env ",(first .z.X)," ",.t.root,"/app/dashboard.q -q -port ",(string p)," </dev/null >/dev/null 2>&1 &";
     h:{[p;x] if[not null x; :x]; system "env sleep 0.1"; @[hopen;(`$"::",string p;100);0Ni]}[p]/[50;0Ni];
     if[null h; '"dashboard did not start"];
     fetch:{[p;path] system "env curl -s --path-as-is -w ' %{http_code}' http://127.0.0.1:",(string p),"/",path};

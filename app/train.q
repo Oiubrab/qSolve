@@ -1,8 +1,8 @@
 / train a model from the command line, e.g.
-/   q train.q -data moons -hidden 16 -act tanh -epochs 200 -lr 0.1
-/   q train.q -data mnist -hidden 128 -act relu -optimiser adam -lr 0.001 -epochs 5 -batch 64 -save model.qsm
-/   q train.q -data csv -file sales.csv -target price -features area rooms city -save price.qsm
-/   q train.q -data csv -file load.csv -series demand -lags 48 -horizon 1 -hidden none
+/   q app/train.q -data moons -hidden 16 -act tanh -epochs 200 -lr 0.1
+/   q app/train.q -data mnist -hidden 128 -act relu -optimiser adam -lr 0.001 -epochs 5 -batch 64 -save model.qsm
+/   q app/train.q -data csv -file sales.csv -target price -features area rooms city -save price.qsm
+/   q app/train.q -data csv -file load.csv -series demand -lags 48 -horizon 1 -hidden none
 / options (defaults in brackets):
 /   -data      and or xor nand fourBit sine circles moons spirals houses seasonal iris mnist fashion, or csv [xor]
 /   -file      csv: the file (with a header row);  -target  csv: the column to predict
@@ -24,7 +24,7 @@
 /              (any option above; layers in a hidden value are joined by x);  -trials N  sample N of them [all]
 /   -cv K      cross-validate the configuration over K folds before the final training run
 
-.cli.root:{$[count x;x;"."]} "/" sv -1_ "/" vs string .z.f;
+.cli.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f;
 system "l ",.cli.root,"/src/defineEquation.q";
 system "l ",.cli.root,"/src/data.q";
 system "l ",.cli.root,"/src/plot.q";

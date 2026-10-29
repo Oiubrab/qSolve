@@ -1,12 +1,13 @@
 / qSolve dashboard: a web UI for training, comparing, searching and using models
-/   q dashboard.q [-port 8080] [-host 127.0.0.1] [-s 4]      then open http://127.0.0.1:8080
+/   q app/dashboard.q [-port 8080] [-host 127.0.0.1] [-s 4]      then open http://127.0.0.1:8080
 / serves ui/ over HTTP and a JSON API over a WebSocket on the same port; the same port answers q IPC
 / queries (e.g. from KX Dashboards) about .dash.runs and .dash.history[]
 / API: send {"cmd":name,...}; replies are JSON objects with a "type" (and the request's "id", if it had one)
 
-/ when loaded from another script (the tests), .dash.root can be set first; otherwise it is this file's directory
+/ when loaded from another script (the tests), .dash.root can be set first; otherwise it is the repository root,
+/ this file's parent directory
 .dash.main:(string .z.f) like "*dashboard.q";
-if[not `root in key `.dash; .dash.root:{$[count x;x;"."]} "/" sv -1_ "/" vs string .z.f];
+if[not `root in key `.dash; .dash.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f];
 system "l ",.dash.root,"/src/defineEquation.q";
 system "l ",.dash.root,"/src/data.q";
 system "l ",.dash.root,"/src/plot.q";
@@ -350,7 +351,7 @@ system "l ",.dash.root,"/src/fx.q";
     p:first "?" vs path; if[p~""; p:"index.html"];
     if[not p like "[A-Za-z0-9_]*"; :.dash.http["404 Not Found";"text/plain";"not found"]];
     if[any not p in .Q.an,"."; :.dash.http["404 Not Found";"text/plain";"not found"]];
-    f:`$":",.dash.root,"/ui/",p;
+    f:`$":",.dash.root,"/app/ui/",p;
     if[()~key f; :.dash.http["404 Not Found";"text/plain";"not found"]];
     e:`$last "." vs p;
     .dash.http["200 OK";$[e in key .dash.types;.dash.types e;"application/octet-stream"];"c"$read1 f]

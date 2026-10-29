@@ -25,7 +25,7 @@ MNIST with one hidden layer of 128 relu nodes reaches 97.5% test accuracy in 5 e
 ## Dashboard
 
 ```bash
-q dashboard.q -s 4                    # then open http://127.0.0.1:8080/   (-port to change, -host to bind elsewhere)
+q app/dashboard.q -s 4                    # then open http://127.0.0.1:8080/   (-port to change, -host to bind elsewhere)
 ```
 
 The dashboard is a web page served by q itself. Nothing else needs installing:
@@ -51,7 +51,7 @@ dashboard listens on 127.0.0.1 only, unless you pass `-host`.
 ### Using it from KX Dashboards
 
 The same port also answers ordinary q queries, so KX Dashboards (or any q process) can read the
-session's results. Start the dashboard, then add `dashboards/qsolve.json` as a connection: copy it into
+session's results. Start the dashboard, then add `app/kx/qsolve.json` as a connection: copy it into
 your Dashboards `data/connections/` folder, or enter the same host and port in the connection editor.
 Useful queries:
 
@@ -66,18 +66,18 @@ These queries can run any q code, which is why the dashboard listens on localhos
 ## Quick start
 
 ```bash
-q train.q -data moons -hidden 16 -epochs 100 -optimiser adam -lr 0.01 -plot moons.svg
+q app/train.q -data moons -hidden 16 -epochs 100 -optimiser adam -lr 0.01 -plot moons.svg
 
-q train.q -data csv -file sales.csv -target price -features area rooms city -optimiser adam -lr 0.01 -epochs 100 -save price.qsm
-q train.q -data moons -optimiser adam -epochs 30 -search lr=0.01,0.001 hidden=4,16,16x16 act=tanh,relu
+q app/train.q -data csv -file sales.csv -target price -features area rooms city -optimiser adam -lr 0.01 -epochs 100 -save price.qsm
+q app/train.q -data moons -optimiser adam -epochs 30 -search lr=0.01,0.001 hidden=4,16,16x16 act=tanh,relu
 
-q train.q -data csv -file load.csv -series demand -lags 48 -horizon 1 -hidden none -optimiser adam -lr 0.003 -epochs 100
+q app/train.q -data csv -file load.csv -series demand -lags 48 -horizon 1 -hidden none -optimiser adam -lr 0.003 -epochs 100
 
 scripts/fetch_data.sh                 # downloads MNIST, Fashion-MNIST and Iris into data/
-q train.q -s 4 -data mnist -hidden 128 -act relu -optimiser adam -lr 0.001 -epochs 5 -batch 64 -save mnist.qsm
+q app/train.q -s 4 -data mnist -hidden 128 -act relu -optimiser adam -lr 0.001 -epochs 5 -batch 64 -save mnist.qsm
 ```
 
-Start q with secondary threads (`q train.q -s 4 ...`, with the script first) and large batches and
+Start q with secondary threads (`q app/train.q -s 4 ...`, with the script first) and large batches and
 predictions are spread across them: MNIST trains about 1.5x faster with `-s 4`.
 
 `train.q` infers the output layer from the data. It picks softmax with cross-entropy for several classes,
@@ -269,8 +269,8 @@ walk, which is what the purging prevents. The limit is the sample: 27 years is a
 requests for it from other q processes:
 
 ```bash
-q train.q -data csv -file sales.csv -target price -optimiser adam -lr 0.01 -epochs 100 -save price.qsm
-q serve.q -model price.qsm -p 5050 -s 4
+q app/train.q -data csv -file sales.csv -target price -optimiser adam -lr 0.01 -epochs 100 -save price.qsm
+q app/serve.q -model price.qsm -p 5050 -s 4
 ```
 
 ```q
@@ -318,9 +318,12 @@ Benchmark results (seed 42):
 ## Layout
 
 ```
-train.q                     command-line training          (entry points: run from the repository root)
-serve.q                     IPC model server
-dashboard.q                 web dashboard server
+app/                        the programs (run them from the repository root, e.g. q app/dashboard.q -s 4)
+  train.q                   command-line training
+  serve.q                   IPC model server
+  dashboard.q               web dashboard server
+  ui/                       the dashboard's page
+  kx/qsolve.json            a KX Dashboards connection to the dashboard
 src/                        the library, loaded by everything else
   defineEquation.q          core: layers, conv front end, training, search (.qs)
   data.q                    datasets, tables, CSV, time series (.qs.data)
@@ -328,7 +331,6 @@ src/                        the library, loaded by everything else
   fx.q                      exchange rates (ECB), currency pairs, forecast scoring and controls (.qs.fx)
   signal.q                  FFT, PSD, whitening, filtering, matched filters (.qs.sig)
   gw.q                      gravitational waves: catalogue, waveforms, noise, injections, search (.qs.gw)
-ui/                         the dashboard's page
 bench/benchmarks.q          benchmark suite
 bench/fx/                   FX experiments: fx.q (forecasting), fx_trends.q (slow trends), fx_trends_l2.q
 bench/gw/                   GW experiments: detector training (gw_mlp.q, gw_cnn.q), real events (gw_events.q),

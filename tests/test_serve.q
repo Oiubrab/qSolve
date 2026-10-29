@@ -6,7 +6,7 @@
     r:.qs.train[.qs.init[7;8 1;`tanh`linear;1];data;`loss`optimiser`lr`epochs`verbose!(`mse;`adam;0.01;20;0)];
     m:r`model; m[`enc]:data`enc; .qs.save[hsym `$f;m];
     p:30000+.z.i mod 20000;
-    system "env ",(first .z.X)," ",.t.root,"/serve.q -q -model ",f," -p ",(string p)," </dev/null >/dev/null 2>&1 &";
+    system "env ",(first .z.X)," ",.t.root,"/app/serve.q -q -model ",f," -p ",(string p)," </dev/null >/dev/null 2>&1 &";
     / wait up to about 5 s for the port to open
     h:{[p;x] if[not null x; :x]; system "env sleep 0.1"; @[hopen;(`$"::",string p;100);0Ni]}[p]/[50;0Ni];
     if[null h; '"server did not start"];
