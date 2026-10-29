@@ -521,3 +521,30 @@
     top:.qs.gw.mineScores[m;lib;pairs;`step`sep`logit!(0.25;1;max g`peak)];
     .t.eq[count top;0];
  }];
+
+/ G6: local maxima, thresholds for false-alarm rates, the library time-slide background and injection windows
+.t.add[`gw_eval_pieces;{
+    .t.eq[.qs.gw.localMax[1 3 2 2 5 1 4f;1];0100101b];
+    .t.eq[.qs.gw.localMax[1 3 2 2 5 1 4f;2];0000100b];
+    / 10 background triggers in 2 hours: 1/h allows 2 above the threshold, 0.25/h can't be measured
+    th:.qs.gw.thresholds[til[10]+0f;7200f;1 2 0.25];
+    .t.eq[th;7 5 0n];
+    lib:.t.fakeLib[3;6]; pairs:.qs.gw.pairs lib; r:.qs.gw.noiseDefaults`rate;
+    / stand in for the model with each window's energy, restored afterwards
+    p:.qs.predictRaw; .qs.predictRaw:{[m;X] enlist each 0.001*{x$x} each X};
+    b:.qs.gw.libSlides[();lib;pairs;`step`sep!(0.25;1)];
+    b1:.qs.gw.libSlides[();lib;pairs;`slides`step`sep!(1;0.25;1)];
+    system "S 2";
+    q:.qs.gw.drawParams[1;`snr`buffer!(40 40f;4)];
+    iw:.qs.gw.injectWindows[lib;pairs;(enlist `buffer)!enlist 4;first q];
+    .qs.predictRaw:p;
+    / 3 pairs, 2 slides each, 21 windows of 1 s every 0.25 s in 6 s chunks
+    .t.near[b`seconds;3*2*0.25*21;1e-9];
+    .t.near[b1`seconds;3*1*0.25*21;1e-9];
+    .t.ok[count[b`logit] within (3*2*2;3*2*21);"triggers per slide"];
+    .t.eq[count iw`X;4];
+    .t.eq[distinct count each iw`X;enlist 2*r];
+    .t.ok[(iw`snrWindow) within 1 40;"window SNR ",string iw`snrWindow];
+    / the injected windows carry the signal's energy above the noise's 2*r
+    .t.ok[all (2*r)<{x$x} each iw`X;"injected windows should be louder than noise"];
+ }];

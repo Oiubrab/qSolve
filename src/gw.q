@@ -472,7 +472,7 @@
         span:count lib[p 0;`w]; s:st*til 1+(span-len) div st;
         X:{[lib;p;len;s] "f"$raze lib[p;`w]@\:s+til len}[lib;p;len] each s;
         z:first each .qs.predictRaw[m;X];
-        keep:where (z>o`logit)&{[z;w;i] z[i]=max z (0|i-w)+til 1+(2*w)&(count z)-0|i-w}[z;w] each til count z;
+        keep:where (z>o`logit)&.qs.gw.localMax[z;w];
         ([] row:(count keep)#p 0; det:(count keep)#`both; at:(s keep)+len div 2; peak:z keep)}[m;lib;len;st;w;o] each pairs;
     $[count t; t; ([] row:`long$(); det:`symbol$(); at:`long$(); peak:`float$())]
  }
@@ -514,6 +514,54 @@
         snrWindow:(sig@\:`snrWindow),(nn+ng+n1)#0n);
     order:neg[n]?n;
     `X`Y`meta`params!(rows order;enlist each "f"$order<ns;info order;params)
+ }
+
+/ which of a sequence of scores are local maxima: at least as high as everything within w places either side
+.qs.gw.localMax:{[z;w] {[z;w;i] z[i]=max z (0|i-w)+til 1+(2*w)&(count z)-0|i-w}[z;w] each til count z}
+
+/ G6.1: time-slide background over a noise library: each pair's H1 chunk against the L1 chunk of the pair k places
+/ on (k = 1 .. slides, at most all the others), scored in 1 s windows every `step` s, keeping local maxima of the
+/ logit at least `sep` s apart as the search does (.qs.gw.searchStreams). Returns `logit (every background
+/ trigger) and `seconds (the time searched)
+.qs.gw.libSlides:{[m;lib;pairs;o]
+    o:(`slides`step`sep!(0N;0.25;1)),o;
+    P:count pairs; K:$[null o`slides; P-1; o[`slides]&P-1];
+    r:.qs.gw.noiseDefaults`rate; len:r; st:"j"$o[`step]*r; w:"j"$o[`sep]%o`step;
+    span:min count each lib[raze pairs;`w]; s:st*til 1+(span-len) div st;
+    H:{"f"$x} each lib[pairs[;0];`w]; L:{"f"$x} each lib[pairs[;1];`w];
+    c:`H`L`s`len`P!(H;L;s;len;P);
+    one:{[m;c;w;k]
+        X:raze {[c;k;i] {[h;l;len;s] (h s+til len),l s+til len}[c[`H] i;c[`L] (i+k) mod c`P;c`len] each c`s}[c;k] each til c`P;
+        z:first each .qs.predictRaw[m;X];
+        raze {[w;z] z where .qs.gw.localMax[z;w]}[w] each (count c`s) cut z}[m;c;w];
+    `logit`seconds!(raze one each 1+til K;K*P*o[`step]*count s)
+ }
+
+/ logit thresholds for false-alarm rates (per hour) from background triggers over a number of seconds: a trigger
+/ is found at a rate if its logit exceeds the threshold, which at most rate*hours background triggers do. Rates the
+/ background is too short to measure (rate*hours < 1) get a null threshold
+.qs.gw.thresholds:{[logit;seconds;rates]
+    z:desc logit; n:rates*seconds%3600;
+    ?[n<1;0n;z "j"$(floor n)&-1+count z]
+ }
+
+/ G6.2: windows to score for one injection: a signal with parameters p (as .qs.gw.drawParams) added to a random
+/ chunk pair of a library at a random merger time, then the 1 s windows that hold the merger at fractions u, u+1/4,
+/ u+1/2, u+3/4 of the window (u random below 1/4), as a search stepping by 1/4 s would see it. Returns `X (four
+/ windows) and `snrWindow (the network SNR inside the window with the merger at 3/4)
+.qs.gw.injectWindows:{[lib;pairs;o;p]
+    o:.qs.gw.injectDefaults,o;
+    r:.qs.gw.noiseDefaults`rate; len:r*o`window; rows:pairs first 1?count pairs; span:count lib[rows 0;`w];
+    pre:r*o[`buffer]-1; post:r div 2;
+    mi:pre+first 1?span-pre+len;
+    s:.qs.gw.whitenedSignal[p;lib[rows;`psd];lib[rows 0;`gps];o];
+    scale:p[`snr]%sqrt sum s[`snr] xexp 2;
+    n:count s[`h;`H1]; rel:(neg pre)+til pre+post;
+    sig:{[s;scale;rel;n;d] scale*s[`h;d] (s[`peak]+rel) mod n}[s;scale;rel;n] each `H1`L1;
+    x:{[lib;mi;rel;r;v] w:"f"$lib[r;`w]; w[mi+rel]+:v; w}[lib;mi;rel]'[rows;sig];
+    u:first 1?0.25; st:mi-"j"$len*u+0.25*til 4;
+    q:{[pre;len;v] v pre+(til len)-"j"$0.75*len}[pre;len] each sig;
+    `X`snrWindow!({[x;len;s] (x[0] s+til len),x[1] s+til len}[x;len] each st;sqrt sum {x$x} each q)
  }
 
 / scanning real data with a trained detector (G7.1): whiten each detector's strain as the noise library does
@@ -747,7 +795,7 @@
     win:{[a;b;len;n;sh;s] (a[`w] s+til len;b[`w] (s+sh+til len) mod n)}[a;b;len;n;sh];
     z:raze {[m;win;k] first each .qs.predictRaw[m;raze each win each k]}[m;win] each .qs.gw.searchBlock cut s;
     w:"j"$o[`sep]%o`step;
-    keep:where {[z;w;i] z[i]=max z (0|i-w)+til 1+(2*w)&(count z)-0|i-w}[z;w] each til count z;
+    keep:where .qs.gw.localMax[z;w];
     t:a[`gps]+s%r;
     amp:flip {max abs x} each/: win each s keep;
     `triggers`seconds!(([] gps:t keep; merger:t[keep]+o[`merger]*len%r; score:reciprocal 1+exp neg z keep; logit:z keep;

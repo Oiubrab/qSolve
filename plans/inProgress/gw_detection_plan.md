@@ -227,8 +227,9 @@ long-duration signals (see scope).
   task (e.g. finding a pulse anywhere in a sequence) that an MLP of similar size struggles with.
 - [ ] **G5.3 Optional: LSTM or GRU layer** (thesis homage; owner's call): backpropagation through time,
   gradient-checked, run on downsampled sequences.
-- [ ] **G5.4 Training runs at scale.** Threads (`-s 4`), epochs on generated data, early stopping on the
-  synthetic validation set, best model saved with its configuration. Log wall-clock times.
+- [x] **G5.4 Training runs at scale.** Threads (`-s 4`), epochs on generated data, early stopping on the
+  synthetic validation set, best model saved with its configuration. Log wall-clock times. (gw_cnn_2 to gw_cnn_4,
+  `-patience 8`, best epochs 49-51, 43-68 min each; see the 2026-10-28 entries here and in the open-search plan.)
 
 ### G6 — Evaluation on simulations
 
