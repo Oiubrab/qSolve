@@ -13,7 +13,7 @@ add a dated line to the Progress log; commit each finished stage before starting
 GW190818 and GW190906; O2 around 170720), about 97 h searched with gw_cnn_4. S4.1 vetting runs on each day's top
 triggers. Known events recovered: GW231226 and GW190706_222641, each louder than all background, and the IAS-only
 GW190707_083226 at 1 false alarm per 47 h. **No new candidates:** every uncatalogued trigger matches the
-background's expectation. Of the 30 vetted, 29 fail the matched-filter consistency check, and the one that passes
+background's expectation. Of the 29 vetted, 28 fail the matched-filter consistency check, and the one that passes
 has network SNR 6.6, at noise level. Next: S4.2 and S4.3 when there is a
 candidate to check, or more days.
 
