@@ -559,18 +559,88 @@
     n:count s[`h;`H1]; rel:(neg pre)+til pre+post;
     sig:{[s;scale;rel;n;d] scale*s[`h;d] (s[`peak]+rel) mod n}[s;scale;rel;n] each `H1`L1;
     x:{[lib;mi;rel;r;v] w:"f"$lib[r;`w]; w[mi+rel]+:v; w}[lib;mi;rel]'[rows;sig];
-    `x`mi`gps`sig`pre!(x;mi;lib[rows 0;`gps];sig;pre)
+    `x`mi`gps`sig`pre`rows!(x;mi;lib[rows 0;`gps];sig;pre;rows)
  }
 
 / G6.2: windows to score for one injection (.qs.gw.injectChunk): the 1 s windows that hold the merger at fractions
 / u, u+1/4, u+1/2, u+3/4 of the window (u random below 1/4), as a search stepping by 1/4 s would see it. Returns
 / `X (four windows) and `snrWindow (the network SNR inside the window with the merger at 3/4)
-.qs.gw.injectWindows:{[lib;pairs;o;p]
-    c:.qs.gw.injectChunk[lib;pairs;o;p];
+.qs.gw.injectWindows:{[lib;pairs;o;p] .qs.gw.chunkWindows[.qs.gw.injectChunk[lib;pairs;o;p];o]}
+.qs.gw.chunkWindows:{[c;o]
     len:.qs.gw.noiseDefaults[`rate]*(.qs.gw.injectDefaults,o)`window;
     u:first 1?0.25; st:c[`mi]-"j"$len*u+0.25*til 4;
     q:{[pre;len;v] v pre+(til len)-"j"$0.75*len}[c`pre;len] each c`sig;
     `X`snrWindow!({[x;len;s] (x[0] s+til len),x[1] s+til len}[c`x;len] each st;sqrt sum {x$x} each q)
+ }
+
+/ G6.2's matched-filter baseline, on whitened data (a noise library's chunks, or injections into them). The data are
+/ already white, so a template is whitened by dividing its spectrum by the chunk's ASD, and the SNR is a plain
+/ correlation with it, normalised so noise gives unit variance in each phase.
+/ mfBank: each template's plus polarisation (face on, zero spins, merger at t=0 so the inspiral wraps to the end of
+/ the buffer) on the rfft bins of n samples, from flow up to the template's cutoff or below Nyquist
+.qs.gw.mfBank:{[n;rate;bank;flow]
+    df:rate%n; f:df*til 1+n div 2;
+    one:{[f;df;flow;rate;m] w:.qs.gw.phenomB[f where (f>=flow)&f<rate%2;m 0;m 1;0 0f;400;0f;(0f;0f)];
+        `m1`m2`bins`re`im!(m 0;m 1;"j"$w[`freq]%df;w[`plus;0];w[`plus;1])}[f;df;flow;rate];
+    `n`rate`f`t!(n;rate;f;one each bank)
+ }
+
+/ a whitened stretch x (at most n samples, zero-padded to n) ready for filtering: its spectrum, the ASD of its PSD
+/ at the bank's bins, and its length
+.qs.gw.mfData:{[b;x;psd]
+    s:.qs.sig.rfft b[`n]#("f"$x),b[`n]#0f;
+    `re`im`asd`len!(s 0;s 1;sqrt .qs.sig.interpolate[psd`freq;psd`psd;b`f];count x)
+ }
+
+/ the phase-maximised SNR of template t over stretch d, indexed by the merger's sample. The template's norm is from
+/ Parseval over the half spectrum (its bins are all strictly between DC and Nyquist, so each counts twice)
+.qs.gw.mfSnr:{[b;d;t]
+    a:d[`asd] t`bins; wr:t[`re]%a; wi:t[`im]%a;
+    norm:sqrt (2*sum (wr*wr)+wi*wi)%b`n;
+    dr:d[`re] t`bins; di:d[`im] t`bins;
+    / the data's spectrum times the template's conjugate, and that times i for the quadrature phase
+    nb:count d`re; pr:@[nb#0f;t`bins;:;(dr*wr)+di*wi]; pm:@[nb#0f;t`bins;:;(di*wr)-dr*wi];
+    c0:.qs.sig.irfft (pr;pm); c1:.qs.sig.irfft (neg pm;pr);
+    (d`len)#sqrt[(c0*c0)+c1*c1]%norm
+ }
+
+/ the loudest of x within w samples either side, at each sample (for non-negative x)
+.qs.gw.mfNear:{[x;w] w _ (1+2*w) mmax x,w#0f}
+
+/ the squared network SNR at each H1 sample: H1's SNR squared plus L1's loudest squared within w samples
+.qs.gw.mfNet2:{[h;l;w] (h*h)+.qs.gw.mfNear[l*l;w]}
+
+/ the matched filter's background over a library's time slides, as .qs.gw.libSlides does for a model: each pair's H1
+/ chunk against the L1 chunk k pairs on (k = 1 .. slides), the network SNR maximised over the bank and over `step` s
+/ bins, keeping local maxima at least `sep` s apart. L1 may lead or lag H1 by up to dt. Returns `snr (every
+/ background trigger) and `seconds (the time searched)
+.qs.gw.mfSlides:{[b;lib;pairs;o]
+    o:(`slides`step`sep`dt!(0N;0.25;1;0.012)),o;
+    P:count pairs; K:$[null o`slides; P-1; o[`slides]&P-1];
+    r:b`rate; k:"j"$o[`step]*r; w:"j"$o[`sep]%o`step; lw:"j"$o[`dt]*r;
+    span:min count each lib[raze pairs;`w]; nb:span div k;
+    D:{[b;lib;span;i] .qs.gw.mfData[b;span#lib[i;`w];lib[i;`psd]]}[b;lib;span] each raze pairs;
+    c:`D`P`K`k`nb`lw!(D;P;K;k;nb;lw);
+    / per template: the squared network SNR's bin maxima for every slide and pair, slide-major
+    one:{[b;c;t]
+        s:.qs.gw.mfSnr[b;;t] each c`D;
+        H:{x*x} each s 2*til c`P; L:.qs.gw.mfNear[;c`lw] each {x*x} each s 1+2*til c`P;
+        raze {[c;H;L;kk] raze {[c;H;L;kk;i] max each (c[`nb];c`k)#H[i]+L (i+kk) mod c`P}[c;H;L;kk] each til c`P}[c;H;L]
+            each 1+til c`K}[b;c];
+    z:sqrt (|/) one peach b`t;
+    `snr`seconds!(raze {[w;z] z where .qs.gw.localMax[z;w]}[w] each nb cut z;K*P*nb*o`step)
+ }
+
+/ the matched filter's network SNR for an injection (.qs.gw.injectChunk's result): the loudest over the bank within
+/ `near` s of the merger. A bank shorter than the chunk filters only its n samples from `before` s ahead of the
+/ merger (more than the longest template), which gives the same SNRs faster
+.qs.gw.mfInject:{[b;lib;c;o]
+    o:(`dt`near`before!(0.012;0.25;10)),o;
+    len:(b`n)&count c[`x;0]; s:0|(count[c[`x;0]]-len)&c[`mi]-"j"$o[`before]*b`rate;
+    d:{[b;lib;c;s;len;i] .qs.gw.mfData[b;c[`x;i] s+til len;lib[c[`rows] i;`psd]]}[b;lib;c;s;len] each 0 1;
+    lw:"j"$o[`dt]*b`rate; q:"j"$o[`near]*b`rate; j:(c[`mi]-s)+(neg q)+til 1+2*q;
+    j:j where (j>=0)&j<first d@\:`len;
+    sqrt max {[b;d;lw;j;t] s:.qs.gw.mfSnr[b;;t] each d; max .qs.gw.mfNet2[s 0;s 1;lw] j}[b;d;lw;j] each b`t
  }
 
 / G8.1, the dashboard's views. view: whitened streams a and b (`gps`w at the library rate) around a centre GPS time:

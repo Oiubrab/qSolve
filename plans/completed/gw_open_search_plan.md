@@ -9,13 +9,16 @@ Read the "q gotchas" in [completed/improvemet_plan.md](../completed/improvemet_p
 **How to use this file:** as the other plans. Tick an item only when its check passes and `q tests/run.q` passes;
 add a dated line to the Progress log; commit each finished stage before starting the next (the owner's rule).
 
-**Current status (2026-10-30):** S1-S3 done for six days (O4a 2023-12-26; O3a around GW190707, GW190814,
-GW190818 and GW190906; O2 around 170720), about 97 h searched with gw_cnn_4. S4.1 vetting runs on each day's top
-triggers. Known events recovered: GW231226 and GW190706_222641, each louder than all background, and the IAS-only
-GW190707_083226 at 1 false alarm per 47 h. **No new candidates:** every uncatalogued trigger matches the
-background's expectation. Of the 29 vetted, 28 fail the matched-filter consistency check, and the one that passes
-has network SNR 6.6, at noise level. Next: S4.2 and S4.3 when there is a
-candidate to check, or more days.
+**Current status (2026-11-03): complete.** Six days of public bulk data searched with gw_cnn_4 (about 97 h:
+O4a 2023-12-26; O3a around GW190707, GW190814, GW190818 and GW190906; O2 around 170720), with time-slide
+background and S4 vetting.
+- **No new candidates.** Every uncatalogued trigger matches the background's expectation. Of the 29 vetted, 28 fail
+  the matched-filter consistency check, and the one that passes has network SNR 6.6, at noise level.
+- No trigger coincides with a GraceDB public alert that isn't catalogued.
+- **Known events recovered:** GW231226 and GW190706_222641, louder than all background, and the IAS-only
+  GW190707_083226 at 1 false alarm per 47 h.
+- The write-up is the README's "Finding gravitational waves in LIGO data" section. Searching more days needs only
+  `scripts/gw/search_days.sh`; O1 needs `gwosc_bulk.py` to support its LOSC file names.
 
 ---
 
@@ -93,8 +96,8 @@ candidate to check, or more days.
 - [x] **S4.1** For each top candidate: single-detector scores (is one detector doing all the work?), H1-L1 time
   difference within the light travel time, data-quality flags around it, nearby loud glitches, a matched-filter
   follow-up with a small template bank (SNR, best masses, consistency between detectors).
-- [ ] **S4.2** Check against GraceDB public alerts (including retracted) and the latest catalogues.
-- [ ] **S4.3** Write-up: searched time, background, known events recovered, candidates and why each is or isn't
+- [x] **S4.2** Check against GraceDB public alerts (including retracted) and the latest catalogues.
+- [x] **S4.3** Write-up: searched time, background, known events recovered, candidates and why each is or isn't
   interesting.
 
 ## Progress log
@@ -245,3 +248,16 @@ candidate to check, or more days.
   - **Totals over the five older days and 170720's segment:** 77 h searched, no new candidates. One IAS-only event
     (GW190707_083226) recovered at 1 per 47 h. Two more (GW190818_232544, GW190906_054335) were missed, as
     expected at SNR 8 (38% efficiency). One (GW190814_192009) fell in unsearchable data.
+- 2026-11-02: **S4.2**: queried GraceDB's public superevents (`/api/superevents/?query=gpstime: start .. end`) for
+  all six days:
+  - **O2:** no public alerts; public alerts began in O3.
+  - **O3a:** the only alerts are catalogued events: S190706ai (GW190706_222641), S190707q (GW190707_093326) and
+    S190814bv (GW190814). None was retracted.
+  - **O4a day:** S231226av (GW231226) and six low-significance alerts (false-alarm rates 0.014-0.074/h; none in
+    GWTC-4). At five of them the search's loudest trigger within 1 s scores logit -3.9 to -0.5 (41-1,300 false
+    alarms per hour). S231226z fell outside the analysable segments. They are consistent with noise or with
+    signals outside the trained mass range.
+  - No search trigger coincides with an alert that isn't in a catalogue, so there is nothing to check further.
+- 2026-11-03: **S4.3**: write-up in the README ("Looking for missed events"): searched time, background, the known
+  and IAS events recovered or missed, and why nothing uncatalogued is a candidate. With the detection plan's G6.2
+  finished the same day, both plans moved to `plans/completed/`.

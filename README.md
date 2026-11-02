@@ -290,12 +290,28 @@ the other's, never on the data it's applied to:
 | Simulated chirps in held-out O1 noise (83 h of background) | at 1 false alarm per hour: half found at network SNR 10, 95% or more above SNR 16. At 1 per day: half at SNR 12 |
 | 35 confident O3 detections, never trained on | 29 found at under 1 false alarm per hour (the first CNN, before the glitch work, found 12) |
 | GW150914 and GW231226 | both found clearly; GW231226 (O4a) is louder than all 412 h of its day's background |
-| A full day of O4a data (20.6 h searched) | nothing else stands out: uncatalogued triggers match what the background predicts (11 above the 1/hour threshold where 20.6 were expected, none above 1/day) |
+| Against a plain matched filter (41 templates) on the same 3000 injections | at 1 false alarm per hour the matched filter is better (half found at SNR 7.1 against 9.8). At 1 per day the CNN is better (12.2 against 16.4): the bare matched filter has no glitch rejection, and the CNN was trained against glitches |
 
 So it finds loud mergers reliably, and finds quieter ones only some of the time. LIGO's own matched-filter searches
-found those O3 events at false-alarm rates typically below 1 per year, so this is far from competitive. The point is a
-working, honest pipeline in q. The full numbers and every decision are in `plans/inProgress/gw_detection_plan.md`
-and `plans/inProgress/gw_open_search_plan.md`.
+add signal-consistency tests against glitches, and found those O3 events at false-alarm rates typically below 1 per
+year, so this is far from competitive. The point is a working, honest pipeline in q.
+
+**Looking for missed events.** The search ran over six whole days of public bulk data, about 97 h in all:
+- one O4a day (around GW231226);
+- four O3a days chosen around events that only the independent IAS pipeline reported (Olsen et al. 2022);
+- one O2 day around a GWTC-1 marginal candidate.
+
+What it found:
+- **No new candidates.** In every day, the uncatalogued triggers match what the time-slide background predicts.
+  The 29 loudest were followed up with the matched filter and the data-quality flags. None holds up: one detector
+  is below its own background, or the trigger is a flagged glitch, or it is at noise level.
+- No trigger coincides with a public GraceDB alert that isn't in a catalogue.
+- **GW190707_083226, which is in no LVK catalogue, was found.** It scored about 1 false alarm per 47 h, the
+  second-loudest trigger of its day, and the matched filter confirms it in both detectors (network SNR 7.9).
+- Two other IAS-only events at SNR 8 were missed, as expected at that strength.
+
+The full numbers and every decision are in `plans/completed/gw_detection_plan.md` and
+`plans/completed/gw_open_search_plan.md`.
 
 ```bash
 scripts/gw/fetch_gw.sh                     # 4096 s event files for the noise library (a few GB)
@@ -303,6 +319,7 @@ scripts/gw/fetch_gw.sh --test-events --duration 32              # 32 s files aro
 q bench/gw/gw_cnn.q -s 4 -q -save models/gw_cnn_1.qsm          # train (options in the file's header)
 q bench/gw/gw_events.q -s 4 -q -model models/gw_cnn_1.qsm      # the O3 detections, with time-slide background
 q bench/gw/gw_eval.q -s 4 -q -model models/gw_cnn_1.qsm        # background, efficiency and glitch checks
+q bench/gw/gw_mf_eval.q -s 4 -q -model models/gw_cnn_1.qsm     # the same injections against a matched filter
 python3 -m venv .venv && .venv/bin/pip install h5py numpy       # for bulk data only
 scripts/gw/search_days.sh models/gw_cnn_1.qsm 10 O4a:1387577000 # fetch, search and time-slide whole days
 q bench/gw/gw_vet.q -s 4 -q -run O4a -start 1387577000 -stop 1387663400   # matched-filter follow-up of the top triggers
@@ -321,7 +338,8 @@ Virgo*, SoftwareX 13 (2021); Ajith et al., *Inspiral-merger-ringdown waveforms f
 nonprecessing spins*, PRL 106 (2011) (IMRPhenomB); LALSuite (https://git.ligo.org/lscsoft/lalsuite) for waveform
 and detector conventions; George and Huerta, *Deep learning for real-time gravitational wave detection and
 parameter estimation*, PLB 778 (2018), and Gabbard et al., *Matching matched filtering with deep networks for
-gravitational-wave astronomy*, PRL 120 (2018), for CNN detectors on whitened strain.
+gravitational-wave astronomy*, PRL 120 (2018), for CNN detectors on whitened strain; Olsen et al., *New binary
+black hole mergers in the LIGO-Virgo O3a data*, PRD 106 (2022), for the IAS events.
 
 ## Serving a model
 

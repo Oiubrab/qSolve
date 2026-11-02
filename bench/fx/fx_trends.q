@@ -1,4 +1,4 @@
-/ FX slow-trend research (plans/inProgress/fx_trends_plan.md): does months-to-years structure predict the next
+/ FX slow-trend research (plans/completed/fx_trends_plan.md): does months-to-years structure predict the next
 / weeks to months?   q bench/fx/fx_trends.q [-s 4]       needs scripts/fetch_data.sh fx
 / every forecast is out of sample (walk-forward by year, purged by the horizon); skill = 1 - MSE(model)/MSE(zero change)
 / The experiment list is fixed here before it is run; K counts every configuration scored (F-D8).

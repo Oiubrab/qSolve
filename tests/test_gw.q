@@ -550,6 +550,36 @@
     .t.ok[all (2*r)<{x$x} each iw`X;"injected windows should be louder than noise"];
  }];
 
+/ G6.2's matched-filter baseline: a whitened template injected at SNR 12 into white noise is found at about 12 at
+/ its merger sample, in any phase; noise alone stays low; the slides and injection pieces fit together
+.t.add[`gw_mf_baseline;{
+    system "S 5"; r:2048; n:16384;
+    b:.qs.gw.mfBank[n;r;enlist 30 30f;20];
+    psd:`freq`psd!(r*(til 1+n div 2)%n;(1+n div 2)#1f);
+    t:first b`t; nb:1+n div 2;
+    / the template in time, merger at sample 0 (the inspiral wraps to the end), and a quarter-phase copy
+    h0:.qs.sig.irfft (@[nb#0f;t`bins;:;t`re];@[nb#0f;t`bins;:;t`im]);
+    h1:.qs.sig.irfft (@[nb#0f;t`bins;:;neg t`im];@[nb#0f;t`bins;:;t`re]);
+    m:12000; noise:.qs.data.normal n;
+    snr:{[b;psd;n;m;noise;h] x:noise+(neg m) rotate h*12%sqrt h$h; .qs.gw.mfSnr[b;.qs.gw.mfData[b;x;psd];first b`t]}[b;psd;n;m;noise];
+    {[m;s] .t.ok[2>=abs m-s?max s;"merger at ",string s?max s]; .t.ok[(max s) within 10.5 13.5;"SNR ",string max s]}[m]
+        each snr each (h0;h1);
+    q:.qs.gw.mfSnr[b;.qs.gw.mfData[b;noise;psd];t];
+    .t.ok[6>max q;"noise SNR ",string max q];
+    .t.near[avg q*q;2;0.2];
+    .t.eq[.qs.gw.mfNear[1 5 2 0 0 3f;1];5 5 5 2 3 3f];
+    / slides and injections on a small library, with a short bank
+    lib:.t.fakeLib[3;6]; pairs:.qs.gw.pairs lib;
+    b:.qs.gw.mfBank[16384;r;(30 30f;40 20f);20];
+    bg:.qs.gw.mfSlides[b;lib;pairs;()!()];
+    .t.near[bg`seconds;3*2*0.25*24;1e-9];
+    .t.ok[count[bg`snr] within (3*2*2;3*2*24);"triggers per slide"];
+    .t.ok[all (bg`snr) within 1 7;"background SNRs ",-3!(min;max)@\:bg`snr];
+    c:.qs.gw.injectChunk[lib;pairs;(enlist `buffer)!enlist 4;first .qs.gw.drawParams[1;`snr`mass!(25 25f;30 40f)]];
+    .t.eq[lib[c`rows;`gps];2#c`gps];
+    .t.ok[(.qs.gw.mfInject[b;lib;c;()!()]) within 15 26;"injection found"];
+ }];
+
 / G8.1: a spectrogram finds a tone at its frequency; the injection view's pieces line up
 .t.add[`gw_views;{
     r:2048; x:sin 2*.qs.sig.pi*100*(til 2*r)%r;

@@ -2,7 +2,7 @@
 / scored on a fixed batch from the validation event: efficiency by SNR at a 1% false-alarm threshold
 /   q bench/gw/gw_mlp.q -s 4 -q [-hidden 64] [-act relu] [-snr 8 30] [-merger 0.6 0.9] [-glitchy 0.25]
 /        [-epochs 15] [-lr 0.0005] [-rows 4000]
-/ needs the noise library: .qs.gw.buildNoise[key .qs.gw.noiseSplit;()!()] (see plans/inProgress/gw_detection_plan.md)
+/ needs the noise library: .qs.gw.buildNoise[key .qs.gw.noiseSplit;()!()] (see plans/completed/gw_detection_plan.md)
 .gwb.root:{$[count x;x;"."]} "/" sv -3_ "/" vs string .z.f;
 {system "l ",.gwb.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/signal.q";"src/gw.q");
 .qs.data.dir:.gwb.root,"/data";

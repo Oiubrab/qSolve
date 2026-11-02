@@ -69,7 +69,7 @@
     }[r;yr;window;spec] each years
  }
 
-/ ---- slow-trend research (plans/inProgress/fx_trends_plan.md) ----
+/ ---- slow-trend research (plans/completed/fx_trends_plan.md) ----
 
 / feature groups: trailing returns over 5..250 days, distance from the 250 and 750 day mean (log), trailing
 / volatility of daily returns (20, 60 days), and month of the year as a circle

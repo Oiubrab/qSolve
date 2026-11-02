@@ -370,7 +370,7 @@ system "l ",.dash.root,"/src/gw.q";
     if[not snr within 0 100; '"SNR must be between 0 and 100"];
     if[not count .dash.gwTest;
         f:hsym `$.qs.gw.dataDir[],"/noise/GW150914";
-        if[()~key f; '"needs the test noise library (data/gw/noise/GW150914): see plans/inProgress/gw_detection_plan.md"];
+        if[()~key f; '"needs the test noise library (data/gw/noise/GW150914): see plans/completed/gw_detection_plan.md"];
         .dash.gwTest:get f];
     lib:.dash.gwTest;
     p:first .qs.gw.drawParams[1;()!()]; p[`m1]:a|b; p[`m2]:a&b; p[`snr]:snr;

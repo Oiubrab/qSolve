@@ -84,7 +84,7 @@
     .t.ok[(w[1;`train])>w[0;`train];"training window didn't grow"];
  }];
 
-/ ---- slow-trend research (plans/inProgress/fx_trends_plan.md) ----
+/ ---- slow-trend research (plans/completed/fx_trends_plan.md) ----
 
 .t.fxLin:`out`optimiser`lr`epochs`batch`seed`verbose`hidden`loss`l2!(`linear;`adam;0.001;30;64;42;0;`long$();`mse;0.1)
 .t.fxMlp:`out`optimiser`lr`epochs`batch`seed`verbose`hidden`act`loss`dropout!(`linear;`adam;0.001;30;64;42;0;enlist 16;`tanh;`mse;0.1)

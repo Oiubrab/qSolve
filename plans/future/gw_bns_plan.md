@@ -1,6 +1,6 @@
 # Binary neutron star track: plan
 
-The BNS track the owner put in scope for [../inProgress/gw_detection_plan.md](../inProgress/gw_detection_plan.md)
+The BNS track the owner put in scope for [../completed/gw_detection_plan.md](../completed/gw_detection_plan.md)
 (G-D1, G-D2): component masses 1–3 M☉, 256 s windows at 2048 Hz, a separate model. The BBH work's tools (noise
 from bulk data, injections, time slides, search and vetting) carry over, but almost every size changes by a
 factor of 256, so the design below has to be settled before building.

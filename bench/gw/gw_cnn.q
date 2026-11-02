@@ -12,7 +12,7 @@
 /   -mine: real glitches above that whitened amplitude in the training noise become hard negatives (kind `real);
 /   -hard: so do windows that model scores above 0.5; -real: their share of the glitchy windows; -patience: early
 /   stopping on validation loss, keeping the best epoch
-/ needs the noise library: .qs.gw.buildNoise[key .qs.gw.noiseSplit;()!()] (see plans/inProgress/gw_detection_plan.md)
+/ needs the noise library: .qs.gw.buildNoise[key .qs.gw.noiseSplit;()!()] (see plans/completed/gw_detection_plan.md)
 .gwb.root:{$[count x;x;"."]} "/" sv -3_ "/" vs string .z.f;
 {system "l ",.gwb.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/signal.q";"src/gw.q");
 .qs.data.dir:.gwb.root,"/data";

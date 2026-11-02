@@ -24,17 +24,13 @@ one-letter string lists) will come up.
 **Update (2026-10-28):** glitch-hardened CNNs (gw_cnn_2, gw_cnn_4) find 29 of 35 held-out O3 detections at under
 1 false alarm per hour (was 12); see the 2026-10-28 log entry and the open-search plan.
 
-**Current status (2026-10-25):** stages G1–G4 are complete: the GW150914 gate passes (G3.4), and the
-noise library (6 events, about 11 hours of coincident H1/L1 noise), injections, glitches and training on
-generated data are built and tested; G5.1 (the MLP baseline) is done and weak, as expected; G5.2 (Conv1D in
-the core) is done; a first CNN run is strong (93% found at SNR 10-15, 99% above 15, at 1% false alarms). **It finds
-GW150914 in the real data**, and on 35 held-out O3 detections with a false-alarm rate measured by time slides in O3
-data it finds 12 at under 1 false alarm per hour (all 6 with SNR >= 15). Real O3 glitches are what limits it. Next:
-improve the detector against real glitches (see the 2026-10-25 "O3 background" log entry for the options), then
-G5.4, G6.2-G6.3, G7.3 and the optional G5.3 LSTM/GRU. The owner chose pure-q waveforms and the
-plan's default download budget, and asked to include binary neutron stars (a separate 1–3 M☉ track, 256 s
-windows at 2048 Hz, its own model) and an LSTM/GRU. Reference sources for waveform coefficients: LALSuite's
-`lalsimulation/lib` and `lal/lib` on git.ligo.org (raw files fetch without a login).
+**Current status (2026-11-03): complete.** Every stage is done. The best model, gw_cnn_4, finds half of
+simulated mergers at network SNR 9.8 at 1 false alarm per hour, and at SNR 12.2 at 1 per day. It finds 29 of 35
+held-out O3 detections at under 1 false alarm per hour, and GW150914 and GW231226 clearly. A plain matched filter
+with 41 templates is better at 1 per hour (SNR 7.1), but worse at 1 per day (SNR 16.4): it has no glitch
+rejection, and the CNN was trained against glitches. The GRU (G5.3) didn't learn the task. The binary neutron star
+track moved to [../future/gw_bns_plan.md](../future/gw_bns_plan.md), and the open-data search to
+[gw_open_search_plan.md](gw_open_search_plan.md).
 
 ---
 
@@ -236,7 +232,7 @@ almost every size in this one.
 
 - [x] **G6.1 Background and false-alarm rate.** Time slides on the held-out test noise give many hours of
   noise-only coincident windows; score them all; map score thresholds to false alarms per hour, day and month.
-- [ ] **G6.2 Efficiency.** (Done for the CNN, see the 2026-10-29 log; the matched-filter comparison remains.) Injections into test noise across SNR bins (e.g. 4–30); detection efficiency per
+- [x] **G6.2 Efficiency.** Injections into test noise across SNR bins (e.g. 4–30); detection efficiency per
   bin at thresholds for false-alarm rates of 1/hour, 1/day and 1/month; ROC curves. Compare with the
   matched-filter baseline (G2.4) on the same injections, using a small template bank built from the same
   waveform model.
@@ -320,6 +316,36 @@ almost every size in this one.
   4096→2048 Hz frequency-domain resampling. A frequency-shaped colored-noise test whitened to unit variance
   and flat PSD; the filter retained 100 Hz and suppressed 700 Hz; resampling retained a 200 Hz tone's
   amplitude and bin. Full suite: 113 passed.
+- 2026-11-03: **G6.2 done: the matched-filter comparison** (`bench/gw/gw_mf_eval.q`, 53 min on 4 threads).
+  New in `gw.q`: `.qs.gw.mfBank`, `mfData`, `mfSnr`, `mfNear`, `mfNet2`, `mfSlides` and `mfInject`.
+  - **Method.** A lean matched filter for already-whitened data: each template's spectrum is divided by the chunk's
+    ASD, correlated by FFT and phase-maximised. The network SNR is H1's SNR plus L1's loudest within 12 ms, in
+    quadrature, maximised over `.qs.gw.bank` (41 PhenomB templates, zero spins).
+  - **Background.** Time slides over the same test library as the CNN: 84.5 h, network SNR in 0.25 s bins, local
+    maxima 1 s apart.
+  - **Injections.** The same 3000 injections (same seed) are scored by both. Each is filtered over 16 s around its
+    merger; this matched full 64 s filtering within 0.15% on 8 checks and is 7× faster.
+  - **FFT cost.** About 50 ms per 2^17-point FFT, far below the earlier estimate, so the run was cheap.
+  - Thresholds: matched filter, network SNR 7.38 (1/hour) and 16.06 (1/day); CNN, logit 1.26 and 3.53.
+
+  | SNR | CNN 1/h | MF 1/h | CNN 1/day | MF 1/day |
+  |---|---|---|---|---|
+  | 6-8 | 10% | 48% | 1% | 0% |
+  | 8-10 | 38% | 94% | 7% | 0% |
+  | 10-12 | 70% | 100% | 30% | 0% |
+  | 12-14 | 83% | 100% | 62% | 0% |
+  | 14-16 | 93% | 100% | 83% | 10% |
+  | 16-18 | 96% | 100% | 89% | 65% |
+  | 20+ | 95-98% | 100% | 93-97% | 98-100% |
+
+  - **Half found at:** CNN, network SNR 9.8 (1/h) and 12.2 (1/day); matched filter, 7.1 and 16.4.
+  - **At 1 per hour the matched filter wins clearly.** Its threshold of 7.4 is close to what Gaussian noise
+    alone allows.
+  - **At 1 per day the CNN wins.** The matched filter's background has at least four triggers above network
+    SNR 16 in 84 h. Gaussian noise essentially never reaches that, so they are non-Gaussian transients in the
+    O1 test noise. A bare matched filter has no defence against them; LIGO's pipelines add a χ² signal-consistency
+    test. The CNN learned to reject glitches. Which detector or glitch class causes them isn't examined.
+  - The CNN's 1/h efficiencies match the G6 run's to within 0.5% (same injections), as they should.
 - 2026-10-29: G6.3's shuffled-label control: gw_cnn_4's recipe with the training labels shuffled
   (`bench/gw/gw_cnn.q ... -shuffle -epochs 8`, saved as `models/control_shuffled_cnn.qsm` so the dashboard doesn't
   list it): validation loss 0.6935 (chance 0.693); evaluated on 10.8 h of background and 1000 injections it finds
