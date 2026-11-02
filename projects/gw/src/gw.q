@@ -30,9 +30,15 @@
         last snr,last pAstro,last jsonurl by name from t
  }
 
-/ where gravitational-wave data lives: data/gw under .qs.data.dir (data.q's setting, relative to the working
-/ directory unless a script such as dashboard.q sets it)
-.qs.gw.dataDir:{[] $[`dir in key `.qs.data; .qs.data.dir; "data"],"/gw"}
+/ where the GW project lives: .qs.gw.home if a script sets it (the experiments, the dashboard and the tests set it
+/ from the repository root), otherwise projects/gw relative to the working directory. Downloads go in its data/,
+/ measured backgrounds, thresholds and search output in results/, trained detectors in models/ (all git-ignored).
+.qs.gw.dir:{[] $[`home in key `.qs.gw; .qs.gw.home; "projects/gw"]}
+.qs.gw.dataDir:{[] .qs.gw.dir[],"/data"}
+.qs.gw.resultsDir:{[] .qs.gw.dir[],"/results"}
+.qs.gw.modelDir:{[] .qs.gw.dir[],"/models"}
+/ a model given by name (gw_cnn_4, or gw_cnn_4.qsm) is in models/; anything with a "/" is a path as given
+.qs.gw.modelFile:{[x] x:$[10h=type x;x;string x]; hsym `$$["/" in x; x; .qs.gw.modelDir[],"/",x,$[x like "*.qsm";"";".qsm"]]}
 
 / Load the cached catalogue, downloading it once when absent.
 .qs.gw.events:{[]
@@ -337,7 +343,7 @@
     select from ([] gps; w:t`w; psd:t`psd) where far
  }
 
-/ an event's noise for both detectors (its 4096 s files under data/gw/strain/<event>/), avoiding every catalogued
+/ an event's noise for both detectors (its 4096 s files under data/strain/<event>/), avoiding every catalogued
 / event in the stretch, keeping only times both detectors have; returns a table event, det, gps, w, psd
 .qs.gw.noiseEvent:{[event;o]
     dir:.qs.gw.dataDir[],"/strain/",string event;
@@ -356,7 +362,7 @@
     `event`det`gps xcols update event:event from select from t where gps in both
  }
 
-/ build and save the noise library: one file per event in data/gw/noise/, returning a summary per event
+/ build and save the noise library: one file per event in data/noise/, returning a summary per event
 .qs.gw.buildNoise:{[events;o]
     {[o;e]
         t0:.z.p; t:.qs.gw.noiseEvent[e;o];
@@ -713,7 +719,7 @@
     ([] start:a[`gps]+starts%r; merger:a[`gps]+(starts%r)+o[`merger]*len%r; score:reciprocal 1+exp neg z; logit:z)
  }
 
-/ scan one event's 32 s H1/L1 files (data/gw/strain/<event>/) with model m: the best score within `near` seconds
+/ scan one event's 32 s H1/L1 files (data/strain/<event>/) with model m: the best score within `near` seconds
 / of the event's GPS time (on the implied merger time) and the best more than `far` seconds away (the local
 / background in the same data). Events with missing samples in the scanned stretch are reported as gaps
 .qs.gw.scanEvent:{[m;event;gps;o]
@@ -761,8 +767,8 @@
     `triggers`seconds!(raze res@\:`triggers;sum res@\:`seconds)
  }
 
-/ bulk data (open-search plan, S1): files converted from GWOSC HDF5 by scripts/gw/gwosc_bulk.py into
-/ data/gw/bulk/<run>/<det>-<gps>-<duration>.{f32,dq,inj,json}: float32 strain, int32 per-second masks, a description
+/ bulk data (open-search plan, S1): files converted from GWOSC HDF5 by projects/gw/scripts/gwosc_bulk.py into
+/ data/bulk/<run>/<det>-<gps>-<duration>.{f32,dq,inj,json}: float32 strain, int32 per-second masks, a description
 
 / one converted file by its base path (no extension): like .qs.gw.strain (`gps`rate`h) plus the masks
 .qs.gw.bulk:{[base]

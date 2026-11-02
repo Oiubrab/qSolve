@@ -1,22 +1,22 @@
 / open-search plan S2-S3: search a run's converted bulk data with a trained CNN. Analysable segments (both
 / detectors usable, at least 64 s), zero-lag triggers, a time-slide background over the same segments, a
 / false-alarm rate per trigger, and the catalogue cross-match
-/   q bench/gw/gw_bulk_scan.q -s 4 -q -run O4a -start GPS -stop GPS [-model models/gw_cnn_1.qsm] [-slides 20]
+/   q projects/gw/experiments/gw_bulk_scan.q -s 4 -q -run O4a -start GPS -stop GPS [-model gw_cnn_1] [-slides 20]
 /        [-slide 7] [-step 0.25] [-top 20] [-veto 15]
 / -veto: triggers where either detector's whitened amplitude exceeds it are glitches (GW231226, at network SNR 35,
 / peaks near 6), dropped from the background and marked at zero lag
-/ needs the run's files: .venv/bin/python scripts/gw/gwosc_bulk.py fetch --run O4a --start GPS --end GPS
-/ writes data/gw/search/<run>-<start>-<stop>-<model>.{triggers,background,summary}.csv (summary: searched and
+/ needs the run's files: .venv/bin/python projects/gw/scripts/gwosc_bulk.py fetch --run O4a --start GPS --end GPS
+/ writes results/search/<run>-<start>-<stop>-<model>.{triggers,background,summary}.csv (summary: searched and
 / background seconds)
-.gsb.root:{$[count x;x;"."]} "/" sv -3_ "/" vs string .z.f;
-{system "l ",.gsb.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/signal.q";"src/gw.q");
-.qs.data.dir:.gsb.root,"/data";
+.gsb.root:{$[count x;x;"."]} "/" sv -4_ "/" vs string .z.f;
+{system "l ",.gsb.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/signal.q";"projects/gw/src/gw.q");
+.qs.data.dir:.gsb.root,"/data"; .qs.gw.home:.gsb.root,"/projects/gw";
 system "c 40 200"; system "P 14";
 a:.Q.opt .z.x;
 g:{[a;k;d;f] $[k in key a; f a k; d]}[a];
 run:g[`run;`O4a;{`$first x}]; start:g[`start;0n;{"F"$first x}]; stop:g[`stop;0n;{"F"$first x}];
 if[null start+stop; -2 "give -start and -stop (GPS)"; exit 1];
-mf:g[`model;"models/gw_cnn_1.qsm";first]; m:.qs.load hsym `$.gsb.root,"/",mf;
+mf:g[`model;"gw_cnn_1";first]; m:.qs.load .qs.gw.modelFile mf;
 slides:g[`slides;20;{"J"$first x}]; slide:g[`slide;7f;{"F"$first x}];
 o:`step`sep`merger!(g[`step;0.25;{"F"$first x}];1;0.75);
 top:g[`top;20;{"J"$first x}]; veto:g[`veto;15f;{"F"$first x}];
@@ -67,7 +67,7 @@ show {[n;t] (n&count t)#t}[top] `logit xdesc select from trig where not vetoed;
 -1 ""; -1 "unvetoed triggers by false-alarm rate:";
 show select n:count i by far:{$[x<0.1;`$"<0.1/h";x<1;`$"0.1-1/h";x<10;`$"1-10/h";`$">=10/h"]} each far from trig where not vetoed;
 
-dir:.gsb.root,"/data/gw/search"; system "env mkdir -p ",dir;
+dir:.qs.gw.resultsDir[],"/search"; system "env mkdir -p ",dir;
 name:dir,"/",("-" sv (string run;string "j"$start;string "j"$stop;first "." vs last "/" vs mf));
 (hsym `$name,".triggers.csv") 0: csv 0: trig;
 (hsym `$name,".background.csv") 0: csv 0: bg;

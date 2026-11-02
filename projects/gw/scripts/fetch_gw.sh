@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root="$(cd "$(dirname "$0")/../.." && pwd)"
-data="$root/data/gw"
+project="$(cd "$(dirname "$0")/.." && pwd)"   # projects/gw
+data="$project/data"
 catalogue="$data/allevents.json"
 duration=4096
 mode=noise
@@ -14,16 +14,16 @@ declare -a requested=()
 usage() {
     cat <<'EOF'
 Usage:
-  scripts/gw/fetch_gw.sh [--dry-run] [--events-file FILE] [EVENT ...]
-  scripts/gw/fetch_gw.sh --test-events [--dry-run] [--duration 32]
-  scripts/gw/fetch_gw.sh --duration 32 [--dry-run] EVENT ...
+  projects/gw/scripts/fetch_gw.sh [--dry-run] [--events-file FILE] [EVENT ...]
+  projects/gw/scripts/fetch_gw.sh --test-events [--dry-run] [--duration 32]
+  projects/gw/scripts/fetch_gw.sh --duration 32 [--dry-run] EVENT ...
 
 No arguments downloads 4096-second H1/L1 noise files for the six events in
-scripts/gw/gw_noise_events.txt. --test-events selects catalogue BBHs with
+projects/gw/scripts/gw_noise_events.txt. --test-events selects catalogue BBHs with
 p_astro >= 0.9 and source component masses from 10 to 80 solar masses, then
 downloads their 32-second H1/L1 files. Event files contain one common event
 name per line; blank lines and lines beginning with # are ignored.
-Files are cached under data/gw/strain/<event>/ and incomplete downloads resume.
+Files are cached under projects/gw/data/strain/<event>/ and incomplete downloads resume.
 EOF
 }
 
@@ -88,7 +88,7 @@ if [[ -n "$events_file" ]]; then
         [[ -n "$line" ]] && requested+=("$line")
     done < "$events_file"
 elif [[ ${#requested[@]} -eq 0 && "$mode" == noise ]]; then
-    mapfile -t requested < "$root/scripts/gw/gw_noise_events.txt"
+    mapfile -t requested < "$project/scripts/gw_noise_events.txt"
 elif [[ ${#requested[@]} -eq 0 && "$mode" == test ]]; then
     mapfile -t requested < <(jq -r '
         [.events | to_entries[] | .value]

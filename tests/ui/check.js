@@ -109,7 +109,7 @@ async function scenario({ ev, until, shot, size, sleep }) {
   await ev(`[...document.querySelectorAll('#models-table button')].find(b => b.closest('tr').textContent.includes(${JSON.stringify(name)})).click(), true`);
   await until(`document.querySelector('#view-predict').classList.contains('active') && document.querySelector('#p-in-area')`);
   fs.rmSync(path.join(ROOT, "models", name + ".qsm"), { force: true });
-  // gravitational waves, when a GW model (models/gw_*.qsm) and GW150914's files are here
+  // gravitational waves, when a GW model (projects/gw/models/gw_*.qsm) and GW150914's files are here
   const waves = async (tag) => {
     await ev(`document.querySelector('nav button[data-view=waves]').click(), true`);
     await until(`WV.loaded`);

@@ -24,6 +24,12 @@ one-letter string lists) will come up.
 **Update (2026-10-28):** glitch-hardened CNNs (gw_cnn_2, gw_cnn_4) find 29 of 35 held-out O3 detections at under
 1 false alarm per hour (was 12); see the 2026-10-28 log entry and the open-search plan.
 
+**Moved (2026-11-03):** the GW work now lives in `projects/gw/`, with its write-up in
+[projects/gw/README.md](../../projects/gw/README.md). Paths in this file are the old ones: `src/gw.q` is now
+`projects/gw/src/gw.q`, `bench/gw/` is `projects/gw/experiments/`, `scripts/gw/` is `projects/gw/scripts/`, the GW
+tests are in `projects/gw/tests/`, `data/gw/` is `projects/gw/data/` (with `eval/` and `search/` in
+`projects/gw/results/`), and `models/gw_*.qsm` is `projects/gw/models/`.
+
 **Current status (2026-11-03): complete.** Every stage is done. The best model, gw_cnn_4, finds half of
 simulated mergers at network SNR 9.8 at 1 false alarm per hour, and at SNR 12.2 at 1 per day. It finds 29 of 35
 held-out O3 detections at under 1 false alarm per hour, and GW150914 and GW231226 clearly. A plain matched filter

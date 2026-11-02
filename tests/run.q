@@ -1,13 +1,21 @@
 / test runner: q tests/run.q [-only substring]
-/ loads the library, every tests/test_*.q, runs each registered test and exits 1 on any failure
+/ loads the library and the projects' libraries, every tests/test_*.q and projects/*/tests/test_*.q, runs each
+/ registered test and exits 1 on any failure
 
 .t.root:{$[count x;x;"."]} "/" sv -2_ "/" vs string .z.f;
 system "l ",.t.root,"/tests/assert.q";
 system "l ",.t.root,"/src/defineEquation.q";
-{if[not ()~key hsym `$.t.root,"/src/",x; system "l ",.t.root,"/src/",x]} each ("data.q";"plot.q";"fx.q";"gw.q";"signal.q");
+{system "l ",.t.root,"/src/",x} each ("data.q";"plot.q";"signal.q");
+.t.projects:asc key hsym `$.t.root,"/projects";
+/ each project's library is .qs.<project> (projects/gw/src/gw.q is .qs.gw), pointed at its own folder
+{[p] d:.t.root,"/projects/",string p;
+    {[d;f] system "l ",d,"/src/",string f}[d] each asc f where (f:key hsym `$d,"/src") like "*.q";
+    @[.Q.dd[`.qs;p];`home;:;d]} each .t.projects;
 
-.t.files:asc f where (f:key hsym `$.t.root,"/tests") like "test_*.q";
-{system "l ",.t.root,"/tests/",string x} each .t.files;
+/ the base tests, then each project's
+.t.dirs:enlist[.t.root,"/tests"],{.t.root,"/projects/",(string x),"/tests"} each .t.projects;
+.t.files:raze {[d] d,/:"/",'string asc f where (f:key hsym `$d) like "test_*.q"} each .t.dirs;
+{system "l ",x} each .t.files;
 
 .t.opt:.Q.opt .z.x;
 .t.names:key .t.reg;

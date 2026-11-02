@@ -1,18 +1,18 @@
 / G6.2's comparison: the matched-filter baseline against a trained detector on the same held-out test noise
 / (GW150914's library) and the same injections. The matched filter uses .qs.gw.bank (41 PhenomB templates, 10-80 M☉,
 / zero spins) and ranks by network SNR (H1's plus L1's loudest within 12 ms, in quadrature); its thresholds come from
-/ its own time-slide background, as the model's do. Run bench/gw/gw_eval.q for the model first (its thresholds).
-/   q bench/gw/gw_mf_eval.q -s 4 -q [-model models/gw_cnn_4.qsm] [-slides 76] [-injections 3000] [-snr 4 30]
-/ writes data/gw/eval/matched_filter.{thresholds,injections}.csv (the injections with both statistics)
-.gmf.root:{$[count x;x;"."]} "/" sv -3_ "/" vs string .z.f;
-{system "l ",.gmf.root,"/src/",x} each ("defineEquation.q";"data.q";"signal.q";"gw.q");
-.qs.data.dir:.gmf.root,"/data";
+/ its own time-slide background, as the model's do. Run projects/gw/experiments/gw_eval.q for the model first (its thresholds).
+/   q projects/gw/experiments/gw_mf_eval.q -s 4 -q [-model gw_cnn_4] [-slides 76] [-injections 3000] [-snr 4 30]
+/ writes results/eval/matched_filter.{thresholds,injections}.csv (the injections with both statistics)
+.gmf.root:{$[count x;x;"."]} "/" sv -4_ "/" vs string .z.f;
+{system "l ",.gmf.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/signal.q";"projects/gw/src/gw.q");
+.qs.data.dir:.gmf.root,"/data"; .qs.gw.home:.gmf.root,"/projects/gw";
 system "c 40 200";
 a:.Q.opt .z.x;
 g:{[a;k;d;f] $[k in key a; f a k; d]}[a];
-mf:g[`model;"models/gw_cnn_4.qsm";first]; m:.qs.load hsym `$.gmf.root,"/",mf;
+mf:g[`model;"gw_cnn_4";first]; m:.qs.load .qs.gw.modelFile mf;
 slides:g[`slides;0N;{"J"$first x}]; ninj:g[`injections;3000;{"J"$first x}]; snr:g[`snr;4 30f;"F"$];
-dir:.gmf.root,"/data/gw/eval"; mname:first "." vs last "/" vs mf;
+dir:.qs.gw.resultsDir[],"/eval"; mname:first "." vs last "/" vs mf;
 cth:("SFFF";enlist ",") 0: hsym `$dir,"/",mname,".thresholds.csv";
 
 test:.qs.gw.loadNoise`GW150914; tp:.qs.gw.pairs test;

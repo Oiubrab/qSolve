@@ -1,10 +1,10 @@
-/ G5.4: CNN detector (H1 and L1 as two channels of 1 s at 2048 Hz), trained and scored as bench/gw/gw_mlp.q:
+/ G5.4: CNN detector (H1 and L1 as two channels of 1 s at 2048 Hz), trained and scored as projects/gw/experiments/gw_mlp.q:
 / generated windows each epoch, a fixed validation batch, efficiency by SNR at a 1% false-alarm threshold
-/   q bench/gw/gw_cnn.q -s 4 -q [-filters 8 16 32] [-kernel 32 16 8] [-pool 4 4 4] [-hidden 32] [-snr 8 30]
+/   q projects/gw/experiments/gw_cnn.q -s 4 -q [-filters 8 16 32] [-kernel 32 16 8] [-pool 4 4 4] [-hidden 32] [-snr 8 30]
 /        [-merger 0.6 0.9] [-glitchy 0.25] [-epochs 20] [-lr 0.001] [-rows 6000] [-batch 128] [-save file]
-/        [-mine 6] [-hard models/gw_cnn_1.qsm] [-real 0.5] [-patience 8] [-bulk O4a -bstart GPS -bstop GPS [-mix]]
+/        [-mine 6] [-hard gw_cnn_1] [-real 0.5] [-patience 8] [-bulk O4a -bstart GPS -bstop GPS [-mix]]
 /        [-single 0.25] [-shuffle] [-gru 16 32]
-/   -bulk: train on that run's bulk noise between bstart and bstop (.qs.gw.bulkNoise, cached in data/gw/noise),
+/   -bulk: train on that run's bulk noise between bstart and bstop (.qs.gw.bulkNoise, cached in data/noise),
 /   its last 20% of time held out for validation; -mix also keeps the O1-O3 training noise; -single: share of the
 /   non-signal windows with a chirp in one detector only; -shuffle: a control that trains on shuffled labels (the
 /   validation labels stay true, so such a model must do no better than chance); -gru block units: a GRU front end
@@ -13,9 +13,9 @@
 /   -hard: so do windows that model scores above 0.5; -real: their share of the glitchy windows; -patience: early
 /   stopping on validation loss, keeping the best epoch
 / needs the noise library: .qs.gw.buildNoise[key .qs.gw.noiseSplit;()!()] (see plans/completed/gw_detection_plan.md)
-.gwb.root:{$[count x;x;"."]} "/" sv -3_ "/" vs string .z.f;
-{system "l ",.gwb.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/signal.q";"src/gw.q");
-.qs.data.dir:.gwb.root,"/data";
+.gwb.root:{$[count x;x;"."]} "/" sv -4_ "/" vs string .z.f;
+{system "l ",.gwb.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/signal.q";"projects/gw/src/gw.q");
+.qs.data.dir:.gwb.root,"/data"; .qs.gw.home:.gwb.root,"/projects/gw";
 system "c 40 200";
 a:.Q.opt .z.x;
 g:{[a;k;d;f] $[k in key a; f a k; d]}[a];
@@ -39,7 +39,7 @@ tp:.qs.gw.pairs train; vp:.qs.gw.pairs val;
 / hard negatives: real glitches by amplitude and by an earlier model's score, in each library
 mined:{[a;g;lib;pairs]
     t:$[`mine in key a; .qs.gw.mine[lib;"F"$first a`mine;0.5]; ()];
-    t,:$[`hard in key a; .qs.gw.mineScores[.qs.load hsym `$first a`hard;lib;pairs;()!()]; ()];
+    t,:$[`hard in key a; .qs.gw.mineScores[.qs.load .qs.gw.modelFile first a`hard;lib;pairs;()!()]; ()];
     t}[a;g];
 if[count tm:mined[train;tp]; o[`mined]:tm; o[`real]:g[`real;0.5;{"F"$first x}];
     -1 "hard negatives in the training noise: ",string count tm];
@@ -54,7 +54,7 @@ m:$[`gru in key a;
 show .qs.summary m;
 patience:g[`patience;0N;{"J"$first x}];
 r:.qs.train[m;`gen`Xval`Yval!(gen;vb`X;vb`Y);`epochs`batch`lr`loss`optimiser`l2`patience`keepBest`verbose!(epochs;batch;lr;`bce;`adam;0.0001;patience;not null patience;1)];
-if[`save in key a; .qs.save[`$first a`save;r`model]];
+if[`save in key a; .qs.save[.qs.gw.modelFile first a`save;r`model]];
 p:first each .qs.predict[r`model;vb`X];
 info:update score:p from vb`meta;
 thr:{x (floor 0.99*count x)} asc exec score from info where kind<>`signal;

@@ -1,19 +1,19 @@
 / G7: scan the real data around every in-scope catalogued binary black hole with a trained detector
-/   q bench/gw/gw_events.q -s 4 -q [-model models/gw_cnn_1.qsm] [-threshold 0.71]
-/ needs the events' 32 s files: scripts/gw/fetch_gw.sh --test-events
+/   q projects/gw/experiments/gw_events.q -s 4 -q [-model gw_cnn_1] [-threshold 0.71]
+/ needs the events' 32 s files: projects/gw/scripts/fetch_gw.sh --test-events
 / the false-alarm rate is measured in the events' own (O3) data: L1 time-slid against H1 by 1-19 s in each event's
 / 20 clean seconds, windows touching either detector's event left out; each event's false-alarm rate is how often
 / that background produces a trigger scoring at least as high. Also reported: the earlier local criterion (above the
 / threshold and above everything else in the same 20 s). Events whose surroundings were training or validation
 / noise are flagged
-.gwe.root:{$[count x;x;"."]} "/" sv -3_ "/" vs string .z.f;
-{system "l ",.gwe.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/signal.q";"src/gw.q");
-.qs.data.dir:.gwe.root,"/data";
+.gwe.root:{$[count x;x;"."]} "/" sv -4_ "/" vs string .z.f;
+{system "l ",.gwe.root,"/",x} each ("src/defineEquation.q";"src/data.q";"src/signal.q";"projects/gw/src/gw.q");
+.qs.data.dir:.gwe.root,"/data"; .qs.gw.home:.gwe.root,"/projects/gw";
 system "c 60 220";
 a:.Q.opt .z.x;
-mf:$[`model in key a; first a`model; .gwe.root,"/models/gw_cnn_1.qsm"];
+mf:$[`model in key a; first a`model; "gw_cnn_1"];
 thr:$[`threshold in key a; "F"$first a`threshold; 0.71];
-m:.qs.load hsym `$mf;
+m:.qs.load .qs.gw.modelFile mf;
 ev:.qs.gw.confidentBBH[.qs.gw.events[];10;80;0.9];
 have:{[e] not ()~key hsym `$.qs.gw.dataDir[],"/strain/",string e} each ev`name;
 ev:select from ev where have;

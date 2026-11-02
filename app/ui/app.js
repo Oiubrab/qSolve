@@ -1170,7 +1170,7 @@ async function wavesInit() {
     if (r.models.includes("gw_cnn_4")) ms.value = "gw_cnn_4";
     es.replaceChildren(...r.events.map((e) => h("option", { value: e.name }, `${e.name} (${fmt(e.mass1, 3)} + ${fmt(e.mass2, 3)} M☉, SNR ${fmt(e.snr, 3)})`)));
     if (r.events.some((e) => e.name === "GW150914")) es.value = "GW150914";
-    $("#w-hint").textContent = r.models.length ? "" : "No GW models yet: train one with q bench/gw/gw_cnn.q -save models/gw_cnn_1.qsm";
+    $("#w-hint").textContent = r.models.length ? "" : "No GW models yet: train one with q projects/gw/experiments/gw_cnn.q -save gw_cnn_1";
     $("#w-show").disabled = !r.models.length || !r.events.length;
     $("#w-inject").disabled = !r.models.length;
   } catch (e) { toast(e.message || String(e), "error"); }
@@ -1242,7 +1242,7 @@ function verdict(v, thresholds) {
   const out = [`Loudest network output within 0.3 s of the merger: logit ${fmt(best.logit, 3)} (score ${fmt(1 / (1 + Math.exp(-best.logit)), 4)}) at ${fmt(best.t, 3)} s; loudest more than 1.5 s away: ${fmt(bg, 3)}.`];
   if (thresholds && thresholds.length)
     out.push(thresholds.map((th) => `${best.logit > th.logit ? "found" : "missed"} at 1 false alarm per ${String(th.rate).replace("1/", "")} (logit above ${fmt(th.logit, 3)})`).join("; ") + ".");
-  else out.push("False-alarm thresholds for this model aren't measured yet: run q bench/gw/gw_eval.q -model models/" + $("#w-model").value + ".qsm");
+  else out.push("False-alarm thresholds for this model aren't measured yet: run q projects/gw/experiments/gw_eval.q -model " + $("#w-model").value);
   return out;
 }
 

@@ -9,6 +9,12 @@ Read the "q gotchas" in [completed/improvemet_plan.md](../completed/improvemet_p
 **How to use this file:** as the other plans. Tick an item only when its check passes and `q tests/run.q` passes;
 add a dated line to the Progress log; commit each finished stage before starting the next (the owner's rule).
 
+**Moved (2026-11-03):** the GW work now lives in `projects/gw/`, with its write-up in
+[projects/gw/README.md](../../projects/gw/README.md). Paths in this file are the old ones: `src/gw.q` is now
+`projects/gw/src/gw.q`, `bench/gw/` is `projects/gw/experiments/`, `scripts/gw/` is `projects/gw/scripts/`, the GW
+tests are in `projects/gw/tests/`, `data/gw/` is `projects/gw/data/` (with `eval/` and `search/` in
+`projects/gw/results/`), and `models/gw_*.qsm` is `projects/gw/models/`.
+
 **Current status (2026-11-03): complete.** Six days of public bulk data searched with gw_cnn_4 (about 97 h:
 O4a 2023-12-26; O3a around GW190707, GW190814, GW190818 and GW190906; O2 around 170720), with time-slide
 background and S4 vetting.
@@ -17,8 +23,8 @@ background and S4 vetting.
 - No trigger coincides with a GraceDB public alert that isn't catalogued.
 - **Known events recovered:** GW231226 and GW190706_222641, louder than all background, and the IAS-only
   GW190707_083226 at 1 false alarm per 47 h.
-- The write-up is the README's "Finding gravitational waves in LIGO data" section. Searching more days needs only
-  `scripts/gw/search_days.sh`; O1 needs `gwosc_bulk.py` to support its LOSC file names.
+- The write-up is [projects/gw/README.md](../../projects/gw/README.md) ("Looking for missed events"). Searching
+  more days needs only `projects/gw/scripts/search_days.sh`; O1 needs `gwosc_bulk.py` to support its LOSC file names.
 
 ---
 

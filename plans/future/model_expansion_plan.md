@@ -118,7 +118,7 @@ So the first stage is a general layer core. Everything else builds on it.
 ### M6 — Proof on real problems
 
 - [ ] **M6.1 A better GW detector.** A residual CNN with batch norm, trained as gw_cnn_4 was, then evaluated
-  with `bench/gw/gw_eval.q` on the same test noise. *Accept:* a reported efficiency curve against gw_cnn_4's,
+  with `projects/gw/experiments/gw_eval.q` on the same test noise. *Accept:* a reported efficiency curve against gw_cnn_4's,
   whichever way it comes out; if better, rerun the O4a day and GW190707.
 - [ ] **M6.2 GRU or attention over conv features** on the GW task (the follow-up after G5.3 failed).
 - [ ] **M6.3 The benchmarks:** MNIST with Conv2D in `bench/benchmarks.q`; FX with an LSTM against the current

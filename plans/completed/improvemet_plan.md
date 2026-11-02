@@ -361,6 +361,10 @@ data's own terms, an input method that fits the data, and real examples to compa
 
 ### Phase 9 — Real-world test: forecasting FX rates (owner's idea)
 
+(Moved 2026-11-03: the FX work is now in `projects/fx/`, written up in
+[projects/fx/README.md](../../projects/fx/README.md); `src/fx.q` is `projects/fx/src/fx.q` and `bench/fx/` is
+`projects/fx/experiments/`.)
+
 Pull historical exchange rates, cut them into windows of recent history, and train the model to predict
 the next value of one currency pair; the loss is the gap between the forecast and what happened.
 

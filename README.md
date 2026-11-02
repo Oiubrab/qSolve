@@ -1,6 +1,6 @@
 # qSolve
 
-A small multilayer perceptron (feed-forward neural network) written in pure q/kdb+.
+A small neural-network library written in pure q/kdb+: dense layers, with an optional Conv1D or GRU front end.
 No Python and no dependencies beyond q itself (plus `curl` and `gunzip` to download the datasets).
 
 - Layers with `sigmoid`, `tanh`, `relu`, `linear` or `softmax` activation
@@ -15,12 +15,29 @@ No Python and no dependencies beyond q itself (plus `curl` and `gunzip` to downl
 - Train on any kdb+ table or CSV: numeric columns standardised, categorical ones one-hot encoded,
   missing values filled; regression or classification chosen from the target column
 - Time-series forecasting from lagged windows, with a time-ordered split and naive baselines
-- Real-world test: daily exchange-rate forecasting with honest baselines, controls and walk-forward
+- 1-D convolutional layers (with max pooling) and a GRU, both gradient-checked
 - Hyperparameter search (grid or random) returning a ranked results table, and k-fold cross-validation
 - Serve a trained model to other kdb+ processes over IPC
 - A web dashboard for all of the above: train with live charts, compare runs, search, predict
 
 MNIST with one hidden layer of 128 relu nodes reaches 97.5% test accuracy in 5 epochs (under 20 seconds with 4 threads).
+
+## Projects
+
+Real-world tests of the library. Each one lives in its own folder under `projects/` with its library code,
+experiments, scripts, tests, data, results and models, and a write-up of what it found.
+
+- **[Finding gravitational waves in LIGO data](projects/gw/README.md).** A 1-D CNN finds binary black hole mergers
+  in real LIGO strain:
+  - half of all simulated mergers found at network SNR 9.8, at 1 false alarm per hour;
+  - 29 of 35 held-out O3 detections found at under 1 false alarm per hour;
+  - compared against a matched filter;
+  - a search of about 98 h of public data found no new candidates, but recovered GW190707_083226, which is in no
+    LIGO-Virgo-KAGRA catalogue.
+- **[Forecasting exchange rates](projects/fx/README.md).** Daily ECB rates since 1999, forecast tomorrow and up to
+  six months ahead with honest baselines, controls and purged walk-forward:
+  - nothing beats "no change" out of sample;
+  - the controls show the pipeline would find an edge if there were one.
 
 ## Dashboard
 
@@ -43,6 +60,8 @@ The dashboard is a web page served by q itself. Nothing else needs installing:
   by name with each class's probability. "Try a validation example" fills in a row the model didn't train
   on and shows whether it got it right. Inputs outside the training range get a warning.
 - **Models:** models saved to `models/`, which can be loaded back for predictions.
+- **Waves:** the [gravitational-wave project](projects/gw/README.md)'s detector on a real LIGO event, or on a chirp
+  you inject into held-out noise.
 
 Training runs in the dashboard's q process, so the page waits for each run to finish, but every epoch is
 pushed to the browser as it completes. Runs live for the session; save the ones you want to keep. The
@@ -73,7 +92,7 @@ q app/train.q -data moons -optimiser adam -epochs 30 -search lr=0.01,0.001 hidde
 
 q app/train.q -data csv -file load.csv -series demand -lags 48 -horizon 1 -hidden none -optimiser adam -lr 0.003 -epochs 100
 
-scripts/fetch_data.sh                 # downloads MNIST, Fashion-MNIST and Iris into data/
+scripts/fetch_data.sh                 # downloads MNIST, Fashion-MNIST and Iris into data/, and the ECB rates for the FX project
 q app/train.q -s 4 -data mnist -hidden 128 -act relu -optimiser adam -lr 0.001 -epochs 5 -batch 64 -save mnist.qsm
 ```
 
@@ -195,152 +214,6 @@ trend or a shift in level doesn't take validation outside what the model saw in 
 Or build a dictionary `` `X`Y `` yourself, where `X` has one row per example and `Y` is one-hot (or a single
 column), then call `.qs.data.split` and `.qs.data.standardise` and pass the result to `.qs.train`.
 
-## Forecasting exchange rates: a real-world test
-
-`fx.q` loads the European Central Bank's daily euro reference rates (since 1999, about 30 currencies;
-`scripts/fetch_data.sh fx`), builds any currency pair, and scores forecasts of daily returns against the
-naive forecast "no change". Skill is `1 - MSE(model) / MSE(no change)`: above 0 beats it, below 0 is worse.
-
-```bash
-q bench/fx/fx.q -s 4          # the whole experiment, about 30 s
-```
-
-```q
-t:.qs.fx.ecb `:data/fx/eurofxref-hist.csv
-in:.qs.fx.inputs[t;`EURUSD`GBPUSD`USDJPY`USDCHF`AUDUSD`USDCAD]   / daily log returns of each pair
-d:.qs.data.lagged[in;`EURUSD;5;1;0.8]                            / last 5 days of all six -> tomorrow's EUR/USD
-.qs.fx.fit[d;`hidden`act`out`loss`optimiser`lr`epochs!(enlist 16;`tanh;`linear;`mse;`adam;0.001;30)]
-```
-
-Results (ECB data to 23 October 2026; tested on the last 20% of days, April 2021 onwards):
-
-| Forecast of tomorrow's return | Skill | Direction right | Up days |
-|---|---|---|---|
-| EUR/USD from its last 10 days, linear | +0.005 | 51.0% | 48.9% |
-| EUR/USD from its last 10 days, neural network | −0.001 | 50.3% | 48.9% |
-| EUR/USD from 6 major pairs' last 5 days, linear | −0.010 | 49.8% | 48.9% |
-| EUR/USD from 6 major pairs' last 5 days, neural network | −0.022 | 48.4% | 48.9% |
-| the same, 5 days ahead | −0.018 | 51.1% | 48.5% |
-| GBP/USD from its own or the majors' history | −0.008 to −0.012 | 47.6–49.6% | 50.8% |
-| Control: training targets shuffled | −0.008 | 50.5% | 48.9% |
-| Control: the answer leaked into the inputs | **+0.986** | **99.1%** | 48.9% |
-
-Walk-forward (retrained every year on all earlier years, EUR/USD from the six majors, 2010–2026): skill was
-above zero in 1 of 17 years for both the linear model and the network (mean −0.028), and the up/down
-classifier was right 51.1% of the time against 51.6% for always guessing the more common direction.
-
-**What this says:** daily exchange rates behave like a random walk, and nothing here beats "no change"
-out of sample. That is the expected answer for liquid markets, and the controls show the pipeline itself
-is sound: given the answer it finds it (skill 0.99), and given shuffled targets it finds nothing. The
-same tools would show an edge if one existed, so they're ready for data where one might: intraday data,
-other markets, or other inputs (rates, news, order flow). `eurusd` and `gbpusd` are also datasets in the
-dashboard and `train.q`, with the naive forecast shown alongside.
-
-### Slow trends: months and years instead of days
-
-A second study asks whether slow structure (1-12 month momentum, distance from the 3-year mean, volatility, month of
-the year) helps forecast the next week to six months. It is purged walk-forward by year (2010-2026, training rows
-whose targets overlap the test year are dropped), over six pairs and horizons of 5, 20, 60 and 120 trading days, with
-fixed trend and reversion rules, linear models, small networks and one model pooled over the pairs. Intervals come
-from a block bootstrap, because overlapping targets make ordinary standard errors far too narrow.
-
-```bash
-q bench/fx/fx_trends.q -s 4      # the whole study, about 25 minutes
-q bench/fx/fx_trends_l2.q -s 4    # does more shrinkage change the answer?
-```
-
-**Result: no edge.** Of 192 forecast configurations 29 had skill above zero, 2 of those with one-sided p <= 0.05,
-against about 10 expected at that level if all were noise, and none survives a correction for the 204 tried. The
-average skill was negative for every model and horizon, and worse for flexible models and longer horizons (linear
--0.06 to -0.32, small network -0.05 to -0.61, rules about 0, pooled linear -0.003 to -0.04). The best, a pooled
-linear model of EUR/USD at six months, had skill +0.06 (interval -0.02 to +0.13, p = 0.08) and ranged from -0.80 to
-+0.43 between years. Mean reversion at six months looks mildly useful for EUR/USD and GBP/USD (correlation about 0.2)
-and harmful for USD/JPY and USD/CAD. Holding the forecast's sign for 20 days lost money after costs on average.
-
-The checks behind it: a synthetic series with a hidden drift is found and the same noise without the drift is not;
-shuffled targets give no skill and a leaked answer gives +0.95; forecasting volatility (which is predictable) gives skill
-up to +0.30 on the same pipeline; and a split that mixes training and test rows shows fake skill (+0.59) on a random
-walk, which is what the purging prevents. The limit is the sample: 27 years is about 330 independent months per pair.
-`plans/completed/fx_trends_plan.md` has every number and the places the study departed from its plan.
-
-## Finding gravitational waves in LIGO data
-
-A second real-world test, revisiting the owner's honours thesis
-([recurrent_grav_detector](https://github.com/Oiubrab/recurrent_grav_detector)): a network that finds binary
-black hole mergers in real detector data from LIGO's Hanford (H1) and Livingston (L1) observatories. Everything is
-pure q except one small Python converter for GWOSC's HDF5 files.
-
-- **Signal processing** (`src/signal.q`): FFT, Welch power spectra, whitening, band-pass, resampling, spectrograms
-  and phase-maximised matched filtering.
-- **Waveforms and detectors** (`src/gw.q`): TaylorF2 and IMRPhenomB in the frequency domain, checked against
-  LALSuite's conventions; antenna patterns and light-travel delays for H1 and L1. A matched filter with these
-  templates finds GW150914 at SNR 19 in H1 and 13 in L1, 7 ms apart.
-- **Training data made fresh each epoch**: real whitened noise from the public 4096 s files around six events and
-  from O4a bulk data, chirps (10–80 M☉, aligned spins, random sky) injected at a chosen network SNR, simulated
-  glitches, real glitches mined from the noise, and chirps in one detector only. These last three are labelled
-  noise, which is what made the detector usable on real data.
-- **Models**: a 1-D convolutional network (the core gained Conv1D layers for this) on 1 s of both detectors at
-  2048 Hz. A GRU (also in the core, gradient-checked) didn't learn the task from raw samples.
-
-Results for the best model, `gw_cnn_4`. Each false-alarm rate is measured by sliding one detector's noise against
-the other's, never on the data it's applied to:
-
-| test | result |
-|---|---|
-| Simulated chirps in held-out O1 noise (83 h of background) | at 1 false alarm per hour: half found at network SNR 10, 95% or more above SNR 16. At 1 per day: half at SNR 12 |
-| 35 confident O3 detections, never trained on | 29 found at under 1 false alarm per hour (the first CNN, before the glitch work, found 12) |
-| GW150914 and GW231226 | both found clearly; GW231226 (O4a) is louder than all 412 h of its day's background |
-| Against a plain matched filter (41 templates) on the same 3000 injections | at 1 false alarm per hour the matched filter is better (half found at SNR 7.1 against 9.8). At 1 per day the CNN is better (12.2 against 16.4): the bare matched filter has no glitch rejection, and the CNN was trained against glitches |
-
-So it finds loud mergers reliably, and finds quieter ones only some of the time. LIGO's own matched-filter searches
-add signal-consistency tests against glitches, and found those O3 events at false-alarm rates typically below 1 per
-year, so this is far from competitive. The point is a working, honest pipeline in q.
-
-**Looking for missed events.** The search ran over six whole days of public bulk data, about 97 h in all:
-- one O4a day (around GW231226);
-- four O3a days chosen around events that only the independent IAS pipeline reported (Olsen et al. 2022);
-- one O2 day around a GWTC-1 marginal candidate.
-
-What it found:
-- **No new candidates.** In every day, the uncatalogued triggers match what the time-slide background predicts.
-  The 29 loudest were followed up with the matched filter and the data-quality flags. None holds up: one detector
-  is below its own background, or the trigger is a flagged glitch, or it is at noise level.
-- No trigger coincides with a public GraceDB alert that isn't in a catalogue.
-- **GW190707_083226, which is in no LVK catalogue, was found.** It scored about 1 false alarm per 47 h, the
-  second-loudest trigger of its day, and the matched filter confirms it in both detectors (network SNR 7.9).
-- Two other IAS-only events at SNR 8 were missed, as expected at that strength.
-
-The full numbers and every decision are in `plans/completed/gw_detection_plan.md` and
-`plans/completed/gw_open_search_plan.md`.
-
-```bash
-scripts/gw/fetch_gw.sh                     # 4096 s event files for the noise library (a few GB)
-scripts/gw/fetch_gw.sh --test-events --duration 32              # 32 s files around the test detections
-q bench/gw/gw_cnn.q -s 4 -q -save models/gw_cnn_1.qsm          # train (options in the file's header)
-q bench/gw/gw_events.q -s 4 -q -model models/gw_cnn_1.qsm      # the O3 detections, with time-slide background
-q bench/gw/gw_eval.q -s 4 -q -model models/gw_cnn_1.qsm        # background, efficiency and glitch checks
-q bench/gw/gw_mf_eval.q -s 4 -q -model models/gw_cnn_1.qsm     # the same injections against a matched filter
-python3 -m venv .venv && .venv/bin/pip install h5py numpy       # for bulk data only
-scripts/gw/search_days.sh models/gw_cnn_1.qsm 10 O4a:1387577000 # fetch, search and time-slide whole days
-q bench/gw/gw_vet.q -s 4 -q -run O4a -start 1387577000 -stop 1387663400   # matched-filter follow-up of the top triggers
-```
-
-The dashboard's **Waves** tab shows any downloaded event, or a chirp you inject into held-out noise. It plots the
-whitened strain, a spectrogram and the network's output over time, and gives the verdict at each measured
-false-alarm rate.
-
-**Data.** This uses data obtained from the Gravitational Wave Open Science Center (https://gwosc.org), a service of
-the LIGO Scientific Collaboration, the Virgo Collaboration and KAGRA, under the CC BY 4.0 licence. LIGO is funded
-by the U.S. National Science Foundation; see https://gwosc.org/acknowledgement/ for the full acknowledgement.
-
-**References.** Abbott et al., *Open data from the first and second observing runs of Advanced LIGO and Advanced
-Virgo*, SoftwareX 13 (2021); Ajith et al., *Inspiral-merger-ringdown waveforms for black-hole binaries with
-nonprecessing spins*, PRL 106 (2011) (IMRPhenomB); LALSuite (https://git.ligo.org/lscsoft/lalsuite) for waveform
-and detector conventions; George and Huerta, *Deep learning for real-time gravitational wave detection and
-parameter estimation*, PLB 778 (2018), and Gabbard et al., *Matching matched filtering with deep networks for
-gravitational-wave astronomy*, PRL 120 (2018), for CNN detectors on whitened strain; Olsen et al., *New binary
-black hole mergers in the LIGO-Virgo O3a data*, PRD 106 (2022), for the IAS events.
-
 ## Serving a model
 
 `train.q -save` stores the model, and for table or CSV data the column encoding too. `serve.q` answers
@@ -369,6 +242,8 @@ q tests/run.q                    # unit tests; exits 1 on failure; -only <substr
 q bench/benchmarks.q             # trains every benchmark dataset and checks its target; -skipLarge, -only <names>
 ```
 
+The runner also loads each project's library and runs its tests (`projects/*/tests/test_*.q`).
+
 `node tests/ui/check.js [dir]` checks the dashboard in a real browser: it starts a dashboard, uses every view in
 headless Chromium, saves screenshots to `dir` (default `/tmp/qsolve-ui`), and fails on any page error. It
 needs `chromium` and Node 22 or later, so it isn't part of `tests/run.q`.
@@ -396,27 +271,30 @@ Benchmark results (seed 42):
 ## Layout
 
 ```
+README.md                   this file: the library
+src/                        the library, loaded by everything else
+  defineEquation.q          core: layers, conv and GRU front ends, training, search (.qs)
+  data.q                    datasets, tables, CSV, time series (.qs.data)
+  plot.q                    decision-boundary SVGs (.qs.plot2D)
+  signal.q                  FFT, PSD, whitening, filtering, matched filters (.qs.sig)
 app/                        the programs (run them from the repository root, e.g. q app/dashboard.q -s 4)
   train.q                   command-line training
   serve.q                   IPC model server
   dashboard.q               web dashboard server
   ui/                       the dashboard's page
   kx/qsolve.json            a KX Dashboards connection to the dashboard
-src/                        the library, loaded by everything else
-  defineEquation.q          core: layers, conv front end, training, search (.qs)
-  data.q                    datasets, tables, CSV, time series (.qs.data)
-  plot.q                    decision-boundary SVGs (.qs.plot2D)
-  fx.q                      exchange rates (ECB), currency pairs, forecast scoring and controls (.qs.fx)
-  signal.q                  FFT, PSD, whitening, filtering, matched filters (.qs.sig)
-  gw.q                      gravitational waves: catalogue, waveforms, noise, injections, search (.qs.gw)
 bench/benchmarks.q          benchmark suite
-bench/fx/                   FX experiments: fx.q (forecasting), fx_trends.q (slow trends), fx_trends_l2.q
-bench/gw/                   GW experiments: detector training (gw_mlp.q, gw_cnn.q), real events (gw_events.q),
-                            open-data search (gw_bulk_scan.q) and vetting (gw_vet.q)
 scripts/fetch_data.sh       dataset downloader
-scripts/gw/                 GW data: event strain (fetch_gw.sh), bulk HDF5 conversion (gwosc_bulk.py),
-                            day-by-day search batches (search_days.sh)
-tests/                      test runner, assertion helpers, tests, fixtures, the dashboard's browser check
+tests/                      test runner, assertion helpers, the library's tests, the dashboard's browser check
+projects/                   real-world tests, one folder each, laid out alike:
+  gw/                       gravitational waves in LIGO data (.qs.gw)
+  fx/                       exchange-rate forecasting (.qs.fx)
+    README.md               the write-up: method, results, how to reproduce
+    src/                    the project's library, on top of src/
+    experiments/            the scripts that produced the results
+    scripts/                downloads and batch jobs
+    tests/                  the project's tests, run by tests/run.q
+    data/ results/ models/  downloads, measured results, trained models (git-ignored)
 plans/                      development plans and progress logs (inProgress/, completed/, future/)
-data/  models/  .venv/      downloads, saved models, the Python venv for HDF5 (all git-ignored)
+data/  models/  .venv/      the library's datasets and saved models, the Python venv for GW HDF5 (git-ignored)
 ```

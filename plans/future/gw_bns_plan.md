@@ -71,7 +71,7 @@ Three consequences:
 
 - [ ] **B2.1 Batches.** As `.qs.gw.batch`, with BNS parameters (1–3 M☉, spins up to 0.05, SNR 8–40), the merger
   in the last 10% of the window, glitches and single-detector chirps as negatives.
-- [ ] **B2.2 Conv1D detector** on the multi-rate input; early stopping; models saved as `models/gw_bns_*.qsm`.
+- [ ] **B2.2 Conv1D detector** on the multi-rate input; early stopping; models saved as `projects/gw/models/gw_bns_*.qsm`.
 
 ### B3 — Evaluation and real events
 

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Fetch GWOSC bulk strain (HDF5) and convert it into raw files q reads directly.
 
-For each 4096 s file of a run, detector and GPS range this writes, under data/gw/bulk/<run>/:
+For each 4096 s file of a run, detector and GPS range this writes, under projects/gw/data/bulk/<run>/:
   <det>-<gps>-<duration>.f32   strain, little-endian float32 (NaN where there is no data)
   <det>-<gps>-<duration>.dq    data-quality bitmask, one little-endian int32 per second
   <det>-<gps>-<duration>.inj   hardware-injection bitmask, one little-endian int32 per second
   <det>-<gps>-<duration>.json  detector, gps, duration, rate, and the names of the mask bits
 
 Usage (run with the project's venv, which has h5py and numpy):
-  .venv/bin/python scripts/gw/gwosc_bulk.py fetch --run O4a --start GPS --end GPS [--detectors H1 L1]
+  .venv/bin/python projects/gw/scripts/gwosc_bulk.py fetch --run O4a --start GPS --end GPS [--detectors H1 L1]
         [--keep-hdf5] [--dry-run]
-  .venv/bin/python scripts/gw/gwosc_bulk.py convert FILE.hdf5 [--out DIR]
+  .venv/bin/python projects/gw/scripts/gwosc_bulk.py convert FILE.hdf5 [--out DIR]
 """
 import argparse
 import json
@@ -25,7 +25,7 @@ API = "https://gwosc.org/api/v2/runs/{run}/strain-files?detector={det}"
 URL = "https://gwosc.org/archive/data/{run}_4KHZ_R1/{dir}/{site}-{det}_GWOSC_{run}_4KHZ_R1-{gps}-4096.hdf5"
 # O1's files keep the older LOSC names
 URL_O1 = "https://gwosc.org/archive/data/O1/{dir}/{site}-{det}_LOSC_4_V1-{gps}-4096.hdf5"
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+PROJECT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))   # projects/gw
 
 
 def names(dataset):
@@ -106,7 +106,7 @@ def download(url, dest):
 
 
 def fetch(args):
-    out = os.path.join(ROOT, "data", "gw", "bulk", args.run)
+    out = os.path.join(PROJECT, "data", "bulk", args.run)
     os.makedirs(out, exist_ok=True)
     for det in args.detectors:
         files = (listing(args.run, det, args.start, args.end, out) if args.use_api

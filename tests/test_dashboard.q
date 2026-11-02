@@ -170,7 +170,7 @@ system "l ",.t.root,"/app/dashboard.q";
  }];
 
 .t.add[`dash_fx_dataset;{
-    if[()~key .t.path "data/fx/eurofxref-hist.csv"; .t.skip "run scripts/fetch_data.sh fx"];
+    if[()~key .t.path "projects/fx/data/eurofxref-hist.csv"; .t.skip "run scripts/fetch_data.sh fx"];
     d:last .t.ask `cmd`data`hidden`epochs!("train";"eurusd";();3);
     .t.eq[d`type;"done"];
     .t.eq[d[`schema]`kind;"series"];
@@ -183,11 +183,11 @@ system "l ",.t.root,"/app/dashboard.q";
 
 / the gravitational-wave view (G8.1): the event list, GW150914's view and an injection, with a trained GW model
 .t.add[`dash_gw;{
-    if[()~key .t.path "models/gw_cnn_4.qsm"; .t.skip "needs models/gw_cnn_4.qsm (q bench/gw/gw_cnn.q ... -save)"];
+    if[()~key .t.path "projects/gw/models/gw_cnn_4.qsm"; .t.skip "needs projects/gw/models/gw_cnn_4.qsm (q projects/gw/experiments/gw_cnn.q ... -save gw_cnn_4)"];
     m:first .t.ask (enlist `cmd)!enlist "gwEvents";
     .t.eq[m`type;"gwEvents"];
     .t.ok[(enlist "gw_cnn_4") in m`models;"GW models listed"];
-    if[not any (enlist "GW150914") in m[`events]@\:`name; .t.skip "needs GW150914's 32 s files (scripts/gw/fetch_gw.sh)"];
+    if[not any (enlist "GW150914") in m[`events]@\:`name; .t.skip "needs GW150914's 32 s files (projects/gw/scripts/fetch_gw.sh)"];
     e:first .t.ask `cmd`event`model!("gwEvent";"GW150914";"gw_cnn_4");
     .t.eq[e`type;"gwEvent"];
     v:e`view;
@@ -197,7 +197,7 @@ system "l ",.t.root,"/app/dashboard.q";
     sc:v`scores;
     near:max sc[`logit] where 0.3>abs sc`t;
     .t.ok[near>5+max sc[`logit] where 1.5<abs sc`t;"GW150914 should stand out: ",string near];
-    if[()~key .t.path "data/gw/noise/GW150914"; .t.skip "needs the test noise library"];
+    if[()~key .t.path "projects/gw/data/noise/GW150914"; .t.skip "needs the test noise library"];
     i:first .t.ask `cmd`model`m1`m2`snr!("gwInject";"gw_cnn_4";36;29;25);
     .t.eq[i`type;"gwInject"];
     .t.eq[i[`view;`params]`snr;25f];

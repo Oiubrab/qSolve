@@ -7,6 +7,11 @@ information about the next weeks or months?**
 
 Read the "q gotchas" section of the earlier plan before writing q here.
 
+**Moved (2026-11-03):** the FX work now lives in `projects/fx/`, with its write-up in
+[projects/fx/README.md](../../projects/fx/README.md). Paths in this file are the old ones: `src/fx.q` is now
+`projects/fx/src/fx.q`, `bench/fx/` is `projects/fx/experiments/`, `tests/test_fx.q` is in `projects/fx/tests/`, and
+`data/fx/` is `projects/fx/data/`.
+
 **Status (2026-10-25): complete**, moved to `plans/completed/`. Stages F1-F4 done; F5 not triggered (nothing to extend). Result: **no reliable
 out-of-sample edge** from slow trends in 27 years of daily ECB rates. See the Progress log for the numbers and the
 list of places where the work departed from this plan.

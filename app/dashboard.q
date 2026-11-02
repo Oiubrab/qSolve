@@ -11,10 +11,13 @@ if[not `root in key `.dash; .dash.root:{$[count x;x;"."]} "/" sv -2_ "/" vs stri
 system "l ",.dash.root,"/src/defineEquation.q";
 system "l ",.dash.root,"/src/data.q";
 system "l ",.dash.root,"/src/plot.q";
-system "l ",.dash.root,"/src/fx.q";
 system "l ",.dash.root,"/src/signal.q";
-system "l ",.dash.root,"/src/gw.q";
+/ the projects' libraries: exchange rates (the eurusd and gbpusd datasets) and gravitational waves (the Waves tab)
+system "l ",.dash.root,"/projects/fx/src/fx.q";
+system "l ",.dash.root,"/projects/gw/src/gw.q";
 .qs.data.dir:.dash.root,"/data";
+.qs.fx.home:.dash.root,"/projects/fx";
+.qs.gw.home:.dash.root,"/projects/gw";
 .dash.modelDir:.dash.root,"/models";
 
 / session state: one row per run, with its model, history and dataset details alongside
@@ -50,8 +53,11 @@ system "l ",.dash.root,"/src/gw.q";
 / a JSON list of names as symbols; .j.k turns ["a","b"] (one-letter names) into the string "ab"
 .dash.syms:{[x] $[10h=type x; `$enlist each x; -10h=type x; enlist `$enlist x; `$x]}
 
-/ datasets the UI can offer: built-in ones (with whether their files are present) and uploads
-.dash.files:`iris`mnist`fashion`eurusd`gbpusd!("iris/iris.data";"mnist/train-images-idx3-ubyte";"fashion/train-images-idx3-ubyte";"fx/eurofxref-hist.csv";"fx/eurofxref-hist.csv");
+/ datasets the UI can offer: built-in ones (with whether their files are present) and uploads; the exchange rates
+/ are in the FX project's data/
+.dash.files:`iris`mnist`fashion!("iris/iris.data";"mnist/train-images-idx3-ubyte";"fashion/train-images-idx3-ubyte");
+.dash.have:{[n] $[n in key .dash.files; not ()~key hsym `$.qs.data.dir,"/",.dash.files n;
+    n in `eurusd`gbpusd; not ()~key .qs.fx.file[]; 1b]}
 .dash.kinds:`and`or`xor`nand`fourBit`sine`circles`moons`spirals`houses`seasonal`iris`mnist`fashion`eurusd`gbpusd!
     `logic`logic`logic`logic`classes`regression`2d`2d`2d`table`series`table`images`images`series`series;
 .dash.about:`and`or`xor`nand`fourBit`sine`circles`moons`spirals`houses`seasonal`iris`mnist`fashion`eurusd`gbpusd!(
@@ -62,7 +68,7 @@ system "l ",.dash.root,"/src/gw.q";
     "70,000 clothing images, 10 kinds";"EUR/USD, the ECB's daily rate since 1999";"GBP/USD, from the ECB's daily rates since 1999");
 .dash.datasets:{[]
     b:{[n] `name`kind`about`available`generated!(n;.dash.kinds n;.dash.about n;
-        $[n in key .dash.files; not ()~key hsym `$.qs.data.dir,"/",.dash.files n; 1b];
+        .dash.have n;
         n in `fourBit`sine`circles`moons`spirals`houses`seasonal)} each .qs.data.names;
     u:{[n] t:.dash.uploads n; `name`kind`about`available`generated!(n;`upload;(string count t)," rows, ",(string count cols t)," columns";1b;0b)} each key .dash.uploads;
     b,u
@@ -331,23 +337,23 @@ system "l ",.dash.root,"/src/gw.q";
 
 .dash.api.runs:{[r] `type`runs!(`runs;.dash.runList[])}
 
-/ gravitational waves (G8.1): catalogued events whose 32 s H1 and L1 files are here, the GW models in models/
-/ (gw_*.qsm), and views of an event or of a simulated chirp in held-out test noise (GW150914's noise library)
+/ gravitational waves (G8.1): catalogued events whose 32 s H1 and L1 files are here, the GW models in
+/ projects/gw/models/ (gw_*.qsm), and views of an event or of a simulated chirp in held-out test noise (GW150914's noise library)
 .dash.gwCache:(`symbol$())!();
 .dash.gwTest:();
-.dash.gwModels:{[] f:key hsym `$.dash.modelDir; f:f where f like "gw_*.qsm"; `$-4_'string f}
+.dash.gwModels:{[] f:key hsym `$.qs.gw.modelDir[]; f:f where f like "gw_*.qsm"; `$-4_'string f}
 .dash.gwModel:{[name]
     if[not name in .dash.gwModels[]; '"no GW model called ",string name];
-    if[not name in key .dash.gwCache; .dash.gwCache[name]:.qs.load hsym `$.dash.modelDir,"/",(string name),".qsm"];
+    if[not name in key .dash.gwCache; .dash.gwCache[name]:.qs.load .qs.gw.modelFile name];
     .dash.gwCache name
  }
 .dash.gwHave:{[]
     d:.qs.gw.dataDir[],"/strain"; e:key hsym `$d;
     e where {[d;e] f:key hsym `$d,"/",string e; 2=count f where (f like "*-32-*") and f like "*.txt.gz"}[d] each e
  }
-/ the false-alarm thresholds bench/gw/gw_eval.q measured for a model, if it has been run
+/ the false-alarm thresholds projects/gw/experiments/gw_eval.q measured for a model, if it has been run
 .dash.gwThresholds:{[model]
-    f:hsym `$.qs.gw.dataDir[],"/eval/",(string model),".thresholds.csv";
+    f:hsym `$.qs.gw.resultsDir[],"/eval/",(string model),".thresholds.csv";
     $[()~key f; (); select rate, logit from ("SFFF";enlist ",") 0: f where not null logit]
  }
 .dash.api.gwEvents:{[r]
@@ -370,7 +376,7 @@ system "l ",.dash.root,"/src/gw.q";
     if[not snr within 0 100; '"SNR must be between 0 and 100"];
     if[not count .dash.gwTest;
         f:hsym `$.qs.gw.dataDir[],"/noise/GW150914";
-        if[()~key f; '"needs the test noise library (data/gw/noise/GW150914): see plans/completed/gw_detection_plan.md"];
+        if[()~key f; '"needs the test noise library (projects/gw/data/noise/GW150914): see projects/gw/README.md"];
         .dash.gwTest:get f];
     lib:.dash.gwTest;
     p:first .qs.gw.drawParams[1;()!()]; p[`m1]:a|b; p[`m2]:a&b; p[`snr]:snr;
