@@ -7,10 +7,11 @@ system "l ",.t.root,"/tests/assert.q";
 system "l ",.t.root,"/src/defineEquation.q";
 {system "l ",.t.root,"/src/",x} each ("data.q";"plot.q";"signal.q");
 .t.projects:asc key hsym `$.t.root,"/projects";
-/ each project's library is .qs.<project> (projects/gw/src/gw.q is .qs.gw), pointed at its own folder
+/ each library file in a project's src/ is a namespace named after the file (projects/markets/src/fx.q is .qs.fx),
+/ pointed at its project's folder
 {[p] d:.t.root,"/projects/",string p;
-    {[d;f] system "l ",d,"/src/",string f}[d] each asc f where (f:key hsym `$d,"/src") like "*.q";
-    @[.Q.dd[`.qs;p];`home;:;d]} each .t.projects;
+    f:asc f where (f:key hsym `$d,"/src") like "*.q";
+    {[d;f] system "l ",d,"/src/",string f; @[.Q.dd[`.qs;`$-2_string f];`home;:;d]}[d] each f} each .t.projects;
 
 / the base tests, then each project's
 .t.dirs:enlist[.t.root,"/tests"],{.t.root,"/projects/",(string x),"/tests"} each .t.projects;

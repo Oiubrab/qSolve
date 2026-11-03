@@ -170,7 +170,7 @@ system "l ",.t.root,"/app/dashboard.q";
  }];
 
 .t.add[`dash_fx_dataset;{
-    if[()~key .t.path "projects/fx/data/eurofxref-hist.csv"; .t.skip "run scripts/fetch_data.sh fx"];
+    if[()~key .t.path "projects/markets/data/eurofxref-hist.csv"; .t.skip "run scripts/fetch_data.sh fx"];
     d:last .t.ask `cmd`data`hidden`epochs!("train";"eurusd";();3);
     .t.eq[d`type;"done"];
     .t.eq[d[`schema]`kind;"series"];

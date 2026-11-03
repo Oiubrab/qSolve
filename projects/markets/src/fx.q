@@ -69,7 +69,7 @@
     }[r;yr;window;spec] each years
  }
 
-/ ---- slow-trend research (plans/completed/fx_trends_plan.md) ----
+/ ---- slow-trend research (projects/markets/plans/completed/fx_trends_plan.md) ----
 
 / feature groups: trailing returns over 5..250 days, distance from the 250 and 750 day mean (log), trailing
 / volatility of daily returns (20, 60 days), and month of the year as a circle
@@ -203,9 +203,9 @@
 
 / the dashboard's and train.q's FX datasets: tomorrow's rate of a pair from its last 20 daily rates
 / (windows relative to the latest rate, the last 20% of days validating), when the ECB file is present
-/ the ECB file lives in the FX project's data/: .qs.fx.home if a script sets it, otherwise projects/fx relative to
+/ the ECB file lives in the FX project's data/: .qs.fx.home if a script sets it, otherwise projects/markets relative to
 / the working directory
-.qs.fx.dir:{[] $[`home in key `.qs.fx; .qs.fx.home; "projects/fx"]}
+.qs.fx.dir:{[] $[`home in key `.qs.fx; .qs.fx.home; "projects/markets"]}
 .qs.fx.file:{[] `$":",.qs.fx.dir[],"/data/eurofxref-hist.csv"}
 .qs.fx.dataset:{[pair;n;noise]
     if[()~key .qs.fx.file[]; '"no ECB data: run scripts/fetch_data.sh fx"];

@@ -4,13 +4,13 @@ Follow-on to [gw_detection_plan.md](gw_detection_plan.md), whose CNN finds GW150
 detections at under 1 false alarm per hour. The owner asked: can we run it over recent public LIGO data and spot
 events that haven't been reported?
 
-Read the "q gotchas" in [completed/improvemet_plan.md](../completed/improvemet_plan.md) and the GW plan's log first.
+Read the "q gotchas" in [completed/improvemet_plan.md](../../../../plans/completed/improvemet_plan.md) and the GW plan's log first.
 
 **How to use this file:** as the other plans. Tick an item only when its check passes and `q tests/run.q` passes;
 add a dated line to the Progress log; commit each finished stage before starting the next (the owner's rule).
 
 **Moved (2026-11-03):** the GW work now lives in `projects/gw/`, with its write-up in
-[projects/gw/README.md](../../projects/gw/README.md). Paths in this file are the old ones: `src/gw.q` is now
+[projects/gw/README.md](../../README.md). Paths in this file are the old ones: `src/gw.q` is now
 `projects/gw/src/gw.q`, `bench/gw/` is `projects/gw/experiments/`, `scripts/gw/` is `projects/gw/scripts/`, the GW
 tests are in `projects/gw/tests/`, `data/gw/` is `projects/gw/data/` (with `eval/` and `search/` in
 `projects/gw/results/`), and `models/gw_*.qsm` is `projects/gw/models/`.
@@ -23,7 +23,7 @@ background and S4 vetting.
 - No trigger coincides with a GraceDB public alert that isn't catalogued.
 - **Known events recovered:** GW231226 and GW190706_222641, louder than all background, and the IAS-only
   GW190707_083226 at 1 false alarm per 47 h.
-- The write-up is [projects/gw/README.md](../../projects/gw/README.md) ("Looking for missed events"). Searching
+- The write-up is [projects/gw/README.md](../../README.md) ("Looking for missed events"). Searching
   more days needs only `projects/gw/scripts/search_days.sh`; O1 needs `gwosc_bulk.py` to support its LOSC file names.
 
 ---

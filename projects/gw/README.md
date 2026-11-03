@@ -21,8 +21,8 @@ LIGO's own pipelines find these events at false-alarm rates far below 1 per year
 competitive with them. The aim is a working, honest pipeline built in q.
 
 The development history, every number and every decision are in
-[gw_detection_plan.md](../../plans/completed/gw_detection_plan.md) and
-[gw_open_search_plan.md](../../plans/completed/gw_open_search_plan.md).
+[gw_detection_plan.md](plans/completed/gw_detection_plan.md) and
+[gw_open_search_plan.md](plans/completed/gw_open_search_plan.md).
 
 ---
 
@@ -207,7 +207,7 @@ data-quality flags.
 - **1 false alarm per month and below** needs about 720 h of background, which hasn't been measured.
 - **O1 bulk data** needs `gwosc_bulk.py` to support its older LOSC file names.
 - **Binary neutron stars** (1–3 M☉, minutes-long signals) are a separate track:
-  [gw_bns_plan.md](../../plans/future/gw_bns_plan.md).
+  [gw_bns_plan.md](plans/future/gw_bns_plan.md).
 - **An unexplained crash.** One whole-day search failed three times with `'stop` while loading a segment, and
   succeeded when split into two runs. The cause hasn't been found.
 
@@ -230,7 +230,7 @@ q tests/run.q -only gw                                            # this project
 ```
 
 `gw_cnn_4`'s full recipe (hard negatives mined with `gw_cnn_3`, O4a noise, single-detector negatives, early
-stopping) is in the 2026-10-28 entries of [gw_open_search_plan.md](../../plans/completed/gw_open_search_plan.md).
+stopping) is in the 2026-10-28 entries of [gw_open_search_plan.md](plans/completed/gw_open_search_plan.md).
 
 The dashboard's **Waves** tab (`q app/dashboard.q -s 4`) shows either a downloaded event or a chirp you inject into
 the held-out noise. For either one it plots:
@@ -252,6 +252,7 @@ projects/gw/
   scripts/          fetch_gw.sh (event strain), gwosc_bulk.py (bulk HDF5 to raw files), search_days.sh
                     (fetch and search whole days), gw_noise_events.txt (the noise library's events)
   tests/            test_gw.q, test_bulk.q, fixtures/
+  plans/            this project's plans: future/, inProgress/, completed/
   data/             downloads: allevents.json, strain/, noise/, bulk/                       (git-ignored)
   results/          eval/ (thresholds, injections), search/ (triggers, background, vetting)  (git-ignored)
   models/           gw_cnn_1-4, gw_gru_1, control_shuffled_cnn                              (git-ignored)

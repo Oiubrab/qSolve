@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Download the benchmark datasets into data/ (next to this script's parent directory); fx goes to the FX
-# project's data folder, projects/fx/data/.
+# project's data folder, projects/markets/data/.
 # Usage: scripts/fetch_data.sh [mnist] [fashion] [iris] [fx]    (no arguments fetches all four)
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 data="$root/data"
-fx="$root/projects/fx/data"   # the FX project keeps its own data
+fx="$root/projects/markets/data"   # the FX project keeps its own data
 want=("$@"); [ ${#want[@]} -eq 0 ] && want=(mnist fashion iris fx)
 idx=(train-images-idx3-ubyte train-labels-idx1-ubyte t10k-images-idx3-ubyte t10k-labels-idx1-ubyte)
 

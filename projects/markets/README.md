@@ -16,7 +16,7 @@ The controls show the pipeline itself is sound:
 The same tools would show an edge if one existed.
 
 The details and every number are in Phase 9 of [improvemet_plan.md](../../plans/completed/improvemet_plan.md) and in
-[fx_trends_plan.md](../../plans/completed/fx_trends_plan.md).
+[fx_trends_plan.md](plans/completed/fx_trends_plan.md).
 
 ---
 
@@ -31,7 +31,7 @@ The details and every number are in Phase 9 of [improvemet_plan.md](../../plans/
   day t only.
 
 ```q
-t:.qs.fx.ecb `:projects/fx/data/eurofxref-hist.csv
+t:.qs.fx.ecb `:projects/markets/data/eurofxref-hist.csv
 in:.qs.fx.inputs[t;`EURUSD`GBPUSD`USDJPY`USDCHF`AUDUSD`USDCAD]   / daily log returns of each pair
 d:.qs.data.lagged[in;`EURUSD;5;1;0.8]                            / last 5 days of all six -> tomorrow's EUR/USD
 .qs.fx.fit[d;`hidden`act`out`loss`optimiser`lr`epochs!(enlist 16;`tanh;`linear;`mse;`adam;0.001;30)]
@@ -133,10 +133,10 @@ more cycles, is what would most likely change the answer.
 Run these from the repository root.
 
 ```bash
-scripts/fetch_data.sh fx                         # the ECB file, into projects/fx/data/
-q projects/fx/experiments/fx.q -s 4              # study 1, about 30 s
-q projects/fx/experiments/fx_trends.q -s 4       # study 2, about 25 minutes
-q projects/fx/experiments/fx_trends_l2.q -s 4    # does more shrinkage change study 2's answer?
+scripts/fetch_data.sh fx                         # the ECB file, into projects/markets/data/
+q projects/markets/experiments/fx.q -s 4              # study 1, about 30 s
+q projects/markets/experiments/fx_trends.q -s 4       # study 2, about 25 minutes
+q projects/markets/experiments/fx_trends_l2.q -s 4    # does more shrinkage change study 2's answer?
 q tests/run.q -only fx                           # this project's tests
 ```
 
@@ -146,11 +146,12 @@ alongside.
 ## Layout
 
 ```
-projects/fx/
+projects/markets/
   README.md       this write-up
   src/fx.q        ECB data, currency pairs, features, purged walk-forward, rules, block bootstrap, forecast
                   scoring and controls (.qs.fx); also the eurusd and gbpusd datasets
   experiments/    fx.q (study 1), fx_trends.q (study 2), fx_trends_l2.q (its shrinkage check)
   tests/          test_fx.q
+  plans/          this project's plans: future/, inProgress/, completed/
   data/           eurofxref-hist.csv (git-ignored)
 ```

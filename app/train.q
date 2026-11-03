@@ -28,9 +28,9 @@
 system "l ",.cli.root,"/src/defineEquation.q";
 system "l ",.cli.root,"/src/data.q";
 system "l ",.cli.root,"/src/plot.q";
-system "l ",.cli.root,"/projects/fx/src/fx.q";   / the eurusd and gbpusd datasets
+system "l ",.cli.root,"/projects/markets/src/fx.q";   / the eurusd and gbpusd datasets
 .qs.data.dir:.cli.root,"/data";
-.qs.fx.home:.cli.root,"/projects/fx";
+.qs.fx.home:.cli.root,"/projects/markets";
 
 .cli.o:.Q.opt .z.x;
 system "c 50 1000";

@@ -1,13 +1,13 @@
-/ FX slow-trend research (plans/completed/fx_trends_plan.md): does months-to-years structure predict the next
-/ weeks to months?   q projects/fx/experiments/fx_trends.q [-s 4]       needs scripts/fetch_data.sh fx
+/ FX slow-trend research (projects/markets/plans/completed/fx_trends_plan.md): does months-to-years structure predict the next
+/ weeks to months?   q projects/markets/experiments/fx_trends.q [-s 4]       needs scripts/fetch_data.sh fx
 / every forecast is out of sample (walk-forward by year, purged by the horizon); skill = 1 - MSE(model)/MSE(zero change)
 / The experiment list is fixed here before it is run; K counts every configuration scored (F-D8).
 
 .fxt.root:{$[count x;x;"."]} "/" sv -4_ "/" vs string .z.f;
-{system "l ",.fxt.root,"/",x} each ("src/defineEquation.q";"src/data.q";"projects/fx/src/fx.q");
+{system "l ",.fxt.root,"/",x} each ("src/defineEquation.q";"src/data.q";"projects/markets/src/fx.q");
 system "c 400 250";
 
-.fxt.file:`$":",.fxt.root,"/projects/fx/data/eurofxref-hist.csv";
+.fxt.file:`$":",.fxt.root,"/projects/markets/data/eurofxref-hist.csv";
 if[()~key .fxt.file; -2 "no ECB data: run scripts/fetch_data.sh fx"; exit 1];
 .fxt.t:.qs.fx.ecb .fxt.file; .fxt.dates:.fxt.t`date;
 .fxt.years:2010+til 1+(`year$last .fxt.dates)-2010;

@@ -13,10 +13,10 @@ system "l ",.dash.root,"/src/data.q";
 system "l ",.dash.root,"/src/plot.q";
 system "l ",.dash.root,"/src/signal.q";
 / the projects' libraries: exchange rates (the eurusd and gbpusd datasets) and gravitational waves (the Waves tab)
-system "l ",.dash.root,"/projects/fx/src/fx.q";
+system "l ",.dash.root,"/projects/markets/src/fx.q";
 system "l ",.dash.root,"/projects/gw/src/gw.q";
 .qs.data.dir:.dash.root,"/data";
-.qs.fx.home:.dash.root,"/projects/fx";
+.qs.fx.home:.dash.root,"/projects/markets";
 .qs.gw.home:.dash.root,"/projects/gw";
 .dash.modelDir:.dash.root,"/models";
 

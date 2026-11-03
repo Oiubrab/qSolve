@@ -5,7 +5,7 @@ The BNS track the owner put in scope for [../completed/gw_detection_plan.md](../
 from bulk data, injections, time slides, search and vetting) carry over, but almost every size changes by a
 factor of 256, so the design below has to be settled before building.
 
-Read the "q gotchas" in [../completed/improvemet_plan.md](../completed/improvemet_plan.md) and the BBH plan's log
+Read the "q gotchas" in [../completed/improvemet_plan.md](../../../../plans/completed/improvemet_plan.md) and the BBH plan's log
 first.
 
 **How to use this file:** as the other plans. Tick an item only when its check passes and `q tests/run.q`

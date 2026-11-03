@@ -2,7 +2,7 @@
 
 Follow-on to [../completed/gw_open_search_plan.md](../completed/gw_open_search_plan.md). That plan searched about
 98 h of public LIGO data with `gw_cnn_4` and found nothing novel. It recovered GW190707_083226, but IAS had already
-reported that event. The results are written up in [../../projects/gw/README.md](../../projects/gw/README.md).
+reported that event. The results are written up in [../../projects/gw/README.md](../../README.md).
 
 The owner, 2026-11-03: write up what it would take to have a real chance of finding something new. There are three
 routes, and they combine:
@@ -11,7 +11,7 @@ routes, and they combine:
 3. **Signals the standard searches cover poorly**: high masses, very unequal masses, precessing spins, eccentric
    orbits (stage N3).
 
-Read the "q gotchas" in [../completed/improvemet_plan.md](../completed/improvemet_plan.md) and both GW plans' logs
+Read the "q gotchas" in [../completed/improvemet_plan.md](../../../../plans/completed/improvemet_plan.md) and both GW plans' logs
 first.
 
 **How to use this file:** the same as the other plans. Tick an item only when its check passes and
@@ -95,7 +95,7 @@ the 35 held-out O3 detections at under 1/hour, and must not raise the O4a day's 
   - longer training.
 
   *Accept:* a table of what each change bought, with the best model saved as `gw_cnn_5`.
-- [ ] **N1.2 Modern architectures.** This is [model_expansion_plan.md](model_expansion_plan.md)'s M6.1 (residual
+- [ ] **N1.2 Modern architectures.** This is [model_expansion_plan.md](../../../../plans/future/model_expansion_plan.md)'s M6.1 (residual
   CNN with batch norm) and M6.2 (a GRU or attention over the conv features). It is tracked there, not here.
   *Accept:* as M6.1; the result feeds N2 and N3.
 - [ ] **N1.3 A χ² test for the matched filter.** Add the standard signal-consistency test, which splits the

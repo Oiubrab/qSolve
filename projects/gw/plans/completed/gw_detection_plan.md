@@ -6,7 +6,7 @@ spot binary black hole "chirps" in detector noise, using public LIGO/Virgo data,
 real detections it never saw.
 
 The earlier plan (qSolve's rewrite, dashboard and FX test, Phases 0–9) is in
-[completed/improvemet_plan.md](../completed/improvemet_plan.md). Read its "q gotchas" section before writing
+[completed/improvemet_plan.md](../../../../plans/completed/improvemet_plan.md). Read its "q gotchas" section before writing
 q here: several of them (no closures, `x`/`y`/`z` making test lambdas take arguments, `sum` skipping nulls,
 one-letter string lists) will come up.
 
@@ -25,7 +25,7 @@ one-letter string lists) will come up.
 1 false alarm per hour (was 12); see the 2026-10-28 log entry and the open-search plan.
 
 **Moved (2026-11-03):** the GW work now lives in `projects/gw/`, with its write-up in
-[projects/gw/README.md](../../projects/gw/README.md). Paths in this file are the old ones: `src/gw.q` is now
+[projects/gw/README.md](../../README.md). Paths in this file are the old ones: `src/gw.q` is now
 `projects/gw/src/gw.q`, `bench/gw/` is `projects/gw/experiments/`, `scripts/gw/` is `projects/gw/scripts/`, the GW
 tests are in `projects/gw/tests/`, `data/gw/` is `projects/gw/data/` (with `eval/` and `search/` in
 `projects/gw/results/`), and `models/gw_*.qsm` is `projects/gw/models/`.

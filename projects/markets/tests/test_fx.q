@@ -22,7 +22,7 @@
  }];
 
 .t.add[`fx_ecb_real;{
-    f:.t.path "projects/fx/data/eurofxref-hist.csv";
+    f:.t.path "projects/markets/data/eurofxref-hist.csv";
     if[()~key f; .t.skip "run scripts/fetch_data.sh fx"];
     t:.qs.fx.ecb f;
     .t.ok[5000<count t;"too few days"];

@@ -34,10 +34,30 @@ experiments, scripts, tests, data, results and models, and a write-up of what it
   - compared against a matched filter;
   - a search of about 98 h of public data found no new candidates, but recovered GW190707_083226, which is in no
     LIGO-Virgo-KAGRA catalogue.
-- **[Forecasting exchange rates](projects/fx/README.md).** Daily ECB rates since 1999, forecast tomorrow and up to
+- **[Forecasting exchange rates](projects/markets/README.md).** Daily ECB rates since 1999, forecast tomorrow and up to
   six months ahead with honest baselines, controls and purged walk-forward:
   - nothing beats "no change" out of sample;
   - the controls show the pipeline would find an edge if there were one.
+
+## Plans
+
+Development is planned in documents: what to build, decisions, acceptance checks and a dated progress log. Each
+plan lives next to the code it is about:
+
+- **`plans/`** at the root holds plans for the library itself: the network, training, the dashboard, and anything
+  every project uses.
+- **`projects/<name>/plans/`** holds plans for one project, for example `projects/gw/plans/` for the
+  gravitational-wave search or `projects/markets/plans/` for the market studies.
+
+Each plans folder has the same three subfolders:
+
+| Folder | What goes in it |
+|---|---|
+| `future/` | written but not started |
+| `inProgress/` | being worked on |
+| `completed/` | done, kept as the record |
+
+A plan moves from `future/` to `inProgress/` when work starts, and to `completed/` when it is finished.
 
 ## Dashboard
 
@@ -288,13 +308,14 @@ scripts/fetch_data.sh       dataset downloader
 tests/                      test runner, assertion helpers, the library's tests, the dashboard's browser check
 projects/                   real-world tests, one folder each, laid out alike:
   gw/                       gravitational waves in LIGO data (.qs.gw)
-  fx/                       exchange-rate forecasting (.qs.fx)
+  markets/                  market studies: exchange-rate forecasting (.qs.fx)
     README.md               the write-up: method, results, how to reproduce
-    src/                    the project's library, on top of src/
+    src/                    the project's library, on top of src/ (each file x.q is namespace .qs.x)
     experiments/            the scripts that produced the results
     scripts/                downloads and batch jobs
     tests/                  the project's tests, run by tests/run.q
+    plans/                  the project's plans (future/, inProgress/, completed/)
     data/ results/ models/  downloads, measured results, trained models (git-ignored)
-plans/                      development plans and progress logs (inProgress/, completed/, future/)
+plans/                      plans for the library itself (future/, inProgress/, completed/); see Plans above
 data/  models/  .venv/      the library's datasets and saved models, the Python venv for GW HDF5 (git-ignored)
 ```
