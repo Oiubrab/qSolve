@@ -91,7 +91,7 @@ if[`search in key .cli.o;
     .qs.init[.cli.nIn;.cli.hidden,.cli.nOut;((count .cli.hidden)#.cli.act),.cli.out;.cli.seed]];
 
 -1 "data ",(string .cli.name),": ",(string count .cli.data`X)," training rows, ",(string count .cli.data`Xval)," validation rows";
--1 "model ",("-" sv string .cli.nIn,count each .cli.model`weight)," ",(" " sv string .cli.model`act),", loss ",(string .cli.loss),", ",(string sum .qs.summary[.cli.model]`params)," parameters";
+-1 "model ",("-" sv string .cli.nIn,.qs.sizes .cli.model)," ",(" " sv string .qs.acts .cli.model),", loss ",(string .cli.loss),", ",(string sum .qs.summary[.cli.model]`params)," parameters";
 -1 "options ",-3!.cli.opts;
 
 if[`cv in key .cli.o;
@@ -114,7 +114,7 @@ if[not null .cli.r`bestEpoch; -1 "best epoch ",(string .cli.r`bestEpoch),$[.cli.
 if[`level in key .cli.data; -1 "naive last-value forecast: val MAE ",trim .Q.fmt[20;4;avg abs .cli.data[`mu]+.cli.sd*first each .cli.data`Yval]];
 if[.cli.class and (.cli.nOut>1) and .cli.nOut<=10; -1 "validation confusion matrix (rows true, columns predicted):"; show .qs.confusion[.cli.r`model;.cli.data`Xval;.cli.data`Yval]];
 if[`plot in key .cli.o;
-    .qs.plot2D[.cli.r`model;.cli.data;`$first .cli.o`plot;(string .cli.name),"  ",("-" sv string .cli.nIn,count each .cli.model`weight),"  val acc ",.Q.fmt[6;4;.cli.va`acc]];
+    .qs.plot2D[.cli.r`model;.cli.data;`$first .cli.o`plot;(string .cli.name),"  ",("-" sv string .cli.nIn,.qs.sizes .cli.model),"  val acc ",.Q.fmt[6;4;.cli.va`acc]];
     -1 "plotted ",first .cli.o`plot];
 if[`save in key .cli.o;
     .cli.m:.cli.r`model; if[`enc in key .cli.data; .cli.m[`enc]:.cli.data`enc];

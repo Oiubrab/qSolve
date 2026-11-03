@@ -15,7 +15,7 @@ system "l ",.srv.root,"/src/data.q";
 if[not `model in key .srv.o; -2 "usage: q app/serve.q -model file.qsm -p port"; exit 1];
 .srv.m:.qs.load hsym `$first .srv.o`model;
 .srv.enc:$[`enc in key .srv.m; .srv.m`enc; ()];
-.srv.nIn:count first first .srv.m`weight;
+.srv.nIn:.qs.inputSize .srv.m;
 
 / the functions clients may call
 .srv.api.predict:{[X]

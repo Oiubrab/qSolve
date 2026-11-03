@@ -13,7 +13,7 @@
 / the data behind a decision-boundary plot: the plane covering d's points (padded by a tenth) cut into
 / n x n cells, row-major from the top-left, with each cell's predicted class and the probability of that class
 .qs.plot.grid:{[m;d;n]
-    if[not 2=count first first m`weight; '"plots need a model with 2 inputs"];
+    if[not 2=.qs.inputSize m; '"plots need a model with 2 inputs"];
     pts:d[`X],$[`Xval in key d;d`Xval;()];
     lo:min pts; hi:max pts; pad:0.1*hi-lo; lo-:pad; hi+:pad;
     i:til n*n; u:(0.5+i mod n)%n; v:(0.5+i div n)%n;
@@ -29,7 +29,7 @@
 
 / the same SVG as a list of lines
 .qs.plot.svg:{[m;d;title]
-    if[not 2=count first first m`weight; '"plot2D needs a model with 2 inputs"];
+    if[not 2=.qs.inputSize m; '"plot2D needs a model with 2 inputs"];
     pts:d[`X],$[`Xval in key d;d`Xval;()];
     lo:min pts; hi:max pts; pad:0.1*hi-lo; lo-:pad; hi+:pad;
     n:.qs.plot.cells; px:.qs.plot.size; c:px%n;

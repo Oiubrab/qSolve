@@ -79,7 +79,7 @@ This review is based on reading `app/dashboard.q` (420 lines), `app/ui/app.js` (
    - from the UI entirely: the loss; momentum and the Adam betas; the step-decay settings and the cosine floor;
      shuffling; the validation share (the server reads `frac` but the page never sends it); the Conv1D and GRU
      front ends;
-   - from the dashboard: anything from [model_expansion_plan.md](model_expansion_plan.md) as it arrives.
+   - from the dashboard: anything from [model_expansion_plan.md](../inProgress/model_expansion_plan.md) as it arrives.
 9. **Nothing explains itself, and nothing says what went wrong.**
    - There's no help on terms like L2, dropout or patience.
    - There's no hint after a bad run, for example "the loss diverged: try a smaller learning rate", or "training

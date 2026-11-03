@@ -146,14 +146,20 @@ r`history                                               / one row per epoch
 | Function | What it does |
 |---|---|
 | `.qs.init[nIn;sizes;acts;seed]` | New model. `sizes` gives one entry per layer, the last being the output. `acts` is one per layer, or a single activation for every layer. Xavier initialisation (He for relu), zero biases. A `seed` of `0N` leaves q's random state alone. |
+| `.qs.initConv[channels;length;layers;sizes;acts;seed]` | New model with a conv front end: `layers` is a table (or list of dictionaries) of `filters`, `kernel`, `pool` and `act`, then dense layers as `.qs.init`. Each input row holds its channels one after another. |
+| `.qs.initGru[channels;length;block;hidden;sizes;acts;seed]` | New model with a GRU front end, then dense layers. |
+| `.qs.assemble[inShape;layers;params;seed]` | Any other stack, from a list of `(kind;spec)` pairs (see below); `params` is `()` to initialise them, or one list of arrays per layer. |
+| `.qs.fromWeights[W;B;acts]` | A dense model from given weights and biases. |
 | `.qs.predict[m;X]` | Outputs for a matrix with one row per example, or for a single example vector. |
 | `.qs.train[m;data;opts]` | Trains on `data` (`` `X`Y ``, optionally `` `Xval`Yval ``). Returns `` `model`history`bestEpoch ``. |
 | `.qs.evaluate[m;X;Y;loss]` | `` `loss`acc`mae`rmse`r2 `` dictionary (`acc` is null for numeric targets). |
 | `.qs.confusion[m;X;Y]` | Confusion matrix. |
-| `.qs.grad[m;X;Y;loss]` | Gradient of the loss, shaped like the model (`.qs.gradDrop` adds a dropout rate). |
+| `.qs.grad[m;X;Y;loss]` | Gradient of the loss: one list of arrays per layer, shaped like `m`params` (`.qs.gradDrop` adds a dropout rate). |
 | `.qs.search[d;space;base;n]` | Trains one model per configuration and returns a table ranked by validation loss. `space` maps options (and `hidden`, `act`) to candidate values, `base` fixes the rest, `n` is `0N` for the whole grid or a number to sample. |
 | `.qs.crossValidate[d;k;base]` | k-fold cross-validation of one configuration: `` `folds`summary `` (per-fold scores; mean and sd). |
-| `.qs.summary m` | One row per layer: inputs, outputs, activation, parameters. |
+| `.qs.summary m` | One row per layer that has parameters: inputs, outputs, activation, parameters. |
+| `.qs.check m` | Signals unless the layers, shapes and parameters fit together; returns the model. |
+| `.qs.gradCheck[kind;spec;inShape]` | Largest difference between a layer's backward pass and finite differences. |
 | `.qs.save[file;m]` / `.qs.load file` | Saves and loads a model (q's native format). |
 
 `opts` is merged over `.qs.defaults`:
@@ -178,8 +184,29 @@ r`history                                               / one row per epoch
 | `seed` | 42 | `0N` to leave q's random state alone |
 | `verbose` | 1 | log every n epochs, 0 for silent |
 
-A model is a dictionary `` `weight`bias`act!(W;B;acts) ``. `W[l]` is an `n_l × n_(l-1)` matrix, `B[l]` a vector,
-and `acts` has one symbol per layer.
+A model is a dictionary `` `layers`params `` (plus any extra keys you add, such as a table encoding). `layers` is a
+list of `(kind;spec)` pairs, one per layer, each spec recording the shapes the layer takes and gives; `params` holds
+each layer's arrays, in the order of `.qs.layer.names[kind]`. Between layers, data is a batch matrix (shape `,d`) or,
+inside a conv stack, a sequence with one vector per channel (shape `(c;t)`).
+
+| Layer kind | What it does | Parameters |
+|---|---|---|
+| `dense` | fully connected layer with `n` outputs | `W`, `b` |
+| `act` | activation `f`: `` `sigmoid`tanh`relu`linear`softmax `` | |
+| `dropout` | zeroes each value with probability `rate` while training | |
+| `seq` | reads a flat batch as `channels` × `length` | |
+| `conv1d` | 1-D convolution (no padding, stride 1) with `filters` and `kernel` | `K`, `b` |
+| `maxpool1d` | maximum over blocks of `pool` steps | |
+| `flatten` | a sequence to a flat row, step by step | |
+| `gru` | gated recurrent unit over a flat input (`channels`, `length`, `block`, `hidden`) | `W`, `U`, `b` |
+
+A new layer type is one call to `.qs.layer.add[kind;parts]`, giving its shape rule, initialiser, forward and backward
+passes, parameter check and a few examples. `q tests/run.q` then checks its gradient against finite differences along
+with every other type (`.qs.gradCheck`). The plan for the types still to come is in
+[plans/inProgress/model_expansion_plan.md](plans/inProgress/model_expansion_plan.md).
+
+Models saved before this layout (keys `weight`, `bias`, `act`, and `conv` or `gru` front ends) are the same network:
+`.qs.load` and the public functions convert them, and they give identical outputs.
 
 `xent` expects one-hot targets. Softmax is only allowed on the output layer, and only with `xent`.
 

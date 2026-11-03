@@ -83,7 +83,7 @@ Each model fixed a problem the one before it showed on real data:
   while GW231226 stayed at 17.
 - **A recurrent network didn't learn the task.** A GRU front end (in the core, gradient-checked) reached
   chance-level validation loss on raw whitened samples. The natural next try is a GRU over the CNN's features,
-  which [model_expansion_plan.md](../../plans/future/model_expansion_plan.md) makes possible.
+  which [model_expansion_plan.md](../../plans/inProgress/model_expansion_plan.md) makes possible.
 
 ## Results
 
@@ -202,7 +202,7 @@ data-quality flags.
 - **The CNN is about 2.7 SNR units less sensitive than a matched filter on clean noise** (1 false alarm per hour).
   Deeper networks (residual blocks, batch norm), and a GRU or attention over the conv features, are the obvious
   tries. Both need the general layer core in
-  [model_expansion_plan.md](../../plans/future/model_expansion_plan.md).
+  [model_expansion_plan.md](../../plans/inProgress/model_expansion_plan.md).
 - **The matched filter needs a χ² test before it is a fair comparison at low false-alarm rates.**
 - **1 false alarm per month and below** needs about 720 h of background, which hasn't been measured.
 - **O1 bulk data** needs `gwosc_bulk.py` to support its older LOSC file names.

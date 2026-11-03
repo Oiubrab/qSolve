@@ -30,5 +30,8 @@
 / skip the current test, e.g. when downloaded data is missing
 .t.skip:{[msg] '"skip: ",msg}
 
+/ a file name in the temp directory (TMPDIR, or /tmp)
+.t.tmpFile:{[name] t:getenv`TMPDIR; hsym `$$[""~t;"/tmp";t],"/",name}
+
 / path of a file under the repo root
 .t.path:{[rel] `$":",.t.root,"/",rel}

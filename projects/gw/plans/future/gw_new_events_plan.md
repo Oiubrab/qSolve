@@ -95,7 +95,7 @@ the 35 held-out O3 detections at under 1/hour, and must not raise the O4a day's 
   - longer training.
 
   *Accept:* a table of what each change bought, with the best model saved as `gw_cnn_5`.
-- [ ] **N1.2 Modern architectures.** This is [model_expansion_plan.md](../../../../plans/future/model_expansion_plan.md)'s M6.1 (residual
+- [ ] **N1.2 Modern architectures.** This is [model_expansion_plan.md](../../../../plans/inProgress/model_expansion_plan.md)'s M6.1 (residual
   CNN with batch norm) and M6.2 (a GRU or attention over the conv features). It is tracked there, not here.
   *Accept:* as M6.1; the result feeds N2 and N3.
 - [ ] **N1.3 A χ² test for the matched filter.** Add the standard signal-consistency test, which splits the

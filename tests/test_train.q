@@ -41,13 +41,13 @@
 .t.add[`train_remainder_batch;{
     d:.t.gate {x<>y}; m:.qs.init[2;4 1;`tanh`sigmoid;1];
     o:.qs.defaults,`batch`optimiser`shuffle!(3;`adam;0b);
-    s:.qs.epoch[o;d`X;d`Y;`model`state!(m;.qs.opt.init[`adam] `weight`bias#m)];
+    s:.qs.epoch[o;d`X;d`Y;`model`state!(m;.qs.opt.init[`adam] m`params)];
     .t.eq[s[`state]`t;2];
  }];
 
 .t.add[`train_l2_shrinks_weights;{
     d:.t.gate {x<>y}; m:.qs.init[2;4 1;`tanh`sigmoid;1]; o:`epochs`batch`verbose!(50;4;0);
-    w:{sum (raze/) {x*x} x[`model]`weight};
+    w:{m:x`model; sum (raze/) {x*x} (m[`params] where `dense=.qs.kinds m)[;0]};
     .t.ok[w[.qs.train[m;d;o,enlist[`l2]!enlist 0.1]]<w .qs.train[m;d;o];"l2 did not shrink weights"];
  }];
 
@@ -64,7 +64,7 @@
     .t.eq[.qs.classes (0.1 0.9;0.8 0.2);1 0];
     .t.eq[.qs.classes (enlist 0.2;enlist 0.7);0 1];
     .t.near[.qs.accuracy[(0.1 0.9;0.8 0.2;0.6 0.4);(0 1f;0 1f;1 0f)];2%3;1e-12];
-    m:`weight`bias`act!(enlist 2 2#1 0 0 1f;enlist 0 0f;enlist `linear);
+    m:.qs.fromWeights[enlist 2 2#1 0 0 1f;enlist 0 0f;`linear];
     .t.eq[.qs.confusion[m;(1 0f;0 1f;1 0f);(1 0f;0 1f;0 1f)];(1 0;1 1)];
     .t.eq[`loss`acc#.qs.evaluate[m;(1 0f;0 1f);(1 0f;0 1f);`mse];`loss`acc!0 1f];
  }];

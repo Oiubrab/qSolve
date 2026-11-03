@@ -9,7 +9,10 @@ Read the "q gotchas" in [../completed/improvemet_plan.md](../completed/improveme
 **How to use this file:** as the other plans. Tick an item only when its check passes and `q tests/run.q`
 passes; add a dated line to the Progress log; commit each finished stage to main (the owner's rule).
 
-**Current status (2026-11-02):** design only; open questions M-Q1 to M-Q3 below need the owner.
+**Current status (2026-11-03):** in progress. **M1 (the general layer core) is done.** M2 onwards is next. The owner said
+"get a start on the model expansion plan" without answering M-Q1 to M-Q3, so the recommended answers are assumed:
+(a) better CNNs first after the core, a new model format with old files converted on load, and pure q. M1 doesn't depend on
+M-Q1, and M-Q2 and M-Q3 are built in. M-Q1 only sets the order of M2, so the owner can still change it.
 
 ---
 
@@ -53,23 +56,52 @@ So the first stage is a general layer core. Everything else builds on it.
 
 ## 3. Stages
 
-### M1 — General layer core
+### M1 — General layer core (done 2026-11-03)
 
-- [ ] **M1.1 Layer registry.** A model is `` `layers`meta ``. Layers is a list of dicts
-  (`` `type`spec`params ``). Each type registers `init`, `forward[spec;params;A;train]` → output and cache,
-  `backward[spec;params;cache;dOut]` → parameter gradients and input gradient, `shape[spec;inShape]`,
-  and which of its parameters take L2. `.qs.predict`, `.qs.grad`, `.qs.step`, L2, `.qs.params` and
-  `.qs.summary` become generic loops over the list.
-- [ ] **M1.2 Port the existing layers** as separate types: `dense`, `act`, `conv1d`, `maxpool1d`, `gru`,
-  `dropout` (now usable anywhere), `flatten`. *Accept:* all current tests pass unchanged through the public
-  functions; the existing training scripts and dashboard work unchanged.
-- [ ] **M1.3 Generic gradient check.** `.qs.gradCheck[layer;inShape]` compares backward with finite differences
-  for parameters and inputs. It runs over every registered type in the tests, so each new layer gets checked for
-  free.
-- [ ] **M1.4 Old models load.** `.qs.load` converts the old format (M-Q2). *Accept:* the converted gw_cnn_4 gives
-  the same logits as before (within 1e-9) on 1,000 windows, and its G6 thresholds reproduce.
-- [ ] **M1.5 Speed parity.** *Accept:* training and prediction for gw_cnn_4 and the MNIST benchmark are no more
-  than 10% slower than before.
+How it differs from the sketch below, and why:
+- **A layer is a `(kind;spec)` pair, and a model's `params` is a list of arrays per layer, not a table or dictionaries.**
+  q silently turns a list of dictionaries with the same keys into a table, and `enlist` of one dictionary into a one-row
+  table, so a model that held dictionaries would change shape depending on its contents (two dense layers, say). Layers
+  are `(kind;spec)` pairs, parameters and caches are lists, and each layer function still receives its parameters as a
+  dictionary built from `.qs.layer.names[kind]`.
+- **Dense and its activation are separate layers** (`dense`, `act`), as planned, and the dropout *training option* keeps
+  working: it inserts dropout layers after the hidden dense activations for one gradient (`.qs.withDropout`), and the
+  masks are drawn for the whole batch before it is split over threads, so seeded runs repeat whatever the thread count.
+- **The registry is a set of dictionaries keyed by kind** (`.qs.layer.shape`, `.init`, `.forward`, `.backward`, `.check`,
+  `.names`, `.l2`, `.inGrad`, `.example`), like `.qs.act` and `.qs.opt`. `.qs.layer.add[kind;parts]` registers a type.
+- **`seq` is a layer** (flat rows to the channel-major layout), so no special case remains at the model's input.
+- **Inference skips what only backpropagation needs**, and the first layer skips its input gradient. Both made things
+  faster, not slower (M1.5).
+
+- [x] **M1.1 Layer registry.** `.qs.layer.*`, `.qs.assemble` (shapes worked out layer by layer and recorded in each spec),
+  `.qs.check`. `.qs.predict`, `.qs.predictRaw`, `.qs.grad`, `.qs.gradDrop`, L2 (`.qs.addL2`, from `.qs.layer.l2`),
+  `.qs.params` and `.qs.summary` are generic loops over the layers.
+- [x] **M1.2 Port the existing layers.** `dense`, `act`, `conv1d`, `maxpool1d`, `gru`, `dropout`, `flatten` and `seq`.
+  `.qs.init`, `.qs.initConv` and `.qs.initGru` build the same networks with the same random draws in the same order.
+  *Checked against the old library:* `tests/fixtures/old_format_cases` holds seven models (MLPs with relu, tanh, softmax
+  and linear outputs; two conv models, one with pool 1; a GRU; one with extra keys) and the numbers the old library gave
+  for them. `tests/test_core_compat.q` reproduces every prediction, logit and gradient to 1e-12, and whole training runs
+  (adam, momentum, l2, dropout, conv, GRU) to 1e-9. The dashboard's browser check gives the same runs (best epoch 93 on
+  moons, same decision boundary). The dashboard, `serve.q`, `train.q` and `plot.q` use new accessors (`.qs.inputSize`,
+  `.qs.outputSize`, `.qs.sizes`, `.qs.acts`). The tests that read the old layout directly were rewritten for the new one.
+- [x] **M1.3 Generic gradient check.** `.qs.gradCheck[kind;spec;inShape]`, run by `tests/test_layers.q` over every
+  registered type with the examples each registers. Every type agrees with finite differences to about 1e-10 (the limit is
+  1e-6), including the input gradient where a layer has one. A test shows the check catches a gradient that is 10% wrong,
+  and another registers a new layer type from outside the library and trains through it.
+- [x] **M1.4 Old models load.** `.qs.load` and every public function convert the old layout (`.qs.fromOld`, extra keys
+  kept). *Checked:* `gw_cnn_4`, `gw_gru_1` and `spirals_1` give **identical** logits to the old library (difference exactly
+  0) on 300 random inputs, with threads off and with `-s 4`. One time slide of the real G6 test noise (GW150914's held-out
+  noise) scored by `gw_cnn_4` gives 1,790 trigger logits with a maximum difference of 0 between the two libraries, so
+  the G6 thresholds, which are computed from those logits, reproduce. (The full 76-slide run wasn't repeated; it would
+  have overwritten the saved thresholds.)
+- [x] **M1.5 Speed parity.** The machine was saturated by other jobs (load average 17.6 on 16 cores), so wall-clock times
+  swung by 3×; the comparison uses CPU time, old and new alternating in fresh processes.
+  - `gw_cnn_4`'s architecture, 128-row gradient: 1.20 s old, 1.19 s new. 512-row prediction: 2.33 s old, **1.93 s new**
+    (17% faster, from not working out which position won each pooling block when only predicting).
+  - GRU gradient: equal. MNIST-shaped MLP (784-128-10) training epoch: 0.60 s old, 0.60 s new with threads off; with 4
+    threads 0.59 to 0.70 s old, 0.40 to 0.46 s new.
+  - A step's parts match too: gradient 7.0 ms, Adam update 1.4 ms, whole step 8.8 ms, both libraries.
+  - The benchmark suite (`bench/benchmarks.q`) meets every target.
 
 ### M2 — New layers (order set by M-Q1; each needs a gradient check and a small learning test)
 
@@ -127,3 +159,11 @@ So the first stage is a general layer core. Everything else builds on it.
 ## Progress log
 
 - 2026-11-02: Plan written after reviewing `src/defineEquation.q`. Not started.
+- 2026-11-03: Started on the owner's go-ahead; moved to `inProgress/`, with the recommended answers to M-Q1 to M-Q3 assumed.
+  **M1 done**: layer registry and the eight ported layer types, old models converted on load, generic gradient check, speed
+  at parity or better. Before changing anything, fixtures and timings were recorded from the old library (see M1.2 and M1.5).
+  q gotchas met: a list of dictionaries with the same keys becomes a table, and `enlist` of a dictionary is a table (so
+  layers are pairs and parameters lists); a dictionary whose values are all symbols can't take a vector by amending (join a
+  new dictionary instead); `desc` and `ij` are keywords (`'assign`, `'ij`); `.[x;i;f;v]` with a mixed nested list gave
+  `'nyi` (L2 is now a multiplication by 1 or 0 per parameter); `read0` of a `/proc` file is empty (use `cat`); and wall-clock
+  timings on this shared machine are unusable, so compare CPU time (`/proc/<pid>/stat`).

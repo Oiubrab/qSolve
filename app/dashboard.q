@@ -126,7 +126,7 @@ system "l ",.dash.root,"/projects/gw/src/gw.q";
 .dash.saved:{[]
     f:$[()~key hsym `$.dash.modelDir; `symbol$(); f where (f:key hsym `$.dash.modelDir) like "*.qsm"];
     {[f] m:.qs.load `$":",.dash.modelDir,"/",string f;
-        `name`arch`params`target!(`$-4_string f;"-" sv string (count first first m`weight),count each m`weight;
+        `name`arch`params`target!(`$-4_string f;"-" sv string (.qs.inputSize m),.qs.sizes m;
             sum .qs.summary[m]`params;$[`enc in key m; first exec col from m[`enc] where role=`target; `])} each f
  }
 
@@ -271,7 +271,7 @@ system "l ",.dash.root,"/projects/gw/src/gw.q";
             if[1<count first A; out:out,'([] confidence:max each A)];
             `type`run`rows!(`predicted;id;out)];
         [X:"f"$r`inputs; if[0h<type X; X:enlist X];
-            if[not (count first X)=count first first m`weight; '"the model takes ",(string count first first m`weight)," inputs"];
+            if[not (count first X)=.qs.inputSize m; '"the model takes ",(string .qs.inputSize m)," inputs"];
             `type`run`outputs!(`predicted;id;.qs.predict[m;X])]]
  }
 
@@ -294,12 +294,12 @@ system "l ",.dash.root,"/projects/gw/src/gw.q";
     if[()~key f; '"no saved model ",n];
     m:.qs.load f;
     id:1+max 0,key[.dash.runs]`id;
-    nIn:count first first m`weight;
-    d:`X`Y!(enlist nIn#0f;enlist (count last m`bias)#0f);
+    nIn:.qs.inputSize m;
+    d:`X`Y!(enlist nIn#0f;enlist (.qs.outputSize m)#0f);
     if[`enc in key m; d[`enc]:m`enc];
-    a:("-" sv string nIn,count each m`weight),$[1<count m`act; " ",string first m`act; ""]," ",string last m`act;
+    a:("-" sv string nIn,.qs.sizes m),$[1<count .qs.acts m; " ",string first .qs.acts m; ""]," ",string last .qs.acts m;
     `.dash.runs upsert (id;.z.p;`$n;a;$[`enc in key m; $[`cat=(m[`enc] first exec col from m[`enc] where role=`target)`kind;`classes;`regression]; `saved];`;0;0n;0n;0n;0n;`loaded);
-    .dash.model[id]:`weight`bias`act#m; .dash.hist[id]:();
+    .dash.model[id]:`layers`params#m; .dash.hist[id]:();
     / models saved before schemas existed get a plain one
     sc:$[`info in key m; m`info;
         @[.dash.schema[enlist[`data]!enlist n;d;$[`enc in key m;`regression;`classes];`acc`r2!0n 0n];`ranges;:;()]];

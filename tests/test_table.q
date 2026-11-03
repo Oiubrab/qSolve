@@ -68,7 +68,7 @@
     .t.ok[.qs.isClass (1 0f;0 1f);"one-hot not classes"];
     .t.ok[.qs.isClass (enlist 1f;enlist 0f);"0/1 column not classes"];
     .t.ok[not .qs.isClass (enlist 1.5;enlist 0f);"numbers taken as classes"];
-    m:`weight`bias`act!(enlist 1 1#2f;enlist enlist 0f;enlist `linear);
+    m:.qs.fromWeights[enlist 1 1#2f;enlist enlist 0f;`linear];
     e:.qs.evaluate[m;(enlist 1f;enlist 2f);(enlist 2f;enlist 4.5);`mse];
     .t.ok[null e`acc;"accuracy for a regression target"];
     .t.near[e`mae;0.25;1e-12];

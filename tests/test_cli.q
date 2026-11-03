@@ -18,7 +18,7 @@
     .t.ok[any out like "final model: train R2 *";"no regression summary: ",-3!out];
     m:.qs.load hsym `$d,"/qsolve_cli_csv.qsm";
     .t.eq[exec col from m`enc;`area`rooms`city`price];
-    .t.eq[count first first m`weight;6];
+    .t.eq[.qs.inputSize m;6];
     hdel each hsym `$d,/:("/qsolve_cli.csv";"/qsolve_cli_csv.qsm");
  }];
 
