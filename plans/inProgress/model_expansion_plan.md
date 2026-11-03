@@ -9,10 +9,10 @@ Read the "q gotchas" in [../completed/improvemet_plan.md](../completed/improveme
 **How to use this file:** as the other plans. Tick an item only when its check passes and `q tests/run.q`
 passes; add a dated line to the Progress log; commit each finished stage to main (the owner's rule).
 
-**Current status (2026-11-03):** in progress. **M1 (the general layer core) is done.** M2 onwards is next. The owner said
-"get a start on the model expansion plan" without answering M-Q1 to M-Q3, so the recommended answers are assumed:
-(a) better CNNs first after the core, a new model format with old files converted on load, and pure q. M1 doesn't depend on
-M-Q1, and M-Q2 and M-Q3 are built in. M-Q1 only sets the order of M2, so the owner can still change it.
+**Current status (2026-11-03):** in progress. **M1 (the general layer core) is done.** M2 onwards is next. The owner has
+answered the open questions: **M-Q1: all of (a), (b) and (c)** (every architecture family must be available, not one
+first), and M-Q2 and M-Q3 as recommended (a new model format with old files converted on load, and pure q). M-Q1 now only
+sets the build order, not what gets built.
 
 ---
 
@@ -39,8 +39,10 @@ So the first stage is a general layer core. Everything else builds on it.
 
 ## 2. Open questions for the owner
 
-1. **M-Q1, what to grow first after the core.** This is the main choice. Recommended **(a)**: it is measurable
-   on the GW problem straight away.
+1. **M-Q1, what to grow after the core. Answered by the owner (2026-11-03): all of it.** The aim is that a user can
+   build whatever network they want: a plain dense network, a CNN, an LSTM, a GRU, or a generative model (autoencoder,
+   VAE, GAN), and mix them (a GRU over conv features, a residual CNN, a conv encoder with a dense decoder). So (a), (b)
+   and (c) below are all in scope; the order is only sequencing, and it can be changed.
    - (a) *Better CNNs*: batch norm, residual blocks, dilated and strided convs, global pooling. These are what
      published GW detectors use. Test: does a deeper residual network beat gw_cnn_4 at SNR 8-10, where it finds
      only 38%?
@@ -48,6 +50,11 @@ So the first stage is a general layer core. Everything else builds on it.
      self-attention and a transformer encoder block.
    - (c) *Generative models*: autoencoders (a denoising one for GW strain), VAEs, then GANs (for example,
      generating realistic glitches to train against).
+   - **Order (default):** (a) first because it is measurable on GW straight away; then (b), whose LSTM and
+     sequence-returning GRU are needed in M2.4 and by the FX benchmark; then the training pieces generative models
+     need (M3.1, M3.4); then (c) in M5. Nothing in (b) or (c) waits for (a) to be proven on GW.
+   - **Completeness check (new, M2.7):** every family has a ready-made builder, a test that it learns a small task,
+     and a gradient check, so none is only "possible in principle".
 2. **M-Q2, saved models.** Recommended: the new core uses a new model format, and `.qs.load` converts old
    `.qsm` files (`gw_cnn_1`-`4`, `spirals_1`, the FX models) on load. The alternative is to keep both code paths.
 3. **M-Q3, speed.** Training gw_cnn_4 already takes hours on this shared machine, and deeper networks cost more.
@@ -110,11 +117,17 @@ How it differs from the sketch below, and why:
   shapes differ. This is the one non-sequential structure needed for ResNets and transformers.
 - [ ] **M2.3 Conv options.** Same padding, stride, dilation; average and global average pooling; Conv2D (for
   spectrograms and MNIST).
-- [ ] **M2.4 Recurrent.** An LSTM; GRU and LSTM with a `sequence` option returning every step, so they stack
-  and can follow conv layers.
+- [ ] **M2.4 Recurrent.** An LSTM, and the GRU turned into a proper layer (today it is a front end that reads
+  blocks of samples). Both with a `sequence` option returning every step, so they stack (a 2-layer LSTM) and can
+  follow conv layers. Both also work as the last recurrent layer returning only the final state, and take input as
+  `(c;t)` channels. *Accept:* gradient checks through time; the existing `gw_gru_1` still loads and gives the same output.
 - [ ] **M2.5 Attention.** Multi-head self-attention with positional encoding, then a transformer encoder block
   (attention + layer norm + feed-forward, residual).
 - [ ] **M2.6 More activations.** GELU, leaky ReLU, ELU.
+- [ ] **M2.7 One builder per family.** `.qs.initDense`, `.qs.initConv`, `.qs.initLstm`, `.qs.initGru` (the last two
+  with stacking and an optional conv front), plus the residual CNN builder, all on `.qs.assemble`. A test for each
+  family trains a small task (spirals for dense, a shape-in-noise task for conv, the order-of-loudness task for GRU and
+  LSTM) and checks it learns. The generative builders arrive with M5, and the same completeness check covers them.
 
 ### M3 — Training system
 
@@ -167,3 +180,6 @@ How it differs from the sketch below, and why:
   new dictionary instead); `desc` and `ij` are keywords (`'assign`, `'ij`); `.[x;i;f;v]` with a mixed nested list gave
   `'nyi` (L2 is now a multiplication by 1 or 0 per parameter); `read0` of a `/proc` file is empty (use `cat`); and wall-clock
   timings on this shared machine are unusable, so compare CPU time (`/proc/<pid>/stat`).
+- 2026-11-03: Owner answered M-Q1: build all of it (dense, CNN, LSTM, GRU, generative), not one family first; M-Q2 and
+  M-Q3 as recommended. Plan updated: M2.4 now covers LSTM and a layer-form GRU with stacking, M2.7 added so every
+  family has a builder and a learning test.
