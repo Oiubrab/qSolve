@@ -24,7 +24,14 @@ Read the "q gotchas" in [../completed/improvemet_plan.md](../completed/improveme
 The browser check `node tests/ui/check.js` must pass after every stage that changes the page, and it grows with
 the stages.
 
-**Current status (2026-11-03):** design only. The open questions D-Q1 to D-Q5 below need the owner.
+**Current status (2026-11-03):** design only, not started. The owner answered D-Q1 to D-Q5 (section 4):
+- jobs run in separate q worker processes;
+- the page may run the known download scripts;
+- a bold redesign;
+- advanced options go fully deep, but with no q console;
+- runs are kept on disk.
+
+Start with D0, the design, which needs the owner to pick a direction.
 
 ---
 
@@ -117,47 +124,61 @@ from Models.
 
 | # | Decision | Why |
 |---|---|---|
-| D-D1 | **Stay dependency-free:** vanilla JS with SVG and canvas, served by q, no build step, works offline. Split `app.js` into ES modules served from `app/ui/` and its subfolders. | That's the current strength. Module scripts only need the JavaScript MIME type q already sends, and the static-file rule widens to subfolders of `ui/` only. |
-| D-D2 | **Long work becomes jobs:** training, search, cross-validation and anything else that takes time. Each job has an id, progress, a result, and **Stop**. The page stays responsive and shows running jobs in the header. How jobs run is D-Q1. | Point 2 of the review is the root cause of "clunky". |
+| D-D1 | **Stay dependency-free:** vanilla JS with SVG and canvas, served by q, no build step, works offline. Split `app.js` into ES modules served from `app/ui/` and its subfolders. Fonts are bundled in `app/ui/`, never fetched from a CDN. | That's the current strength. Module scripts only need the JavaScript MIME type q already sends, and the static-file rule widens to subfolders of `ui/` only. |
+| D-D2 | **Long work becomes jobs, each in its own q worker process** (D-Q1): training, search, cross-validation, permutation importance and downloads. The dashboard process stays free for the page and quick commands like predictions and the Waves views. Each job has an id, progress, a result, and **Stop**. The header shows running jobs. | Point 2 of the review is the root cause of "clunky". Workers also let a search run its trials in parallel. |
+| D-D7 | **Bold redesign** (D-Q3), still with light and dark themes, still at phone width, and still following D-D5. The owner picks the direction from mockups (D0.1) before any building. | A bold look is a matter of taste, so it's shown, not described. |
+| D-D8 | **Runs live on disk** (D-Q5) in `runs/<id>/`, git-ignored: the config, history, report, model, and the uploaded data it trained on. Workers write there, so the disk is also how results come back. The dashboard reloads it on start. | One mechanism for both persistence and returning results from workers. |
 | D-D3 | **The options schema lives on the server** as `.dash.options`, a q table, sent in `hello`. | One source of truth. q decides what's valid, and the page only draws it. |
 | D-D4 | **The KX Dashboards interface stays compatible:** `.dash.runs` and `.dash.history[]` keep their columns. New columns are only added. | Others may have connections built on it. |
 | D-D5 | **Visuals follow the dataviz rules used so far:** one axis per chart, fixed series colours per run, a hover tooltip on every chart, legends for two or more series, and each colour scheme checked in light and dark. | The current charts already mostly do this. New ones must too. |
 | D-D6 | **Every stage keeps the current features working.** The browser check's existing scenarios must pass throughout, rewritten only where the layout moves things. | This is an uplift, not a rewrite. |
 
-## 4. Open questions for the owner
+## 4. The owner's answers (2026-11-03)
 
-1. **D-Q1, how jobs run.**
-   - **(a) Recommended:** one process. Training advances one epoch per timer tick, using a stepping API in the
-     library (`.qs.trainStart`, `.qs.trainEpoch` and `.qs.trainEnd`, built from what `.qs.train` already does). The
-     page stays responsive between epochs, and Stop and Pause are easy. Jobs take turns. Big epochs (MNIST) still
-     block for one epoch, so those get split into batch chunks.
-   - **(b)** Worker q processes, one per job, reporting back over IPC. This is true parallelism, but it depends on
-     licence limits (we run at most `-s 4` now), and needs process management.
-   - Start with (a). (b) can come later for long project jobs.
-2. **D-Q2, downloads from the page.** Should a "Download" button on an unavailable dataset run the known fetch
-   script on the server? Recommended: yes, for `scripts/fetch_data.sh` and project fetch scripts only, never
-   arbitrary commands. It shows progress as a job. The dashboard listens on localhost only by default.
-3. **D-Q3, look.** Keep the current clean look and push it further (recommended), or a bolder redesign? For
-   example, a darker "lab instrument" style, as the Waves page hints at.
-4. **D-Q4, how deep "mile deep" goes.**
-   - Recommended: the full options drawer, the raw JSON config, and "copy as q code".
-   - Not recommended: a q console in the page. The port already answers q queries for KX Dashboards, and a console
-     makes it far too easy to run anything by accident.
-5. **D-Q5, saved runs across restarts.** Recommended: save every run's report, history and model to `runs/` on
-   disk (git-ignored), and reload them on start. A "clear session" button removes them. The alternative is to keep
-   runs for the session only, as now.
+1. **D-Q1, how jobs run: separate q worker processes.**
+   - The dashboard starts one q process per job. The worker connects back over IPC, trains, streams epochs as
+     async messages, and writes its result to `runs/<id>/` (D-D8).
+   - The single-process timer design was the alternative, and isn't used.
+   - **To check at the start of D2:** how many q processes, and how many threads each, the licence allows
+     alongside the dashboard. We run at most `-s 4` now. That sets the default number of workers running at once.
+     Further jobs queue.
+2. **D-Q2, downloads from the page: yes.**
+   - Only the known scripts run: `scripts/fetch_data.sh`, and project fetch scripts registered by name. A request
+     never supplies a command or path.
+   - Each download runs as a job, with its output streamed to the page.
+   - The dashboard still listens on localhost only by default.
+3. **D-Q3, look: a bold redesign.** Stage D0 shows directions as mockups for the owner to choose from.
+4. **D-Q4, depth: fully advanced, without a q console.** That means:
+   - the full options drawer;
+   - the architecture editor;
+   - the raw JSON config;
+   - "copy as q code";
+   - the full search grid.
+
+   There's no box in the page for running q. The port's existing q interface for KX Dashboards is unchanged.
+5. **D-Q5, runs on disk: yes** (D-D8). A "clear session" button, and deleting a run, remove its folder.
 
 ## 5. Stages
 
-### D0 — Quick wins (no redesign)
+### D0 — The bold redesign: pick a direction, then build the look
 
-- [ ] **D0.1** Toasts move to a corner that doesn't cover charts, and stack and fade.
-- [ ] **D0.2** Numbers are shown to a sensible number of significant figures everywhere: `441.1`, `164.7`.
-- [ ] **D0.3** Compare groups runs by dataset, so different datasets never share an axis, and adds an accuracy or
-  R² chart beside the loss.
-- [ ] **D0.4** The upload shows the preview and column kinds the server already sends.
-- [ ] **D0.5** The view and the selected run go in the address (`#train`, `#models/3`), so Back and reload work.
-  *Accept:* the browser check covers each change, and the screenshots show it.
+- [ ] **D0.1 Three directions as mockups.** Static HTML pages showing the same two screens in each direction:
+  - the Train screen with data drawn and a run in progress;
+  - a finished run's results.
+
+  Each is shown in light and dark, and at phone width, using real data from the browser check's runs. Starting
+  ideas for the three:
+  - a **lab instrument**: dark-first, dense, glowing traces, like the Waves page pushed further;
+  - an **editorial** style: big type, generous space, charts as the heroes;
+  - a **playful canvas**: the data and the network fill the screen, with controls floating over them.
+
+  *Accept:* the owner picks one, or a mix. The choice and the reasons go in the Progress log.
+- [ ] **D0.2 Design tokens and components.** CSS variables for colour, type, spacing, radius and motion. The
+  chart palettes pass the dataviz validator in both themes. Build one set of components: card, button, field,
+  drawer, tabs, toast, job pill, tooltip and empty state. Toasts never cover a chart, and they stack and fade.
+  Numbers are shown to sensible significant figures (`441.1`, not `441.107`).
+- [ ] **D0.3 The current views in the new look,** with behaviour unchanged.
+  *Accept:* the browser check passes, and its screenshots are shown to the owner.
 
 ### D1 — Foundations
 
@@ -171,24 +192,50 @@ from Models.
 - [ ] **D1.3 A form built from the schema.** The Train settings and the search grid are both drawn from
   `.dash.options`, replacing the hand-written HTML.
   *Accept:* the same requests as before, compared by recording the payloads in the browser check.
+- [ ] **D1.4 The address holds the view and the run** (`#train`, `#models/3`), so Back and reload work.
 
-### D2 — Jobs
+### D2 — Jobs in worker processes
 
-- [ ] **D2.1 A library stepping API** as chosen in D-Q1, for example `.qs.trainStart`, `.qs.trainEpoch` and
-  `.qs.trainEnd`. `.qs.train` is rewritten on top of it.
-  *Accept:* `.qs.train` gives the same results as before, bit for bit with the same seed, and the library tests
-  pass.
-- [ ] **D2.2 Dashboard jobs.** `.dash.jobs` is a table of id, kind, state, progress and result. Train, search and
-  cross-validation become jobs, run as chosen in D-Q1, with Stop.
-  *Accept:* while MNIST trains, the page still switches views, predicts with an older model and starts a second
-  job, which waits its turn. Stop ends a job within one epoch or chunk and keeps the model so far.
-- [ ] **D2.3 The jobs indicator** in the header: what's running, its progress, and Stop. It works from any view.
+- [ ] **D2.0 Licence check.** Start the dashboard plus 1, 2 and 4 workers, each with `-s 1` and `-s 2`, and record
+  what the licence allows.
+  *Accept:* a default number of workers and threads per worker, written into the README.
+- [ ] **D2.1 Stopping from outside.** A worker is busy inside `.qs.train`, so it can't read messages until it
+  finishes. To fix that, the library lets `onEpoch` return `` `stop `` to end training after that epoch. The
+  result is the model so far, or the best one with `keepBest`.
+  - The worker's `onEpoch` checks for a `runs/<id>/stop` file, which the dashboard writes when Stop is pressed.
+  - If a worker hasn't stopped within 10 s of its epoch time, Kill ends the process by its PID.
+
+  *Accept:* library tests for early stopping. `.qs.train` without it gives identical results to now.
+- [ ] **D2.2 The worker.** `app/worker.q` loads the library and the same data and config code as the dashboard,
+  which moves into shared files under `app/`.
+  - It is started with the job id and the dashboard's port.
+  - It connects back, receives the job: the request, plus the table for an upload.
+  - It runs it, sends `start`, `epoch` and `cv` messages as async IPC, writes `runs/<id>/`, sends `done`, and
+    exits.
+  - A worker that dies is marked failed, with the tail of its log.
+- [ ] **D2.3 Dashboard jobs.** `.dash.jobs` is a table of id, kind, state, progress, PID and started time. It
+  starts workers up to the D2.0 limit and queues the rest. It forwards worker messages to the browser, and loads
+  results from `runs/<id>/` when they finish.
+  - Train, cross-validation and search become jobs.
+  - A search spreads its trials over the free workers.
+
+  *Accept:* while MNIST trains:
+  - the page switches views, predicts with an older model and shows a GW event;
+  - a second training job runs alongside, or queues if the limit is 1;
+  - Stop ends a job within one epoch and keeps the model so far;
+  - killing a worker by hand marks its job failed without disturbing the dashboard.
+- [ ] **D2.4 Downloads as jobs** (D-Q2). A registry of named fetch scripts, `scripts/fetch_data.sh` and each
+  project's. The page asks for one by name, and the dashboard runs it in a worker and streams its output.
+  *Accept:* an unknown name is refused. A dry run streams in the browser check.
+- [ ] **D2.5 The jobs indicator** in the header: what's running and queued, progress, Stop and Kill. It works from
+  any view.
 
 ### D3 — Layer 1: data and "just go"
 
 - [ ] **D3.1 Dataset gallery.** Cards with a small picture drawn from a sample of the data: dots for 2-D, a
-  sparkline for series, four digits for MNIST, a mini table for tables. Each card has a one-line purpose and a
-  "needs download" state, with the D-Q2 button if agreed.
+  sparkline for series, four digits for MNIST, a mini table for tables. Each card has a one-line purpose. A card
+  that needs downloading has a Download button that starts the D2.4 job, and the card comes alive when it
+  finishes.
 - [ ] **D3.2 Drop a file anywhere.** CSV via drag-and-drop or the file picker.
   - Show a column profile: kind, gaps, range or levels, and a small histogram per column.
   - Suggest a target: the last column, or the only categorical one.
@@ -240,7 +287,9 @@ All charts follow D-D5. Each is checked in light and dark, and at phone width.
   - For regression: residuals against the predicted value.
 - [ ] **D5.5 What matters.** For table models, permutation importance per input column, on validation data, run as
   a job.
-- [ ] **D5.6 Search, drawn.** Parallel coordinates, or one small chart per setting, showing which settings gave
+- [ ] **D5.6 Compare, grouped.** Runs are grouped by dataset, so different datasets never share an axis, and an
+  accuracy or R² chart sits beside the loss.
+- [ ] **D5.7 Search, drawn.** Parallel coordinates, or one small chart per setting, showing which settings gave
   low validation loss.
 
 ### D6 — Layer 3: advanced
@@ -262,7 +311,13 @@ All charts follow D-D5. Each is checked in light and dark, and at phone width.
 
 - [ ] **D7.1 One Models view.** Session runs and saved files appear together, each marked with its status. Each
   row opens the full report and Use it. You can delete, rename and compare runs.
-- [ ] **D7.2 Runs across restarts,** if agreed in D-Q5.
+- [ ] **D7.2 Runs across restarts** (D-D8).
+  - On start, the dashboard reloads every `runs/<id>/`, including the uploads they trained on, so examples and
+    predictions still work.
+  - "Clear session" removes the folders after a confirmation built into the page.
+  - Runs from before a format change still load, or are listed as old with the reason.
+
+  *Accept:* the browser check trains, restarts the dashboard, and finds the run with its charts and predictions.
 - [ ] **D7.3 Downloads:** the model file (`.qsm`), the report, prediction results as CSV, and any chart as PNG or
   SVG. Uploading a `.qsm` adds it to Models.
 
@@ -281,3 +336,6 @@ All charts follow D-D5. Each is checked in light and dark, and at phone width.
 
 - 2026-11-03: Plan written after a review of the dashboard: code, and screenshots of every view from the browser
   check. Not started.
+- 2026-11-03: The owner answered D-Q1 to D-Q5: worker processes, downloads allowed, a bold redesign, fully
+  advanced with no q console, runs on disk. The decisions and stages were updated to match. The old D0 quick wins
+  are folded into D0.2, D1.4 and D5.6, and the upload preview into D3.2. Not started.
