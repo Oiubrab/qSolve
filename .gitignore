@@ -4,3 +4,4 @@
 /projects/*/data
 /projects/*/results
 /projects/*/models
+*.env
